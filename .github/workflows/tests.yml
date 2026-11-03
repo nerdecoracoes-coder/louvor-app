@@ -1,0 +1,11 @@
+# Testes automáticos (leitor .RPP, convenção de nomes, WAV) a cada envio de código.
+name: Testes
+on: [push, pull_request]
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg
+      - run: bun test tests/parsers.test.ts

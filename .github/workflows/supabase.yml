@@ -1,0 +1,40 @@
+# Publica o banco (migrações) e as Edge Functions no Supabase.
+# Rode pela aba "Actions" do GitHub → "Publicar no Supabase" → "Run workflow" (funciona pelo celular).
+# Secrets do repositório necessários (Settings → Secrets and variables → Actions):
+#   SUPABASE_ACCESS_TOKEN  token pessoal (supabase.com → Account → Access Tokens)
+#   SUPABASE_PROJECT_REF   identificador do projeto (ex.: abcdefghijklmno)
+#   SUPABASE_DB_PASSWORD   senha do banco definida ao criar o projeto
+#   GOOGLE_SERVICE_ACCOUNT conteúdo completo do arquivo JSON da conta de serviço do Google
+#   CRON_SECRET            uma senha longa qualquer (a mesma usada em supabase/setup/agendamento.sql)
+name: Publicar no Supabase
+on:
+  workflow_dispatch:
+    inputs:
+      migrations:
+        description: "Aplicar as migrações do banco"
+        type: boolean
+        default: true
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with: { version: latest }
+      - name: Vincular projeto
+        run: supabase link --project-ref "$PROJECT_REF" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+      - name: Aplicar migrações
+        if: ${{ inputs.migrations }}
+        run: supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
+      - name: Secrets das funções
+        run: |
+          printf '%s' '${{ secrets.GOOGLE_SERVICE_ACCOUNT }}' > /tmp/sa.json
+          supabase secrets set --project-ref "$PROJECT_REF" GOOGLE_SERVICE_ACCOUNT="$(cat /tmp/sa.json)" CRON_SECRET='${{ secrets.CRON_SECRET }}'
+          rm -f /tmp/sa.json
+      - name: Publicar funções
+        run: |
+          supabase functions deploy drive-sync --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy drive-media --project-ref "$PROJECT_REF" --no-verify-jwt
