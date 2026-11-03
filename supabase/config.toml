@@ -1,0 +1,9 @@
+# Configuração usada pelo Supabase CLI / GitHub Actions ao publicar as funções.
+project_id = "louvor-app"
+
+[functions.drive-sync]
+# A função confere o login por conta própria (administrador), o segredo do agendamento e o token do aviso do Drive.
+verify_jwt = false
+
+[functions.drive-media]
+verify_jwt = false

@@ -244,6 +244,8 @@ create table public.songs (
   status_message text,
   drive_folder_id text,
   drive_folder_name text,
+  drive_signature text,          -- resumo do conteúdo da pasta (detecta alterações)
+  drive_modified_at timestamptz,
   current_project_id uuid,
   duplicate_of uuid references public.songs(id) on delete set null,
   retry_count int not null default 0,
@@ -329,6 +331,7 @@ create table public.project_tracks (
   color int,
   folder_depth int not null default 0,
   parent_idx int,
+  sends_to_parent boolean not null default true,
   items jsonb not null default '[]',
   warnings jsonb not null default '[]',
   unique (project_id, idx)
