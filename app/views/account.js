@@ -13,7 +13,7 @@ export function register(route) {
   route("/org/drive", driveSettings);
 }
 
-const logo = () => `<div class="logo"><span class="tbadge" style="--s:56px;border-radius:18px">${icon("music")}</span></div>`;
+const logo = () => `<div class="logo"><span class="brandmark"><img src="icon-192.png" alt=""><b>Somos</b></span></div>`;
 const root = () => document.getElementById("app");
 const authShell = (inner) => `<div class="backdrop"><svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="rgba(30,167,255,.45)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="rgba(30,167,255,.25)" stroke-width="1" fill="none"/></svg></div><div class="auth"><div class="box">${inner}</div></div>`;
 
@@ -28,7 +28,7 @@ export function authView(el, path, invite = null) {
     el.innerHTML = authShell(`${logo()}
       ${invite ? `<div class="invitecard">${teamBadge(invite.team || invite.org, 52)}<div><span class="tiny muted">${invite.team ? "Convite para o time" : "Convite para ser membro da igreja"}</span><b style="display:block;font-size:17px">${esc((invite.team || invite.org).name)}</b>${invite.team ? `<span class="small muted">${esc(invite.org.name)}</span>` : ""}</div></div>` : ""}
       <h1>${mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : "Recuperar senha"}</h1>
-      <p class="sub">${mode === "login" ? "Gestão de escalas, times e repertório do ministério." : mode === "signup" ? "O cadastro é gratuito. Para entrar em um time, você precisa de um convite." : "Enviaremos um link para criar uma nova senha."}</p>
+      <p class="sub">${mode === "login" ? "A igreja organizada em times: escalas, integrantes e repertório em um só lugar." : mode === "signup" ? "O cadastro é gratuito. Para entrar em um time, você precisa de um convite." : "Enviaremos um link para criar uma nova senha."}</p>
       <form id="af">
         ${mode === "signup" ? `<label class="field"><span>Nome completo</span><input name="name" required autocomplete="name" maxlength="100"></label>` : ""}
         <label class="field"><span>E-mail</span><input name="email" type="email" required autocomplete="email"></label>

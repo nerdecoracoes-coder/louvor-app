@@ -1,4 +1,4 @@
-# Louvor — gestão de ministérios de louvor
+# Somos — a igreja organizada em times
 
 Aplicativo instalável (PWA) para organizações, times, escalas, repertório, chat e **player multitrack** dos projetos preparados no REAPER com Automate Pro.
 

@@ -1,8 +1,8 @@
 {
   "id": "./",
-  "name": "Louvor — Gestão de Ministérios",
-  "short_name": "Louvor",
-  "description": "Escalas, times, repertório e player multitrack do ministério de louvor.",
+  "name": "Somos",
+  "short_name": "Somos",
+  "description": "A igreja organizada em times: escalas, integrantes, chat, repertório e player multitrack.",
   "lang": "pt-BR",
   "start_url": "./",
   "scope": "./",
