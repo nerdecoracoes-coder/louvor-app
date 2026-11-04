@@ -1,7 +1,7 @@
 // Testes da importação/sincronização contra o banco local real (dev/stack.sh), com uma pasta local
 // fazendo o papel do Google Drive (tests/fsdrive.ts).
 import { describe, expect, test, beforeAll } from "bun:test";
-import { mkdirSync, rmSync, cpSync, renameSync, unlinkSync, utimesSync } from "node:fs";
+import { mkdirSync, rmSync, cpSync, renameSync, unlinkSync, utimesSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { Db } from "../supabase/functions/_shared/db.ts";
 import { syncOrg } from "../supabase/functions/_shared/sync.ts";
@@ -222,5 +222,32 @@ describe("importação do Drive", () => {
     expect(a.errors + b.errors).toBe(0);
     const all = await db.select("songs", `org_id=eq.${org}&select=drive_folder_id`);
     expect(new Set(all.map((x: any) => x.drive_folder_id)).size).toBe(all.length);
+  });
+  test("capa: a imagem da pasta da música aparece no cartão; troca quando a imagem muda; capa manual é mantida", async () => {
+    const store = new Map<string, Uint8Array>(); const removed: string[] = [];
+    const covers = { put: async (p: string, b: Uint8Array) => { store.set(p, b); return `https://x.supabase.co/storage/v1/object/public/media/${p}`; }, remove: async (p: string) => { removed.push(p); } };
+    const dir = join(ROOT, "Emaús - Morada");
+    writeFileSync(join(dir, "Emaús.jpg"), new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]));
+    writeFileSync(join(dir, "Tracks 1", "foto-da-sessao.jpg"), new Uint8Array([0xff, 0xd8, 9])); // em subpasta: não é capa
+    await ageAll(ROOT);
+    await syncOrg({ ...deps(), covers }, org, "cron");
+    let s = await song("Emaús - Morada");
+    expect(s.cover_url).toMatch(/\/songs\/.+\/drive-.+\.jpg$/);
+    expect([...store.values()][0]).toEqual(new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]));
+    // sem mudanças: não copia de novo
+    await syncOrg({ ...deps(), covers }, org, "cron");
+    expect(store.size).toBe(1);
+    // imagem trocada: nova capa, a antiga é apagada do armazenamento
+    writeFileSync(join(dir, "Emaús.jpg"), new Uint8Array([0xff, 0xd8, 0xff, 7, 7, 7, 7]));
+    await ageAll(ROOT);
+    await syncOrg({ ...deps(), covers }, org, "cron");
+    const s2 = await song("Emaús - Morada");
+    expect(s2.cover_url).not.toBe(s.cover_url);
+    expect(removed).toHaveLength(1);
+    // capa enviada à mão pelo app tem prioridade
+    await db.update("songs", `id=eq.${s2.id}`, { cover_url: "https://x.supabase.co/storage/v1/object/public/media/songs/manual.jpg" });
+    await syncOrg({ ...deps(), covers }, org, "cron");
+    expect((await song("Emaús - Morada")).cover_url).toContain("manual.jpg");
+    s = s2; void s;
   });
 });

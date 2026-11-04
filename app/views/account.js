@@ -324,7 +324,7 @@ async function driveSettings(_, el) {
       <ol class="small muted" style="padding-left:18px;margin:8px 0 0;line-height:1.7">
         <li>Na conta Google da igreja, abra a pasta <b>multitracks</b> e toque em <b>Compartilhar</b>.</li>
         <li>Adicione o e-mail abaixo como <b>Leitor</b>. O app só enxerga o que for compartilhado com esse e-mail — nenhuma outra pasta da conta.</li>
-        <li>Copie o link da pasta e cole aqui. Cada pasta de música vira uma música no repertório. Ela pode ficar direto em "multitracks" ou dentro de uma pasta de cantor/grupo (ex.: multitracks → Morada → Emaús).</li></ol>
+        <li>Copie o link da pasta e cole aqui. Cada pasta de música vira uma música no repertório. Ela pode ficar direto em "multitracks" ou dentro de uma pasta de cantor/grupo (ex.: multitracks → Morada → Emaús). Uma imagem JPEG na pasta da música vira a capa.</li></ol>
       ${email ? `<div class="row gap mt"><input class="input grow" readonly value="${attr(email)}" id="em"><button class="btn ghost sm" id="cpem">${icon("copy")}</button></div>`
         : `<p class="danger-t small mt">A conta de serviço do Google ainda não foi configurada no servidor (${esc(info.data?.error || info.error?.message || "função indisponível")}). Veja o README.</p>`}</div>
     <form class="card mt" id="cf"><label class="field"><span>Link da pasta "multitracks"</span><input name="folder" required placeholder="https://drive.google.com/drive/folders/..." value="${integ ? attr(`https://drive.google.com/drive/folders/${integ.folder_id}`) : ""}"></label>

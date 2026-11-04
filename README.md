@@ -82,6 +82,7 @@ multitracks/
 
 - Uma pasta com o .RPP ou áudios logo dentro dela é uma **música**; uma pasta só com subpastas é de um **cantor/grupo**, e cada subpasta dela é uma música.
 - Se o nome do projeto não trouxer o artista, o nome da pasta do cantor/grupo é usado como artista.
+- **Capa**: uma imagem (JPEG, PNG ou WebP) solta na pasta da música vira a capa no cartão. Se houver mais de uma, vale a que tiver "capa" ou "cover" no nome. A imagem é copiada para as imagens do app (o original fica intacto); uma capa enviada à mão pelo app tem prioridade.
 
 - **Nome**: `Música - Artista - BPM (Tom)` → título, artista, BPM e tom extraídos automaticamente (ex.: "Emaús", "Morada", 140, "B"). Títulos com " - " são aceitos ("Te Louvarei - Ao Vivo - Morada - 140 BPM (B)"). Tom inválido ou nome fora do padrão vira aviso, nunca um dado inventado.
 - **.RPP**: lê andamento, compasso, taxa de amostragem, faixas, pastas (ISBUS), volume, pan, mute, solo, inversão de fase, envio para o master, itens (posição, duração, deslocamento na fonte, volume, fades, takes), marcadores e regiões, volume do master.

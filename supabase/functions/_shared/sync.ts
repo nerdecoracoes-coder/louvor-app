@@ -19,8 +19,10 @@ import { parseRpp, compactTree, RppError, type RppProject } from "./rpp.ts";
 import { parseWavHeader, WavNeedMore, isWavName, mimeFor, type WavFormat } from "./wav.ts";
 import { resolveRef, type FolderFile } from "./resolve.ts";
 
+export interface CoverStore { put(path: string, bytes: Uint8Array, contentType: string): Promise<string>; remove?(path: string): Promise<void> }
 export interface SyncDeps {
   db: Db; drive: DriveClient;
+  covers?: CoverStore;          // onde guardar a capa (imagem da pasta) para exibir nos cartões
   now?: () => Date;
   maxProjectsPerRun?: number;   // limite de projetos reprocessados por execução (tempo da função)
   settleMinutes?: number;       // tempo de espera por arquivos ainda sendo enviados
@@ -30,6 +32,7 @@ export interface SyncDeps {
 export interface SyncStats { busy?: boolean; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
 const IGNORE = /(\.rpp-bak|\.reapeaks|\.rpp-undo|\.reapindex|\.ds_store|desktop\.ini|thumbs\.db)$/i;
+const IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
 const AUDIO_EXT = /\.(wav|wave|bwf|rf64|mp3|flac|ogg|opus|m4a|aif|aiff)$/i;
 
 async function sha256(s: string) {
@@ -56,6 +59,34 @@ async function walk(drive: DriveClient, folderId: string, prefix = "", depth = 0
     out.push({ id: k.id, name: k.name, relPath: rel, md5: k.md5Checksum ?? null, size: k.size ? Number(k.size) : null, modifiedTime: k.modifiedTime ?? null, mimeType: k.mimeType });
   }
   return out;
+}
+
+// Capa: imagem (JPEG/PNG/WebP) solta na pasta da música. Preferência para nomes como "capa"/"cover"; senão, a primeira.
+export function pickCover(files: FolderFile[]): FolderFile | null {
+  const imgs = files.filter((f) => !f.relPath.includes("/") && IMAGE_EXT.test(f.name) && (f.size ?? 0) <= 8 * 1024 * 1024);
+  if (!imgs.length) return null;
+  const score = (f: FolderFile) => (/(capa|cover|artwork|folder|front)/i.test(f.name) ? 0 : 1);
+  return imgs.sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))[0];
+}
+
+async function syncCover(deps: SyncDeps, orgId: string, song: any, files: FolderFile[]) {
+  if (!deps.covers || !song) return;
+  const manual = song.cover_url && !song.cover_url.includes("/drive-");   // capa enviada à mão pelo app: mantida
+  if (manual) return;
+  const f = pickCover(files);
+  const tag = f ? `drive-${f.id}-${(f.md5 ?? f.modifiedTime ?? String(f.size)).replace(/[^\w-]/g, "")}` : null;
+  if (tag && song.cover_url?.includes(tag)) return;
+  if (!tag && !song.cover_url) return;
+  let url: string | null = null;
+  if (f && tag) {
+    const ext = (f.name.match(IMAGE_EXT)?.[1] ?? "jpg").toLowerCase().replace("jpeg", "jpg");
+    const bytes = await deps.drive.downloadRange(f.id, 0, Math.max(0, (f.size ?? 8 * 1024 * 1024) - 1));
+    url = await deps.covers.put(`songs/${orgId}/${song.id}/${tag}.${ext}`, bytes, ext === "jpg" ? "image/jpeg" : `image/${ext}`);
+  }
+  const old = song.cover_url?.match(/\/object\/public\/media\/(.+)$/)?.[1];
+  await deps.db.update("songs", `id=eq.${song.id}`, { cover_url: url });
+  song.cover_url = url;
+  if (old && deps.covers.remove) await deps.covers.remove(decodeURIComponent(old));
 }
 
 export async function readWavFormat(drive: DriveClient, fileId: string, size?: number | null): Promise<WavFormat> {
@@ -130,6 +161,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
     for (const { folder, files, error } of listings) {
       let song = byFolder.get(folder.id);
       if (error) { stats.errors++; await event("error", `Não foi possível ler a pasta "${folder.name}": ${error}`, { folder_id: folder.id, song_id: song?.id }); continue; }
+      if (song) await syncCover(deps, orgId, song, files).catch((e) => event("warn", `"${folder.name}": não foi possível copiar a capa (${(e as Error).message}).`, { folder_id: folder.id, song_id: song.id }));
       const sigSrc = files.map((x) => `${x.relPath}|${x.md5 ?? ""}|${x.size ?? ""}|${x.modifiedTime ?? ""}`).sort().join("\n");
       const signature = await sha256(folder.name + "\n" + sigSrc);
       const latest = files.reduce((m, x) => (x.modifiedTime && x.modifiedTime > m ? x.modifiedTime : m), folder.modifiedTime ?? "");
@@ -149,6 +181,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
           if (!song) throw e;
         }
         byFolder.set(folder.id, song);
+        await syncCover(deps, orgId, song, files).catch((e) => event("warn", `"${folder.name}": não foi possível copiar a capa (${(e as Error).message}).`, { folder_id: folder.id, song_id: song.id }));
       }
       if (budget <= 0 || now().getTime() - runStart.getTime() > (deps.timeBudgetMs ?? 90_000)) { stats.deferred++; continue; }
       budget--;

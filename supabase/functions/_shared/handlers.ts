@@ -1,7 +1,7 @@
 // Lógica HTTP das Edge Functions (separada do Deno.serve para poder ser testada fora do Supabase).
 import { Db, asUser } from "./db.ts";
 import { FOLDER_MIME, folderIdFromInput, type DriveClient } from "./drive.ts";
-import { syncOrg } from "./sync.ts";
+import { syncOrg, type CoverStore } from "./sync.ts";
 
 export interface Env {
   rest: string;            // <SUPABASE_URL>/rest/v1
@@ -10,6 +10,8 @@ export interface Env {
   cronSecret?: string;     // CRON_SECRET (agendamento)
   publicUrl?: string;      // URL pública desta função, para o aviso de alterações do Drive
   drive: () => DriveClient;
+  storage?: string;        // <SUPABASE_URL>/storage/v1 (padrão: derivado de rest)
+  publicStorage?: string;  // endereço público do armazenamento, se diferente
   background?: (p: Promise<unknown>) => void;
 }
 
@@ -19,6 +21,23 @@ const CORS = {
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
   "Access-Control-Expose-Headers": "Content-Range, Content-Length, Accept-Ranges, Content-Type",
 };
+// Capas das músicas: a imagem da pasta é copiada para o armazenamento público de imagens do app (bucket "media"),
+// para aparecer nos cartões sem passar pelo Google a cada exibição. O original no Drive não é alterado.
+export function coverStore(env: Env): CoverStore {
+  const base = env.storage ?? env.rest.replace(/\/rest\/v1\/?$/, "/storage/v1");
+  const h = { apikey: env.serviceKey, Authorization: `Bearer ${env.serviceKey}` };
+  return {
+    async put(path, bytes, contentType) {
+      const r = await fetch(`${base}/object/media/${path}`, { method: "POST", headers: { ...h, "Content-Type": contentType, "x-upsert": "true", "cache-control": "31536000" }, body: bytes });
+      if (!r.ok) throw new Error(`Storage ${r.status} ${await r.text()}`);
+      return `${env.publicStorage ?? base}/object/public/media/${path}`;
+    },
+    async remove(path) {
+      await fetch(`${base}/object/media`, { method: "DELETE", headers: { ...h, "Content-Type": "application/json" }, body: JSON.stringify({ prefixes: [path] }) }).catch(() => {});
+    },
+  };
+}
+
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 const bearer = (req: Request) => req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
 
@@ -52,7 +71,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     if (req.headers.get("x-goog-resource-state") === "sync") return new Response("ok");
     // o aviso do Drive não diz qual pasta mudou; sincroniza todas as organizações ligadas (é barato quando nada mudou)
     const all: any[] = await db.select("drive_integrations", "status=neq.paused&select=org_id");
-    const job = (async () => { for (const i of all) await syncOrg({ db, drive: env.drive() }, i.org_id, "webhook").catch(() => {}); })();
+    const job = (async () => { for (const i of all) await syncOrg({ db, drive: env.drive(), covers: coverStore(env) }, i.org_id, "webhook").catch(() => {}); })();
     if (env.background) { env.background(job); return new Response("accepted", { status: 202 }); }
     await job; return new Response("ok");
   }
@@ -64,7 +83,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     const all: any[] = await db.select("drive_integrations", "status=neq.paused");
     const results: Record<string, unknown> = {};
     for (const i of all) {
-      try { results[i.org_id] = await syncOrg({ db, drive: env.drive() }, i.org_id, "cron"); }
+      try { results[i.org_id] = await syncOrg({ db, drive: env.drive(), covers: coverStore(env) }, i.org_id, "cron"); }
       catch (e) { results[i.org_id] = { error: String((e as Error).message) }; }
       await ensureWatch(env, db, i).catch(() => null);
     }
@@ -102,7 +121,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
       last_error: null, connected_at: new Date().toISOString(), watch_channel_id: null, watch_token: null, watch_expires_at: null,
     }, "org_id");
     await ensureWatch(env, db, integ).catch((e) => warnings.push(`Aviso automático de alterações indisponível (${(e as Error).message}); a verificação periódica continua ativa.`));
-    const job = syncOrg({ db, drive }, orgId, "connect");
+    const job = syncOrg({ db, drive, covers: coverStore(env) }, orgId, "connect");
     if (env.background) { env.background(job.catch(() => {})); return json({ ok: true, folder: f.name, warnings, started: true }); }
     const stats = await job.catch((e) => ({ error: String((e as Error).message) }));
     return json({ ok: true, folder: f.name, warnings, stats });
@@ -112,7 +131,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
       await db.update("songs", `id=eq.${body.song_id}&org_id=eq.${orgId}`, { next_retry_at: null, drive_signature: null });
     }
     try {
-      const stats = await syncOrg({ db, drive: env.drive() }, orgId, "manual");
+      const stats = await syncOrg({ db, drive: env.drive(), covers: coverStore(env) }, orgId, "manual");
       if (stats.busy) return json({ error: "Já existe uma sincronização em andamento. Aguarde um pouco e tente de novo." }, 409);
       return json({ ok: true, stats });
     }

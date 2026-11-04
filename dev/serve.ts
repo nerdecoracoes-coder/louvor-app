@@ -21,7 +21,8 @@ const exp = Math.floor(Date.now() / 1000) + 10 * 365 * 86400;
 const ANON = await signJwt({ role: "anon", iss: "supabase", exp });
 const SERVICE = await signJwt({ role: "service_role", iss: "supabase", exp });
 const drive = new FsDrive(DRIVE_ROOT);
-const env = { rest: REST, serviceKey: SERVICE, anonKey: ANON, cronSecret: "dev-cron", drive: () => drive };
+const env = { rest: REST, serviceKey: SERVICE, anonKey: ANON, cronSecret: "dev-cron", drive: () => drive, storage: `http://127.0.0.1:${PORT}/storage/v1` };
+const isService = (req: Request) => req.headers.get("authorization") === `Bearer ${SERVICE}`;
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css", ".json": "application/json",
   ".svg": "image/svg+xml", ".woff": "font/woff", ".png": "image/png", ".jpg": "image/jpeg", ".webmanifest": "application/manifest+json" };
 const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "*", "Access-Control-Allow-Methods": "GET,POST,PATCH,PUT,DELETE,OPTIONS", "Access-Control-Expose-Headers": "Content-Range, Content-Length" };
@@ -60,14 +61,14 @@ async function storage(req: Request, rest: string) {
   }
   if (req.method === "POST" && (m = rest.match(/^object\/(\w+)\/(.+)$/))) {
     const path = decodeURIComponent(m[2]);
-    if (!(await asUser(req, "storage_can_write", { p_bucket: m[1], p_name: path }))) return Response.json({ message: "new row violates row-level security policy" }, { status: 403, headers: CORS });
+    if (!isService(req) && !(await asUser(req, "storage_can_write", { p_bucket: m[1], p_name: path }))) return Response.json({ message: "new row violates row-level security policy" }, { status: 403, headers: CORS });
     const f = safe(m[1], path); mkdirSync(dirname(f), { recursive: true });
     writeFileSync(f, new Uint8Array(await req.arrayBuffer()));
     return Response.json({ Key: `${m[1]}/${path}` }, { headers: CORS });
   }
   if (req.method === "DELETE" && (m = rest.match(/^object\/(\w+)$/))) {
     const { prefixes } = await req.json();
-    for (const p of prefixes) if (await asUser(req, "storage_can_write", { p_bucket: m[1], p_name: p })) rmSync(safe(m[1], p), { force: true });
+    for (const p of prefixes) if (isService(req) || await asUser(req, "storage_can_write", { p_bucket: m[1], p_name: p })) rmSync(safe(m[1], p), { force: true });
     return Response.json([], { headers: CORS });
   }
   return new Response("not found", { status: 404, headers: CORS });
