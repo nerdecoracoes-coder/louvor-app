@@ -213,4 +213,14 @@ describe("importação do Drive", () => {
     expect(after.status).toBe("error");
     expect(after.error).toContain("Interrompida");
   });
+  test("duas rodadas ao mesmo tempo: a segunda espera, sem duplicar músicas", async () => {
+    const [r] = await db.insert("sync_runs", { org_id: org, trigger: "cron" });
+    const st = await syncOrg(deps(), org, "manual");
+    expect(st.busy).toBe(true);
+    await db.update("sync_runs", `id=eq.${r.id}`, { status: "ok", finished_at: new Date().toISOString() });
+    const [a, b] = await Promise.all([syncOrg(deps(), org, "cron"), syncOrg(deps(), org, "webhook")]);
+    expect(a.errors + b.errors).toBe(0);
+    const all = await db.select("songs", `org_id=eq.${org}&select=drive_folder_id`);
+    expect(new Set(all.map((x: any) => x.drive_folder_id)).size).toBe(all.length);
+  });
 });

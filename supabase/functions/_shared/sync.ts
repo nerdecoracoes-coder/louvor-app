@@ -27,7 +27,7 @@ export interface SyncDeps {
   concurrency?: number;
   timeBudgetMs?: number;        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
 }
-export interface SyncStats { folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
+export interface SyncStats { busy?: boolean; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
 const IGNORE = /(\.rpp-bak|\.reapeaks|\.rpp-undo|\.reapindex|\.ds_store|desktop\.ini|thumbs\.db)$/i;
 const AUDIO_EXT = /\.(wav|wave|bwf|rf64|mp3|flac|ogg|opus|m4a|aif|aiff)$/i;
@@ -79,9 +79,11 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
   const integ = await db.one("drive_integrations", `org_id=eq.${orgId}`);
   if (!integ) throw new Error("Organização sem integração com o Google Drive.");
   // rodadas que ficaram "em andamento" porque o servidor encerrou a função antes do fim
-  const stale = new Date(runStart.getTime() - 10 * 60_000).toISOString();
+  const stale = new Date(runStart.getTime() - 7 * 60_000).toISOString();
   await db.update("sync_runs", `org_id=eq.${orgId}&status=eq.running&started_at=lt.${q(stale)}`,
     { status: "error", finished_at: runStart.toISOString(), error: "Interrompida pelo servidor (tempo limite). As músicas que faltaram continuam na próxima rodada." }).catch(() => {});
+  // só uma rodada por vez (cron, aviso do Drive e botão podem chegar juntos)
+  if (await db.one("sync_runs", `org_id=eq.${orgId}&status=eq.running&select=id&limit=1`)) return { ...stats, busy: true };
   const [run] = await db.insert("sync_runs", { org_id: orgId, trigger });
   const event = (level: "info" | "warn" | "error", message: string, extra: Record<string, unknown> = {}) =>
     db.insert("sync_events", { org_id: orgId, run_id: run.id, level, message, ...extra }).catch(() => {});
@@ -138,8 +140,14 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
 
       if (!song) {
         const n = bestName(null, folder.name);
-        [song] = await db.insert("songs", { org_id: orgId, title: n.title || folder.name, artist: n.artist ?? folder.group ?? null, source: "drive", status: "processing",
-          status_message: "Na fila para processamento", drive_folder_id: folder.id, drive_folder_name: folder.name });
+        try {
+          [song] = await db.insert("songs", { org_id: orgId, title: n.title || folder.name, artist: n.artist ?? folder.group ?? null, source: "drive", status: "processing",
+            status_message: "Na fila para processamento", drive_folder_id: folder.id, drive_folder_name: folder.name });
+        } catch (e) {
+          if (!/ 409 /.test(String((e as Error).message))) throw e;
+          song = await db.one("songs", `org_id=eq.${orgId}&drive_folder_id=eq.${q(folder.id)}`); // criada ao mesmo tempo por outra rodada
+          if (!song) throw e;
+        }
         byFolder.set(folder.id, song);
       }
       if (budget <= 0 || now().getTime() - runStart.getTime() > (deps.timeBudgetMs ?? 90_000)) { stats.deferred++; continue; }

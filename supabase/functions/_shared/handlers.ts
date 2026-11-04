@@ -111,7 +111,11 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     if (action === "retry" && body.song_id) {
       await db.update("songs", `id=eq.${body.song_id}&org_id=eq.${orgId}`, { next_retry_at: null, drive_signature: null });
     }
-    try { return json({ ok: true, stats: await syncOrg({ db, drive: env.drive() }, orgId, "manual") }); }
+    try {
+      const stats = await syncOrg({ db, drive: env.drive() }, orgId, "manual");
+      if (stats.busy) return json({ error: "Já existe uma sincronização em andamento. Aguarde um pouco e tente de novo." }, 409);
+      return json({ ok: true, stats });
+    }
     catch (e) { return json({ error: String((e as Error).message) }, 502); }
   }
   if (action === "disconnect") {
