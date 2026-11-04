@@ -74,3 +74,13 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - Imagem JPEG na pasta da música vira a capa.
 - Música ainda não pronta: "- Editar" no fim do nome da pasta; o app não lê e tira do app; tirar o "- Editar" traz de volta.
 - Status: **implementado** em 04/11/2026.
+
+## 8. Ministério de Multimídia — primeira versão (04/11/2026)
+- Tipos de time: Louvor, Multimídia, Diáconos, Ministério Infantil e Outro.
+- Recursos novos (o tipo Multimídia já vem com os três): **Roteiro do culto**, **Pedidos de mídia**, **Checklist pré-culto**.
+- Funções padrão do Multimídia: Direção, Projeção, Transmissão/Corte, Câmera 2, Câmera 3, Iluminação.
+- Roteiro: na escala do Multimídia; modelo pronto; as músicas da escala do Louvor no mesmo culto (até 4 h de diferença)
+  aparecem no item "Louvor", com a letra (para os slides), sem abrir o repertório para o Multimídia.
+- Pedidos: qualquer membro pede (botão +); o time recebe aviso; responsável, link ou arquivo de entrega; quem pediu é avisado.
+- Checklist: o líder define os itens (há uma lista sugerida); quem é do time marca em cada escala.
+- Próximos passos a definir com os líderes: equipamentos, ambiente dos Diáconos e do Ministério Infantil.

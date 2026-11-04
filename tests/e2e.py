@@ -314,6 +314,38 @@ with sync_playwright() as pw:
     carla.goto(BASE + "/#/musicas")
     ok(f"versão leve: {conv['ok']} faixas convertidas ({conv['inBytes'] // 1000} KB → {conv['outBytes'] // 1000} KB); player toca direto do R2 com {lt['sources']} trechos")
 
+    # ------------------------------------------------------------------ Multimídia: recursos, checklist, roteiro com o louvor, pedido
+    ana.goto(BASE + "/#/times"); ana.reload()
+    jovens_id = ana.locator(".teamcard a", has_text="Jovens").get_attribute("href").split("/")[-1]
+    ana.goto(f"{BASE}/#/times/{jovens_id}/config")
+    for k, on_ in [("roteiro", True), ("pedidos", True), ("checklist", True), ("repertorio", False)]:
+        assert ana.locator(f"input[name=feat_{k}]").is_checked() == on_, k
+    ana.get_by_role("button", name="Usar lista sugerida").click()
+    expect(ana.locator("#ci .li")).to_have_count(7, timeout=10000)
+    ana.goto(f"{BASE}/#/escala/nova/{jovens_id}")
+    ana.fill("input[name=title]", "Culto de Celebração")
+    ana.fill("input[name=date]", nxt); ana.locator("input[name=date]").dispatch_event("change"); ana.fill("input[name=time]", "18:30")
+    ana.get_by_role("button", name="Publicar escala").click()
+    expect(ana.get_by_role("heading", name="Roteiro do culto")).to_be_visible(timeout=10000)
+    ana.locator("#cedit").click(); ana.locator(".sheet #tpl").click(); ana.locator(".sheet #ok").click()
+    toast_has(ana, "Roteiro salvo")
+    expect(ana.locator(".cue", has_text="Pregação")).to_contain_text("19:")
+    expect(ana.locator(".cue.k-louvor .cue-song", has_text="Emaús")).to_be_visible(timeout=10000)
+    ana.locator(".cue-song", has_text="Emaús").click(); expect(ana.locator(".sheet")).to_contain_text("Teu amor me alcançou")
+    ana.keyboard.press("Escape"); ana.locator(".sheet-wrap").click(position={"x": 5, "y": 5}) if ana.locator(".sheet-wrap").count() else None
+    expect(ana.get_by_role("heading", name="Checklist pré-culto")).to_be_visible(); expect(ana.locator(".li.check")).to_have_count(7)
+    shot(ana, "21-multimidia-escala")
+    carla.goto(f"{BASE}/#/pedidos/novo/{jovens_id}")
+    carla.locator(".kinds label", has_text="Vídeo").click(); carla.fill("input[name=title]", "Vídeo de abertura do retiro")
+    carla.fill("textarea[name=description]", "30 segundos, para o telão"); carla.locator("#save").click()
+    expect(carla.locator(".pagehead .tag")).to_have_text("Pendente", timeout=10000)
+    req_url = carla.url
+    ana.goto(req_url); ana.get_by_role("button", name="Marcar como pronto").click()
+    toast_has(ana, "Pedido pronto")
+    carla.goto(BASE + "/#/notificacoes"); carla.reload()
+    expect(carla.get_by_text("Pedido pronto: Vídeo de abertura do retiro")).to_be_visible(timeout=10000)
+    ok("Multimídia: recursos do tipo, checklist sugerido, roteiro com as músicas e letras do louvor, pedido de mídia até a entrega")
+
     # ------------------------------------------------------------------ várias organizações
     carla.goto(BASE + "/#/nova-org")
     carla.fill("input[name=name]", "Igreja do Bairro"); carla.locator("#go").click()

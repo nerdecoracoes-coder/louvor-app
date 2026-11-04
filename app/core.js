@@ -14,6 +14,7 @@ export const state = {
   org: null,           // organização selecionada
   role: null,          // 'admin' | 'member' na organização selecionada
   myTeams: [],         // times do usuário na org (com is_leader)
+  orgTeams: [],        // times da igreja (para pedidos a outros times)
   leaderOf: new Set(),
   space: null,         // onde o usuário está: um time (objeto de myTeams) ou null = área da igreja
   unread: 0,
@@ -37,13 +38,20 @@ export const isGuest = () => state.role === "guest";
 export const canManageTeam = (teamId) => isAdmin() || state.leaderOf.has(teamId);
 export const isStaff = () => isAdmin() || state.leaderOf.size > 0;
 // Tipos de time. O repertório (músicas, player) é exclusivo dos tipos em REPERTOIRE_TYPES (igual ao banco: repertoire_types()).
-export const TEAM_TYPES = [["louvor", "Louvor"], ["multimidia", "Multimídia"], ["diaconal", "Ministério Diaconal"], ["recepcao", "Recepção"],
-  ["infantil", "Ministério Infantil"], ["intercessao", "Intercessão"], ["outro", "Outro"]];
+export const TEAM_TYPES = [["louvor", "Louvor"], ["multimidia", "Multimídia"], ["diaconal", "Diáconos"], ["infantil", "Ministério Infantil"], ["outro", "Outro"]];
+const OLD_TYPES = { recepcao: "Recepção", intercessao: "Intercessão" }; // tipos antigos continuam com o nome certo
 export const REPERTOIRE_TYPES = ["louvor"];
-export const teamTypeLabel = (t) => (t?.team_type === "outro" ? t.team_type_label || "Outro" : TEAM_TYPES.find((x) => x[0] === t?.team_type)?.[1] || "");
+export const teamTypeLabel = (t) => (t?.team_type === "outro" ? t.team_type_label || "Outro" : TEAM_TYPES.find((x) => x[0] === t?.team_type)?.[1] || OLD_TYPES[t?.team_type] || "");
 // Recursos de cada time: o tipo sugere (igual ao banco: team_feature_preset) e o administrador ajusta.
-export const FEATURES = [["repertorio", "Repertório e player", "Músicas, player multitrack e Google Drive"]];
-export const featurePreset = (type) => (REPERTOIRE_TYPES.includes(type) ? ["repertorio"] : []);
+export const FEATURES = [
+  ["repertorio", "Repertório e player", "Músicas, player multitrack e Google Drive"],
+  ["roteiro", "Roteiro do culto", "Ordem do culto nas escalas, com as músicas do louvor e as letras"],
+  ["pedidos", "Pedidos de mídia", "A igreja pede artes, vídeos e slides; o time acompanha e entrega"],
+  ["checklist", "Checklist pré-culto", "Itens a conferir antes de cada culto"],
+];
+const PRESETS = { louvor: ["repertorio"], multimidia: ["checklist", "pedidos", "roteiro"] }; // igual ao banco: team_feature_preset
+export const featurePreset = (type) => PRESETS[type] || [];
+export const teamHas = (t, f) => (Array.isArray(t?.features) ? t.features.includes(f) : featurePreset(t?.team_type).includes(f));
 export const teamHasRepertoire = (t) => (Array.isArray(t?.features) ? t.features.includes("repertorio") : REPERTOIRE_TYPES.includes(t?.team_type));
 export const hasRepertoire = () => isAdmin() || state.myTeams.some(teamHasRepertoire);
 export const isRepertoireStaff = () => isAdmin() || state.myTeams.some((t) => t.is_leader && teamHasRepertoire(t));
@@ -134,6 +142,9 @@ const P = {
   wave: '<path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M21 12h0"/>', drag: '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>', lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>',
   sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/>',
+  list: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
+  checkbox: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/>',
   org: '<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6M9 10h.01M15 10h.01"/>', swap: '<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
 };
 export const icon = (name, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ""}</svg>`;
@@ -269,6 +280,7 @@ export async function selectOrg(orgId, persist = true) {
     const t = await sb.from("team_members").select("team_id,is_leader,teams(*)").eq("user_id", state.user.id).eq("org_id", state.org.id);
     state.myTeams = (t.data || []).filter((x) => x.teams).map((x) => ({ ...x.teams, is_leader: x.is_leader })).sort((a, b) => a.name.localeCompare(b.name));
     state.leaderOf = new Set(state.myTeams.filter((x) => x.is_leader).map((x) => x.id));
+    state.orgTeams = (await sb.from("teams").select("*").eq("org_id", state.org.id).order("name")).data || [];
   }
   if (state.space) state.space = state.myTeams.find((t) => t.id === state.space.id) || null; // dados atualizados do time
   if (persist || !state.space) restoreSpace();

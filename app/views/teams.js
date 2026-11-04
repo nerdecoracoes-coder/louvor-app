@@ -1,7 +1,8 @@
 // Times: lista, criação, página do time (Escalas, Integrantes, Arquivos, Avisos), configurações e integrantes.
-import { TEAM_TYPES, REPERTOIRE_TYPES, FEATURES, featurePreset, teamHasRepertoire, isRepertoireStaff, teamTypeLabel, sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, invalidatePeople, isAdmin, canManageTeam, sheet, toast, errMsg, busy,
+import { teamHas, TEAM_TYPES, REPERTOIRE_TYPES, FEATURES, featurePreset, teamHasRepertoire, isRepertoireStaff, teamTypeLabel, sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, invalidatePeople, isAdmin, canManageTeam, sheet, toast, errMsg, busy,
   on, go, empty, spinner, fDate, uploadPublic, pickFile, confirmDialog, applyAccent, waLink, roleIcon, selectOrg, linkify, safeUrl } from "../core.js";
 import { schedRow } from "./home.js";
+import { checklistEditor } from "./multimidia.js";
 import { noticeForm } from "./home.js";
 
 export function register(route) {
@@ -37,7 +38,7 @@ export const featuresField = (t = {}) => `<div class="field"><span>Recursos do t
     <span class="switch"><input type="checkbox" name="feat_${k}" ${(Array.isArray(t.features) ? t.features : featurePreset(t.team_type || "louvor")).includes(k) ? "checked" : ""} ${isAdmin() ? "" : "disabled"}><i></i></span></label>`).join("")}
   <span class="hint">${isAdmin() ? "Já vêm marcados os recursos do tipo escolhido; ajuste se precisar." : "Só o administrador da igreja altera os recursos do time."}</span></div>`;
 const bindFeatures = (form, presetOnTypeChange) => {
-  if (!presetOnTypeChange) return;
+  if (!presetOnTypeChange || !form.querySelector("[name^=feat_]")) return;
   let touched = false;
   form.querySelectorAll("[name^=feat_]").forEach((c) => c.addEventListener("change", () => (touched = true)));
   form.team_type.addEventListener("change", () => { if (touched) return; const p = featurePreset(form.team_type.value); FEATURES.forEach(([k]) => (form[`feat_${k}`].checked = p.includes(k))); });
@@ -407,10 +408,12 @@ async function teamSettings(id, el) {
       <span class="switch"><input type="checkbox" name="apply_theme" ${team.apply_theme ? "checked" : ""}><i></i></span></label>
     <button class="btn primary block mt" id="save">Salvar</button>
   </form>
+  ${teamHas(team, "checklist") ? `<div id="chk"></div>` : ""}
   ${teamHasRepertoire(team) && isRepertoireStaff() ? `<div class="card mt"><div class="row between"><span><h3 style="font-size:16px">Repertório e Google Drive</h3><span class="small muted">Pasta "multitracks", importação e histórico de sincronização.</span></span>
     <a class="btn ghost sm" href="#/org/drive">${icon("cloud")} Abrir</a></div></div>` : ""}
   ${isAdmin() ? `<div class="card mt"><h3 class="danger-t" style="font-size:16px">Excluir time</h3><p class="small muted">Remove o time, suas escalas, chat e arquivos. As contas dos integrantes continuam existindo.</p><button class="btn danger sm" id="del">${icon("trash")} Excluir time</button></div>` : ""}`;
-  const form = el.querySelector("#f"); bindColor(form, "color"); bindType(form);
+  const form = el.querySelector("#f"); bindColor(form, "color"); bindType(form); bindFeatures(form, isAdmin());
+  if (el.querySelector("#chk")) checklistEditor(team, el.querySelector("#chk")).catch((e) => console.warn(e));
   let logo = team.logo_url;
   el.querySelector("#up").onclick = async () => {
     const f = await pickFile("image/*"); if (!f) return;

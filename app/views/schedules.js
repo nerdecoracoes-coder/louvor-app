@@ -2,6 +2,7 @@
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, isAdmin, canManageTeam, isStaff, sheet, toast, errMsg, busy, on, go,
   empty, spinner, fDate, fDateLong, fTime, fDow, fDay, fMon, ymd, fromLocal, confirmDialog, roleIcon, linkify, fDur, fMonthYear, cap, teamHasRepertoire } from "../core.js";
 import { schedRow } from "./home.js";
+import { scheduleExtras } from "./multimidia.js";
 
 export function register(route) {
   route("/escala/nova", (p, el) => editor(el, null, null));
@@ -277,11 +278,13 @@ async function detail(el, id) {
           <div class="s">${esc(x.artist_snapshot || "")}${x.song_key ? `<span>Tom ${esc(x.song_key)}</span>` : ""}${x.songs?.bpm ? `<span>${Number(x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
         ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
     }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>` : ""}
+    <div id="extras"></div>
     <div class="sec">${icon("users")}<h2>Escalados</h2></div>
     <div class="list">${[...byRole.entries()].map(([role, list]) => list.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(role)}</span></span>
       ${s.status === "published" ? (a.seen_at ? `<span class="tiny ok row gap-s">${icon("check")} Visto</span>` : `<span class="tiny muted">Não visto</span>`) : ""}</div>`).join("")).join("") || `<div class="li muted small">Ninguém escalado ainda.</div>`}</div>
     ${manage ? `<div class="row gap mt wrap"><a class="btn ghost grow" href="#/escala/${id}/editar">${icon("edit")} Editar</a>
       ${s.status === "draft" ? `<button class="btn primary grow" id="pub">${icon("check")} Publicar</button>` : ""}<button class="btn danger" id="del">${icon("trash")}</button></div>` : ""}`;
+  scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
   el.querySelector("#seen")?.addEventListener("click", async (e) => {
     busy(e.target); const r = await sb.rpc("mark_schedule_seen", { p_schedule: id });
     if (r.error) { busy(e.target, false); return toast(errMsg(r.error), "err"); }

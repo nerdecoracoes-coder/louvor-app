@@ -1,6 +1,7 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest } from "./core.js";
 import * as home from "./views/home.js";
+import * as multimidia from "./views/multimidia.js";
 import * as teams from "./views/teams.js";
 import * as schedules from "./views/schedules.js";
 import * as songs from "./views/songs.js";
@@ -15,7 +16,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); teams.register(route); schedules.register(route); songs.register(route); chat.register(route); account.register(route);
+home.register(route); multimidia.register(route); teams.register(route); schedules.register(route); songs.register(route); chat.register(route); account.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
 
@@ -27,6 +28,7 @@ function navItems() {
     ["inicio", "home", "Início", "#/"],
     ["escalas", "calendar", "Escalas", `#/times/${t.id}/escalas`],
     ...(teamHasRepertoire(t) ? [["musicas", "music", "Músicas", "#/musicas"]] : []),
+    ...(teamHas(t, "pedidos") ? [["pedidos", "inbox", "Pedidos", `#/times/${t.id}/pedidos`]] : []),
     ["chat", "chat", "Chat", `#/chat/${t.id}`],
     ["time", "users", "Time", `#/times/${t.id}/integrantes`],
   ];
@@ -43,6 +45,7 @@ function navActive(path) {
   if (path === "/" || path === "/inicio" || path === "") return "inicio";
   if (path.startsWith("/musica")) return "musicas";
   if (path.startsWith("/chat")) return "chat";
+  if (t && (path.startsWith(`/times/${t.id}/pedidos`) || path.startsWith("/pedido"))) return "pedidos";
   if (t) {
     if (path.startsWith(`/times/${t.id}/integrantes`) || path.startsWith(`/times/${t.id}/config`) || path.startsWith(`/times/${t.id}/arquivos`) || path.startsWith(`/times/${t.id}/avisos`)) return "time";
     if (path.startsWith(`/times/${t.id}`) || path.startsWith("/escala") || path.startsWith("/calendario")) return "escalas";
@@ -113,6 +116,7 @@ function addMenu() {
     if (canManageTeam(t.id) && teamHasRepertoire(t) && isRepertoireStaff()) items.push(["music", "Nova música", "Cadastrar no repertório", "#/musicas/nova"]);
     if (canManageTeam(t.id)) items.push(["megaphone", "Novo aviso do time", `Comunicado para o ${t.name}`, `#/times/${t.id}/aviso`]);
     if (canManageTeam(t.id)) items.push(["link", "Convidar para o time", "Link exclusivo deste time", `#/times/${t.id}/integrantes?convidar=1`]);
+    if (teamHas(t, "pedidos")) items.push(["inbox", "Registrar pedido", `Pedido de arte, vídeo ou slide para o ${t.name}`, `#/pedidos/novo/${t.id}`]);
   } else {
     if (isStaff()) items.push(["calendar", "Nova escala", "Criar e escalar integrantes", "#/escala/nova"]);
     if (isStaff()) items.push(["megaphone", "Novo aviso", "Comunicado para a igreja ou um time", "#/avisos/novo"]);
@@ -120,6 +124,8 @@ function addMenu() {
     if (isAdmin()) items.push(["users", "Novo time", "Criar um time na igreja", "#/times/novo"]);
     if (isAdmin()) items.push(["org", "Convidar membro da igreja", "Cadastrar alguém como membro, sem time", "#/convidar-membro"]);
   }
+  const asks = state.orgTeams.filter((x) => teamHas(x, "pedidos") && x.id !== t?.id);
+  if (asks.length && !isGuest()) items.push(["image", "Pedir arte ou vídeo", `Pedido para ${asks.map((x) => x.name).join(", ")}`, asks.length === 1 ? `#/pedidos/novo/${asks[0].id}` : "#/pedidos/novo"]);
   items.push(["lock", "Bloquear datas", "Informar minha indisponibilidade", "#/bloqueios"]);
   const s = sheet(`<h3>Adicionar</h3><div class="list menu">${items.map(([ic, ti, d, h]) => `<a class="li" href="${h}">${icon(ic)}<span class="grow"><span class="t">${esc(ti)}</span><span class="s">${esc(d)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`);
   s.el.addEventListener("click", (e) => { if (e.target.closest("a")) s.close(); });
