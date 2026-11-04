@@ -30,7 +30,7 @@ export interface SyncDeps {
   concurrency?: number;
   timeBudgetMs?: number;
   projectConcurrency?: number;  // projetos processados ao mesmo tempo
-  requireMark?: boolean;        // só importa pastas de música marcadas como prontas (nome terminando em "- Pronta"). Padrão: sim        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
+  requireMark?: boolean;        // só importa pastas de música marcadas como prontas (nome terminando em "- Pronta"). Padrão: não        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
 }
 export interface SyncStats { busy?: boolean; processed?: number; unmarked?: number; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
@@ -149,7 +149,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
     }
     // só as músicas marcadas como prontas entram no app; as outras ficam guardadas no Drive sem serem lidas
     const unmarkedIds = new Set<string>();
-    if (deps.requireMark !== false) {
+    if (deps.requireMark === true) {
       const marked: typeof folders = [];
       for (const f of folders) {
         const clean = readyName(f.name);
