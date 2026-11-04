@@ -1,7 +1,7 @@
 // Sincronização da pasta "multitracks" do Google Drive com o repertório da organização.
 //
 // Cada pasta de música fica direto em "multitracks" ou dentro de uma pasta de cantor/grupo (multitracks/Grupo/Música).
-// Só entram no app as pastas de música marcadas como prontas: nome terminando em "- Pronta" (ex.: "Emaús - Pronta").
+// Pastas de música terminando em "- Editar" (ainda não prontas) não são lidas.
 // a pasta de música é identificada pelo ID da pasta no Drive, que não muda
 // (que não muda quando a pasta é renomeada ou movida para dentro de um grupo — por isso não há duplicação). A cada execução:
 //   1. lista as pastas e seus arquivos (inclusive subpastas como "Tracks 1/");
@@ -28,16 +28,16 @@ export interface SyncDeps {
   maxProjectsPerRun?: number;   // limite de projetos reprocessados por execução (tempo da função)
   settleMinutes?: number;       // tempo de espera por arquivos ainda sendo enviados
   concurrency?: number;
-  timeBudgetMs?: number;
+  timeBudgetMs?: number;        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
   projectConcurrency?: number;  // projetos processados ao mesmo tempo
-  requireMark?: boolean;        // só importa pastas de música marcadas como prontas (nome terminando em "- Pronta"). Padrão: não        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
 }
-export interface SyncStats { busy?: boolean; processed?: number; unmarked?: number; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
+export interface SyncStats { busy?: boolean; processed?: number; editing?: number; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
 const IGNORE = /(\.rpp-bak|\.reapeaks|\.rpp-undo|\.reapindex|\.ds_store|desktop\.ini|thumbs\.db)$/i;
-// Marca de "música pronta": o nome da pasta termina com "- Pronta" (ou "- Pronto"). Ex.: "Emaús - Pronta".
-export const READY_MARK = /\s*[-\u2013\u2014]\s*pront[ao]\s*$/iu;
-export const readyName = (name: string) => { const m = READY_MARK.exec(name); return m ? name.slice(0, m.index).trim() || null : null; };
+// Música ainda não pronta: o nome da pasta termina com "- Editar". O app não lê essa pasta (e tira a música do app,
+// se ela já estava lá). Quando a edição terminar, basta tirar o "- Editar" do nome.
+export const EDIT_MARK = /\s*[-\u2013\u2014]\s*editar\s*$/iu;
+export const isEditing = (name: string) => EDIT_MARK.test(name);
 const IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
 const AUDIO_EXT = /\.(wav|wave|bwf|rf64|mp3|flac|ogg|opus|m4a|aif|aiff)$/i;
 
@@ -147,18 +147,11 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
       for (const k of kids) if (k.mimeType !== FOLDER_MIME && /\.rpp$/i.test(k.name)) await event("warn", `"${f.name}/${k.name}" está solto na pasta do grupo. Coloque cada música em sua própria pasta.`, { folder_id: f.id });
       for (const sf of subs) folders.push({ ...sf, group: f.name });
     }
-    // só as músicas marcadas como prontas entram no app; as outras ficam guardadas no Drive sem serem lidas
+    // músicas marcadas "- Editar" ficam guardadas no Drive sem serem lidas
     const unmarkedIds = new Set<string>();
-    if (deps.requireMark === true) {
-      const marked: typeof folders = [];
-      for (const f of folders) {
-        const clean = readyName(f.name);
-        if (clean) marked.push({ ...f, name: clean }); else unmarkedIds.add(f.id);
-      }
-      folders.length = 0; folders.push(...marked);
-    }
+    for (let i = folders.length - 1; i >= 0; i--) if (isEditing(folders[i].name)) { unmarkedIds.add(folders[i].id); folders.splice(i, 1); }
     stats.folders = folders.length;
-    stats.unmarked = unmarkedIds.size;
+    stats.editing = unmarkedIds.size;
 
     const songs: any[] = await db.select("songs", `org_id=eq.${orgId}&source=eq.drive&select=*`);
     const byFolder = new Map(songs.map((s) => [s.drive_folder_id, s]));
@@ -223,12 +216,12 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
     for (const s of songs) {
       if (present.has(s.drive_folder_id)) continue;
       if (unmarkedIds.has(s.drive_folder_id)) {
-        // a pasta perdeu a marca de pronta (ou nunca teve): a música sai do app até ser marcada de novo
+        // pasta marcada "- Editar": a música sai do app até o "- Editar" ser tirado
         const used = s.current_project_id ? [1] : await db.select("schedule_songs", `song_id=eq.${s.id}&select=id&limit=1`);
         if (!used.length) { await db.delete("songs", `id=eq.${s.id}`); continue; }
         if (s.status === "removed") continue;
-        await db.update("songs", `id=eq.${s.id}`, { status: "removed", status_message: "A pasta no Drive não termina com \"- Pronta\". Marque de novo para a música voltar.", drive_signature: null });
-        await event("info", `"${s.title}" saiu do repertório (pasta sem a marca de pronta).`, { song_id: s.id, folder_id: s.drive_folder_id });
+        await db.update("songs", `id=eq.${s.id}`, { status: "removed", status_message: "A pasta no Drive está marcada como \"- Editar\". Tire o \"- Editar\" do nome quando a música estiver pronta.", drive_signature: null });
+        await event("info", `"${s.title}" saiu do repertório (pasta marcada "- Editar").`, { song_id: s.id, folder_id: s.drive_folder_id });
         stats.removed++;
         continue;
       }

@@ -71,17 +71,17 @@ Cada pasta de música vira uma música. Ela pode ficar direto em "multitracks" o
 ```
 multitracks/
   Morada/                                   pasta de cantor/grupo (só tem subpastas)
-    Canção de Simeão/                       ainda não pronta: não entra no app
-    Emaús - Pronta/
+    Canção de Simeão - Editar/              ainda não pronta: não entra no app
+    Emaús/
       Emaús - Morada - 140 BPM (B).rpp
       Tracks 1/
         Click.wav  Guide.wav  Drums.wav ...
-  Ousado Amor - Isaias Saad - Pronta/       música direto na pasta principal
+  Ousado Amor - Isaias Saad/                música direto na pasta principal
     Ousado Amor - Isaias Saad - 136 BPM (A).rpp
     ...
 ```
 
-- **Só entram as músicas prontas**: quando a música estiver editada no Reaper, com as marcações, renomeie a pasta dela para terminar com **"- Pronta"** (ex.: "Emaús - Pronta"). Pastas sem isso ficam guardadas no Drive e não são lidas. Tirar o "- Pronta" tira a música do app (o histórico das escalas fica).
+- **Músicas ainda não prontas**: coloque **"- Editar"** no fim do nome da pasta (ex.: "Canção de Simeão - Editar"). O app não lê essa pasta e, se ela já estava no app, ela sai (o histórico das escalas fica). Quando terminar no Reaper, tire o "- Editar" e a música entra no app.
 - Uma pasta com o .RPP ou áudios logo dentro dela é uma **música**; uma pasta só com subpastas é de um **cantor/grupo**, e cada subpasta dela é uma música.
 - Se o nome do projeto não trouxer o artista, o nome da pasta do cantor/grupo é usado como artista.
 - **Capa**: uma imagem (JPEG, PNG ou WebP) solta na pasta da música vira a capa no cartão. Se houver mais de uma, vale a que tiver "capa" ou "cover" no nome. A imagem é copiada para as imagens do app (o original fica intacto); uma capa enviada à mão pelo app tem prioridade.
