@@ -1,5 +1,5 @@
 {
-  "id": "/louvor-app/",
+  "id": "/louvor-app/?app=louvor-v2",
   "name": "Louvor — Gestão de Ministérios",
   "short_name": "Louvor",
   "description": "Escalas, times, repertório e player multitrack do ministério de louvor.",
