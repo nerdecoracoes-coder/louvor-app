@@ -81,7 +81,11 @@ async function newTeam(_, el) {
     const { data, error } = await sb.from("teams").insert({ org_id: state.org.id, name: form.name.value.trim(), description: form.description.value || null, accent_color: readColor(form, "color"), created_by: state.user.id }).select("*").single();
     busy(btn, false);
     if (error) return toast(errMsg(error), "err");
-    toast("Time criado"); go(`/times/${data.id}/integrantes`);
+    // quem cria o time entra nele como líder (pode sair depois, se não for participar)
+    const tm = await sb.from("team_members").insert({ team_id: data.id, user_id: state.user.id, org_id: state.org.id, is_leader: true });
+    if (tm.error) toast(errMsg(tm.error), "err");
+    await selectOrg(state.org.id, false);
+    toast("Time criado. Você entrou como líder."); go(`/times/${data.id}/integrantes`);
   };
 }
 
