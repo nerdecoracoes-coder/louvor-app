@@ -26,8 +26,8 @@ jobs:
           test -n "$GOOGLE_SERVICE_ACCOUNT" || { echo "Falta o secret GOOGLE_SERVICE_ACCOUNT"; exit 1; }
           test -n "$CRON_SECRET" || { echo "Falta o secret CRON_SECRET"; exit 1; }
           printf '%s' "$GOOGLE_SERVICE_ACCOUNT" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('type')=='service_account' and d.get('private_key') and d.get('client_email'); print('Conta de serviço:', d['client_email'])"
-          supabase secrets set --project-ref "$PROJECT_REF" GOOGLE_SERVICE_ACCOUNT="$GOOGLE_SERVICE_ACCOUNT" CRON_SECRET="$CRON_SECRET"
+          supabase secrets set --project-ref "$PROJECT_REF" GOOGLE_SERVICE_ACCOUNT="$GOOGLE_SERVICE_ACCOUNT" CRON_SECRET="$CRON_SECRET" --yes
       - name: Publicar funções
         run: |
-          supabase functions deploy drive-sync --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
-          supabase functions deploy drive-media --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy drive-sync --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
+          supabase functions deploy drive-media --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
