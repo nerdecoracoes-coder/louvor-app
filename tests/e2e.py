@@ -69,19 +69,30 @@ with sync_playwright() as pw:
     ana.keyboard.press("Escape"); ana.goto(BASE + "/#/")
 
     # ------------------------------------------------------------------ Bruno e Carla aceitam
+    # convite de membro da igreja (o time é ministério: só membros entram)
+    ana.goto(BASE + "/#/org"); ana.locator("#orginv").click()
+    church_link = ana.locator(".sheet #lnk").input_value()
+    assert "/#/convite/" in church_link
+    ana.keyboard.press("Escape"); ana.goto(BASE + "/#/")
     people = {}
     for who in ["Bruno Costa", "Carla Dias"]:
         c, p = ctx(br)
-        p.goto(link)
-        expect(p.locator(".invitecard")).to_contain_text("Louvor Domingo", timeout=15000)
-        if who == "Bruno Costa": shot(p, "05-convite-recebido")
+        if who == "Bruno Costa":
+            # sem ser membro, o link do ministério é recusado com orientação
+            p.goto(link); expect(p.locator(".invitecard")).to_contain_text("Louvor Domingo", timeout=15000)
+            shot(p, "05-convite-recebido")
+        p.goto(church_link)
+        expect(p.locator(".invitecard")).to_contain_text("INVT Tijuca", timeout=15000)
         p.get_by_role("button", name="Criar conta").click()
         p.fill("input[name=name]", who); p.fill("input[name=email]", f"{who.split()[0].lower()}.{STAMP}@teste.local"); p.fill("input[name=password]", "senha-forte-123")
         p.locator("#go").click()
         p.get_by_role("button", name="Aceitar convite").click(timeout=15000)
+        expect(p.locator(".hero")).to_be_visible(timeout=15000)
+        p.goto(link)
+        p.get_by_role("button", name="Aceitar convite").click(timeout=15000)
         expect(p.locator(".pagehead h1", has_text="Louvor Domingo")).to_be_visible(timeout=15000)
         people[who] = (c, p)
-    ok("convites aceitos (cadastro pelo link)")
+    ok("convite de membro da igreja e depois convite do time")
     bc, bruno = people["Bruno Costa"]; cc, carla = people["Carla Dias"]
     carla.goto(link); expect(carla.get_by_text("Você já faz parte deste time")).to_be_visible(timeout=15000)
     ok("convite repetido informa que já faz parte")

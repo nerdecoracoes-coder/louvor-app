@@ -1,6 +1,6 @@
 // Início: perfil, atalhos, avisos, próximas escalas, aniversariantes e bloqueio de datas.
 import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDate, fDateLong, ymd, people, personName, myName, isStaff, isAdmin,
-  canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire } from "../core.js";
+  canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire, invalidatePeople } from "../core.js";
 
 export function register(route) {
   route("/", homeView);
@@ -32,13 +32,15 @@ export async function upcomingAssignments(limit = 6) {
   return [...by.values()].sort((a, b) => a.starts_at.localeCompare(b.starts_at)).slice(0, limit);
 }
 
-export function schedRow(s, { showTeam = true } = {}) {
-  const role = s.roles?.[0];
-  return `<a class="sched${s.status === "draft" ? " draft" : ""}" href="#/escala/${s.id}">
-    <div class="date">${fDow(s.starts_at)}<b>${fDay(s.starts_at)}</b>${fMon(s.starts_at)}</div>
-    <div class="info"><h3>${esc(s.title)}</h3><div class="meta"><span>${icon("clock")}${fTime(s.starts_at)}</span>${s.location ? `<span>${icon("pin")}${esc(s.location)}</span>` : showTeam && s.teams ? `<span>${icon("users")}${esc(s.teams.name)}</span>` : ""}</div></div>
-    <div class="side">${role ? `<span class="pill">${icon(roleIcon(role))}${esc(role)}${s.roles.length > 1 ? ` +${s.roles.length - 1}` : ""}</span>` : ""}
-      ${s.status === "draft" ? `<span class="tag gray">Rascunho</span>` : s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="tiny ok">${icon("check")} Visto</span>` : ""}</div></a>`;
+export function schedRow(s, { showTeam = true, feature = false } = {}) {
+  const roles = s.roles || [];
+  const where = [s.location, showTeam && s.teams ? s.teams.name : null].filter(Boolean).join(" · ");
+  const status = s.status === "draft" ? `<span class="tag gray">Rascunho</span>` : s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="seen">${icon("check")} Visto</span>` : "";
+  return `<a class="sched${feature ? " feature" : ""}${s.status === "draft" ? " draft" : ""}" href="#/escala/${s.id}">
+    <div class="date"><span>${fDow(s.starts_at)}</span><b>${fDay(s.starts_at)}</b><span>${fMon(s.starts_at)}</span></div>
+    <div class="info"><h3>${esc(s.title)}</h3><div class="meta">${fTime(s.starts_at)}${where ? ` · ${esc(where)}` : ""}</div>
+      ${roles.length || status ? `<div class="side">${roles.map((r) => `<span class="pill">${esc(r)}</span>`).join("")}${status}</div>` : ""}</div>
+    ${icon("chevronRight", "chev")}</a>`;
 }
 
 function nextBirthday(dateStr) {
@@ -63,35 +65,43 @@ async function homeView(_, el, alive) {
   const name = myName().split(" ")[0] || "você";
   const bdays = [...ppl.values()].map((p) => ({ p, b: nextBirthday(p.birth_date) })).filter((x) => x.b && x.b.days <= 30).sort((a, b) => a.b.days - b.b.days).slice(0, 6);
 
+  const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date()));
+  const hello = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const noPhoto = !state.profile?.avatar_url;
+  const teamsLine = state.myTeams.map((t) => t.name).join(", ");
   el.innerHTML = `
   <section class="hero">
-    <a href="#/perfil">${avatar({ ...state.profile, display_name: myName() }, 96)}</a>
-    <div class="grow"><h1>Olá, <b>${esc(name)}</b></h1>
-      <div class="roles">${roles.length ? roles.map(esc).join(" &nbsp;•&nbsp; ") : `<a href="#/perfil">${esc(state.org.name)}</a>`}</div><div class="bar"></div></div>
+    <div class="grow"><p class="hello">${hello},</p><h1>${esc(name)}</h1>
+      <p class="roles">${[roles.join(", "), teamsLine].filter(Boolean).map(esc).join(" — ") || esc(state.org.name)}</p></div>
+    <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 76)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
   </section>
-  <nav class="shortcuts">
-    <a href="#/calendario/meu">${icon("music")}<span>Escalas</span></a>
-    <a href="#/times">${icon("users")}<span>Times</span></a>
-    ${hasRepertoire() ? `<a href="#/musicas">${icon("file")}<span>Músicas</span></a>` : `<a href="#/calendario">${icon("calendar")}<span>Agenda</span></a>`}
-    <a href="#/chat">${icon("chat")}<span>Chat</span></a>
-  </nav>
+  ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
-  <div class="sec">${icon("megaphone")}<h2>Avisos</h2><a href="#/avisos">Ver todos ${icon("chevronRight")}</a></div>
+  <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/calendario/meu">Agenda ${icon("chevronRight")}</a></div>
+  <div id="ups">${ups.length ? ups.map((s, i) => schedRow(s, { feature: i === 0 })).join("") : empty("calendar", "Nenhuma escala por enquanto", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>
+
+  <div class="sec"><h2>Avisos</h2><a href="#/avisos">Todos ${icon("chevronRight")}</a></div>
   ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>
     ${notices.length > 1 ? `<div class="dots" id="ndots">${notices.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}`
-    : `<div class="card">${empty("megaphone", "Nenhum aviso por enquanto", isStaff() ? `<a class="link" href="#/avisos/novo">Publicar um aviso</a>` : "Os comunicados da igreja aparecem aqui.")}</div>`}
+    : empty("megaphone", "Nenhum aviso publicado", isStaff() ? `<a class="link" href="#/avisos/novo">Publicar o primeiro aviso</a>` : "Os comunicados da igreja aparecem aqui.")}
 
-  <div class="sec">${icon("calendar")}<h2>Minhas próximas escalas</h2><a href="#/calendario/meu">Ver agenda ${icon("chevronRight")}</a></div>
-  <div id="ups">${ups.length ? ups.map((s) => schedRow(s)).join("") : `<div class="card">${empty("calendar", "Você não tem escalas futuras", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>`}</div>
+  ${bdays.length ? `<div class="sec"><h2>Aniversariantes</h2></div>
+  <div class="bdays">${bdays.map(({ p, b }) => `<div class="bday">${avatar(p, 56, b.days === 0)}
+      <b>${esc(p.display_name.split(" ")[0])}</b><span class="when">${b.days === 0 ? "Hoje" : b.days === 1 ? "Amanhã" : fDate(b.date)}${b.age ? `, ${b.age} anos` : ""}</span></div>`).join("")}</div>` : ""}
 
-  <div class="sec">${icon("gift")}<h2>Aniversariantes</h2></div>
-  <div>${bdays.length ? bdays.map(({ p, b }) => `<div class="bday"><span style="position:relative">${avatar(p, 64)}<span class="cake">${icon("gift")}</span></span>
-      <div class="grow"><b>${esc(p.display_name)}</b><br><span class="when">${b.days === 0 ? "Hoje" : b.days === 1 ? "Amanhã" : `Em ${b.days} dias`}, ${fDateLong(b.date).replace(/^[^,]+, /, "")}${b.age ? ` · ${b.age} anos` : ""}</span></div></div>`).join("")
-    : `<p class="muted small">Nenhum aniversário nos próximos 30 dias.</p>`}</div>
-
-  <div class="sec">${icon("lock")}<h2>Bloqueio de datas</h2><a href="#/bloqueios">Abrir ${icon("chevronRight")}</a></div>
+  <div class="sec"><h2>Disponibilidade</h2><a href="#/bloqueios">Abrir ${icon("chevronRight")}</a></div>
   <div class="card" id="blocks"></div>`;
-
+  const pickPhoto = async () => {
+    const f = await pickFile("image/*"); if (!f) return;
+    try {
+      const url = await uploadPublic(`avatars/${state.user.id}`, f);
+      await must(sb.from("profiles").update({ avatar_url: url }).eq("id", state.user.id));
+      state.profile.avatar_url = url; invalidatePeople(); document.dispatchEvent(new Event("profile-changed"));
+      toast("Foto adicionada"); homeView(_, el, alive);
+    } catch (e) { toast(errMsg(e), "err"); }
+  };
+  el.querySelector("#addphoto")?.addEventListener("click", pickPhoto);
+  el.querySelector("#heroav").onclick = () => (noPhoto ? pickPhoto() : go("/perfil"));
   const car = el.querySelector("#notices");
   if (car) car.addEventListener("scroll", () => {
     const i = Math.round(car.scrollLeft / car.clientWidth);

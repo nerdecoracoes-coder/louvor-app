@@ -60,7 +60,7 @@ on(document, "click", "[data-act=add]", () => addMenu());
 function orgSwitcher() {
   const s = sheet(`<h3>Igrejas</h3><div class="list menu">
     ${state.orgs.map((o) => `<button class="li" data-org="${o.org_id}">${o.organizations.logo_url ? `<span class="tbadge" style="--s:40px"><img src="${attr(o.organizations.logo_url)}" alt=""></span>` : `<span class="tbadge" style="--s:40px;--tc:${attr(o.organizations.accent_color)}"><span>${esc(o.organizations.name[0])}</span></span>`}
-      <span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : "Integrante"}</span></span>${o.org_id === state.org?.id ? icon("check", "accent") : ""}</button>`).join("")}
+      <span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : o.role === "guest" ? "Convidado" : "Membro"}</span></span>${o.org_id === state.org?.id ? icon("check", "accent") : ""}</button>`).join("")}
   </div><div class="list menu mt">
     ${isAdmin() ? `<a class="li" href="#/org">${icon("settings")}<span class="grow t">Configurações da igreja</span></a>` : ""}
     <a class="li" href="#/nova-org">${icon("plus")}<span class="grow t">Cadastrar outra igreja</span></a></div>`);

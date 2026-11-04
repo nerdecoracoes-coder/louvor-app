@@ -1,6 +1,6 @@
 // Tipos de time: o repertório só aparece para administradores e integrantes de times de Louvor.
 import { describe, expect, test, beforeAll } from "bun:test";
-import { newUser } from "./helpers";
+import { newUser, joinChurch } from "./helpers";
 
 let admin: any, louvorLider: any, louvorMembro: any, midia: any, midiaLider: any;
 let org = "", louvor = "", multimidia = "", song = "";
@@ -12,6 +12,7 @@ beforeAll(async () => {
   multimidia = (await admin.api.post("teams", { org_id: org, name: "Mídia", team_type: "multimidia" })).data[0].id;
   const inv = async (t: string) => (await admin.api.rpc("create_team_invite", { p_team: t })).data;
   const tl = await inv(louvor), tm = await inv(multimidia);
+  await joinChurch(admin.api, org, louvorLider, louvorMembro, midia, midiaLider);
   await louvorLider.api.rpc("accept_invite", { p_token: tl }); await louvorMembro.api.rpc("accept_invite", { p_token: tl });
   await midia.api.rpc("accept_invite", { p_token: tm }); await midiaLider.api.rpc("accept_invite", { p_token: tm });
   await admin.api.patch(`team_members?team_id=eq.${louvor}&user_id=eq.${louvorLider.id}`, { is_leader: true });

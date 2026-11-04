@@ -7,7 +7,7 @@ import { Db } from "../supabase/functions/_shared/db.ts";
 import { syncOrg } from "../supabase/functions/_shared/sync.ts";
 import { FsDrive } from "./fsdrive.ts";
 import { makeProject } from "./fixtures/make-project.ts";
-import { newUser, serviceKey, REST } from "./helpers.ts";
+import { newUser, serviceKey, REST, joinChurch } from "./helpers.ts";
 
 const SIM = `/tmp/claude-0/drive-sim-${Date.now()}`;
 const ROOT = `${SIM}/multitracks`;
@@ -28,6 +28,7 @@ beforeAll(async () => {
   [admin, member, outsider] = await Promise.all([newUser("Admin Sync"), newUser("Membro Sync"), newUser("De Fora")]);
   org = (await admin.api.rpc("create_organization", { p_name: "Org Sync" })).data;
   team = (await admin.api.post("teams", { org_id: org, name: "Louvor" })).data[0].id;
+  await joinChurch(admin.api, org, member);
   await member.api.rpc("accept_invite", { p_token: (await admin.api.rpc("create_team_invite", { p_team: team })).data });
   await db.insert("drive_integrations", { org_id: org, folder_id: drive.idOf(ROOT), folder_name: "multitracks" });
 });

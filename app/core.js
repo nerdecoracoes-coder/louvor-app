@@ -18,6 +18,7 @@ export const state = {
   unread: 0,
 };
 export const isAdmin = () => state.role === "admin";
+export const isGuest = () => state.role === "guest";
 export const canManageTeam = (teamId) => isAdmin() || state.leaderOf.has(teamId);
 export const isStaff = () => isAdmin() || state.leaderOf.size > 0;
 // Tipos de time. O repertório (músicas, player) é exclusivo dos tipos em REPERTOIRE_TYPES (igual ao banco: repertoire_types()).
@@ -48,9 +49,9 @@ const fmt = (opts) => new Intl.DateTimeFormat("pt-BR", { timeZone: TZ, ...opts }
 export const fDate = (d) => fmt({ day: "2-digit", month: "short" }).format(new Date(d)).replace(".", "");
 export const fDateLong = (d) => fmt({ weekday: "long", day: "2-digit", month: "long" }).format(new Date(d));
 export const fTime = (d) => fmt({ hour: "2-digit", minute: "2-digit" }).format(new Date(d));
-export const fDow = (d) => fmt({ weekday: "short" }).format(new Date(d)).replace(".", "").toUpperCase();
+export const fDow = (d) => fmt({ weekday: "short" }).format(new Date(d)).replace(".", "");
 export const fDay = (d) => fmt({ day: "2-digit" }).format(new Date(d));
-export const fMon = (d) => fmt({ month: "short" }).format(new Date(d)).replace(".", "").toUpperCase();
+export const fMon = (d) => fmt({ month: "short" }).format(new Date(d)).replace(".", "");
 export const fRel = (d) => {
   const s = (Date.now() - new Date(d).getTime()) / 1000;
   if (s < 60) return "agora";
@@ -146,6 +147,8 @@ export function toast(msg, kind = "") {
 }
 export function errMsg(e) {
   if (String(e?.message).includes("only_admin_sets_leader")) return "Somente o administrador da igreja define os líderes.";
+  if (String(e?.message).includes("not_church_member")) return "Este time recebe apenas membros cadastrados da igreja.";
+  if (String(e?.message).includes("team_has_guests")) return "Remova os convidados antes de tornar este time um ministério.";
   const m = e?.message || String(e || "");
   const map = {
     forbidden: "Você não tem permissão para isso.", last_admin: "A igreja precisa de pelo menos um administrador geral.",
@@ -215,11 +218,11 @@ export function pickFile(accept = "image/*", capture) {
 // ---------------------------------------------------------------- tema
 export function hexToRgb(h) { const m = /^#?([0-9a-f]{6})$/i.exec(h || ""); if (!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
 export function applyAccent(el, hex) {
-  const rgb = hexToRgb(hex) || [30, 167, 255];
+  const rgb = hexToRgb(hex) || [61, 139, 255];
   el.style.setProperty("--accent", `rgb(${rgb.join(",")})`);
   el.style.setProperty("--accent-rgb", rgb.join(","));
 }
-export function applyOrgTheme() { applyAccent(document.documentElement, state.org?.accent_color || "#1EA7FF"); }
+export function applyOrgTheme() { applyAccent(document.documentElement, state.org?.accent_color || "#3D8BFF"); }
 
 // ---------------------------------------------------------------- dados da sessão
 export async function loadSession() {

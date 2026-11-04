@@ -14,8 +14,11 @@ export function register(route) {
   route("/times/:id/:tab", (p, el, a) => teamView(p.id, p.tab, el, a));
 }
 
-const COLORS = ["#1EA7FF", "#7C5CFF", "#22D3EE", "#34D399", "#F59E0B", "#F97316", "#EF4444", "#EC4899", "#A3E635", "#E5E7EB"];
-export const typeField = (t = {}) => `<div class="field"><span>Tipo de time *</span><select name="team_type" required>
+const COLORS = ["#3D8BFF", "#1EA7FF", "#7C6CF2", "#2BB3C0", "#3DBE8B", "#CDB98F", "#E0884A", "#E26464", "#D46BA8", "#E5E7EB"];
+export const typeField = (t = {}) => `<div class="field"><span>Categoria</span><div class="seg2">
+    <label><input type="radio" name="category" value="ministry" ${(t.category || "ministry") === "ministry" ? "checked" : ""}><span><b>Ministério da igreja</b><small>Só membros cadastrados</small></span></label>
+    <label><input type="radio" name="category" value="open" ${t.category === "open" ? "checked" : ""}><span><b>Aberto a convidados</b><small>Aceita pessoas de outras igrejas</small></span></label></div></div>
+  <div class="field"><span>Tipo de time *</span><select name="team_type" required>
     ${TEAM_TYPES.map(([k, l]) => `<option value="${k}" ${(t.team_type || "louvor") === k ? "selected" : ""}>${l}</option>`).join("")}</select></div>
   <label class="field ${t.team_type === "outro" ? "" : "hidden"}" id="tlab"><span>Qual tipo?</span><input name="team_type_label" maxlength="60" value="${attr(t.team_type_label || "")}" placeholder="Ex.: Teatro"></label>
   <p class="tiny muted" id="thint" style="margin:-6px 0 14px"></p>`;
@@ -28,7 +31,7 @@ const bindType = (form) => {
   };
   form.team_type.addEventListener("change", sync); sync();
 };
-const readType = (form) => ({ team_type: form.team_type.value, team_type_label: form.team_type.value === "outro" ? form.team_type_label.value.trim() || null : null });
+const readType = (form) => ({ category: form.querySelector("input[name=category]:checked")?.value || "ministry", team_type: form.team_type.value, team_type_label: form.team_type.value === "outro" ? form.team_type_label.value.trim() || null : null });
 export const colorPicker = (name, value) => `<div class="colors">${COLORS.map((c) => `<label style="background:${c}"><input type="radio" name="${name}" value="${c}" ${c.toLowerCase() === (value || "").toLowerCase() ? "checked" : ""}><i></i></label>`).join("")}
   <label title="Outra cor" style="box-shadow:none"><input type="color" name="${name}_custom" value="${attr(COLORS.includes(value) ? "#1EA7FF" : value || "#1EA7FF")}"></label></div>`;
 export const readColor = (form, name) => {
@@ -55,7 +58,7 @@ async function teamsList(_, el, alive) {
     <p class="muted small">${isAdmin() ? "Como administrador geral, você vê todos os times da igreja." : "Times dos quais você participa."}</p>
     ${visible.length ? `<div class="grid mt">${visible.map((t) => `<div class="teamcard" style="--tc:${attr(t.accent_color || "var(--accent)")}">
       <a href="#/times/${t.id}" class="row gap grow" style="color:inherit;min-width:0">${teamBadge(t, 52)}<span class="grow" style="min-width:0"><h3 class="ellipsis">${esc(t.name)}</h3>
-        <span class="small muted">${esc(teamTypeLabel(t))} · ${cnt(t.id)} integrante${cnt(t.id) === 1 ? "" : "s"}${state.leaderOf.has(t.id) ? " · você é líder" : mine.has(t.id) ? "" : " · você não participa"}</span></span></a>
+        <span class="small muted">${esc(teamTypeLabel(t))}${t.category === "open" ? " · aberto a convidados" : ""} · ${cnt(t.id)} integrante${cnt(t.id) === 1 ? "" : "s"}${state.leaderOf.has(t.id) ? " · você é líder" : mine.has(t.id) ? "" : " · você não participa"}</span></span></a>
       ${mine.has(t.id) ? `<a class="iconbtn" href="#/chat/${t.id}" aria-label="Chat do time">${icon("chat")}</a>` : ""}
       <button class="iconbtn" data-menu="${t.id}" aria-label="Opções">${icon("more")}</button></div>`).join("")}</div>`
       : `<div class="card mt">${empty("users", "Você ainda não está em nenhum time", "Peça ao líder um link de convite.")}</div>`}`;
@@ -90,7 +93,7 @@ async function newTeam(_, el) {
     ${typeField()}
     <label class="field"><span>Líder do time</span><select name="leader"><option value="">Definir depois</option>${ppl.map((p) => `<option value="${p.id}">${esc(p.display_name)}${p.id === state.user.id ? " (você)" : ""}</option>`).join("")}</select>
       <span class="hint">Você cadastra o time sem precisar fazer parte dele. O líder convida e inclui os integrantes.</span></label>
-    <div class="field"><span>Cor de destaque</span>${colorPicker("color", "#1EA7FF")}</div>
+    <div class="field"><span>Cor de destaque</span>${colorPicker("color", "#3D8BFF")}</div>
     <button class="btn primary block" id="save">Criar time</button></form>`;
   const form = el.querySelector("#f"); bindColor(form, "color"); bindType(form);
   form.onsubmit = async (e) => {
@@ -123,7 +126,7 @@ export async function inviteSheet(team) {
   const link = `${location.origin}${location.pathname}#/convite/${r.data}`;
   const text = `Você foi convidado(a) para o time ${team.name} (${state.org.name}). Entre pelo link: ${link}`;
   s.el.innerHTML = `<div class="grab"></div><h3>Convidar para ${esc(team.name)}</h3>
-    <p class="small muted">Quem abrir este link cria a conta (ou faz login) e entra no time como integrante. O link vale por 30 dias.</p>
+    <p class="small muted">${team.category === "open" ? "Time aberto: membros da igreja entram como integrantes e pessoas de outras igrejas entram como convidadas, só neste time." : "Ministério da igreja: o link funciona só para quem já é membro da igreja. Para alguém novo, o administrador envia antes o convite de membro."} O link vale por 30 dias.</p>
     <label class="field"><span>Link exclusivo</span><input class="input" readonly value="${attr(link)}" id="lnk"></label>
     <div class="two"><button class="btn ghost" id="cp">${icon("copy")} Copiar link</button>
       <a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">${icon("whatsapp")} WhatsApp</a></div>
@@ -181,8 +184,8 @@ async function membersTab(team, members, box, manage) {
       .filter((m) => !roleFilter || tmr.some((r) => r.user_id === m.user_id && r.role_id === roleFilter))
       .sort((a, b) => Number(b.is_leader) - Number(a.is_leader) || a.p.display_name.localeCompare(b.p.display_name));
     box.querySelector("#mlist").innerHTML = list.map((m) => `<div class="li">${avatar(m.p, 44, m.is_leader)}
-      <span class="grow" style="min-width:0"><span class="t row gap-s">${esc(m.p.display_name)}${m.is_leader ? `<span class="tag soft">Líder</span>` : ""}${m.p.role === "admin" ? `<span class="tag gray">Admin</span>` : ""}</span>
-      <span class="s">${rolesOf(m.user_id).map(esc).join(" · ") || "Sem função definida"}</span></span>
+      <span class="grow" style="min-width:0"><span class="t row gap-s">${esc(m.p.display_name)}${m.is_leader ? `<span class="tag soft">Líder</span>` : ""}${m.p.role === "admin" ? `<span class="tag gray">Admin</span>` : ""}${m.is_guest ? `<span class="tag champ">Convidado</span>` : ""}</span>
+      <span class="s">${m.is_guest ? `${esc(m.guest_church || "Outra igreja")}${m.access_until ? ` · até ${m.access_until.split("-").reverse().join("/")}` : ""} · ` : ""}${rolesOf(m.user_id).map(esc).join(", ") || "Sem função definida"}</span></span>
       <button class="iconbtn" data-mm="${m.user_id}" aria-label="Opções">${icon("more")}</button></div>`).join("") || `<div class="li muted">Ninguém encontrado.</div>`;
   };
   box.innerHTML = `${manage ? `<div class="row gap wrap mb"><button class="btn primary sm" id="inv">${icon("link")} Convidar</button><button class="btn ghost sm" id="add">${icon("plus")} Adicionar da igreja</button></div>` : ""}
@@ -199,7 +202,7 @@ async function membersTab(team, members, box, manage) {
 
 function addExisting(team, members, ppl) {
   const inTeam = new Set(members.map((m) => m.user_id));
-  const cands = [...ppl.values()].filter((p) => !inTeam.has(p.id)).sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const cands = [...ppl.values()].filter((p) => !inTeam.has(p.id) && p.role !== "guest").sort((a, b) => a.display_name.localeCompare(b.display_name));
   const sel = new Set();
   const s = sheet(`<h3>Adicionar ao ${esc(team.name)}</h3><p class="small muted">Pessoas que já fazem parte da igreja. Selecione uma ou várias.</p>
     <label class="search mb" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar"></label>
@@ -279,6 +282,8 @@ async function editMember(team, m, p, roles, tmr, ppl) {
       ${isAdmin() ? `<label class="check"><input type="checkbox" name="admin" ${om?.role === "admin" ? "checked" : ""}> Administrador geral da igreja</label>` : ""}</div>
     <div class="two"><label class="field"><span>Data de nascimento</span><input type="date" name="birth_date" value="${attr(om?.birth_date || p.birth_date || "")}" ${isAdmin() ? "" : "disabled"}></label>
       <label class="field"><span>Limite de escalas por mês</span><input type="number" min="0" max="62" name="monthly_limit" value="${m.monthly_limit ?? ""}" placeholder="Sem limite"></label></div>
+    ${m.is_guest ? `<div class="two"><label class="field"><span>Igreja de origem</span><input name="guest_church" maxlength="80" value="${attr(m.guest_church || "")}"></label>
+      <label class="field"><span>Acesso até (opcional)</span><input type="date" name="access_until" value="${attr(m.access_until || "")}"></label></div>` : ""}
     <div class="field"><span>Evitar escalar junto com</span><div class="hint" style="margin:0 0 8px">Preferência usada na sugestão automática. Não impede a escala manual.</div>
       <div style="max-height:180px;overflow:auto" class="list">${others.map((o) => `<label class="li check" style="min-height:44px"><input type="checkbox" name="avoid" value="${o.id}" ${(m.avoid_with || []).includes(o.id) ? "checked" : ""}>${esc(o.display_name)}</label>`).join("")}</div></div>
     <button class="btn primary block" id="save">Salvar</button></form>`);
@@ -299,7 +304,7 @@ async function editMember(team, m, p, roles, tmr, ppl) {
       const roleIds = fd.getAll("role");
       const ops = [
         sb.rpc("set_member_roles", { p_team: team.id, p_user: m.user_id, p_roles: roleIds }),
-        sb.from("team_members").update({ ...(isAdmin() ? { is_leader: fd.get("leader") === "1" } : {}), monthly_limit: fd.get("monthly_limit") ? Number(fd.get("monthly_limit")) : null, avoid_with: fd.getAll("avoid") }).eq("team_id", team.id).eq("user_id", m.user_id),
+        sb.from("team_members").update({ ...(isAdmin() ? { is_leader: fd.get("leader") === "1" } : {}), monthly_limit: fd.get("monthly_limit") ? Number(fd.get("monthly_limit")) : null, ...(m.is_guest ? { guest_church: fd.get("guest_church")?.trim() || null, access_until: fd.get("access_until") || null } : {}), avoid_with: fd.getAll("avoid") }).eq("team_id", team.id).eq("user_id", m.user_id),
       ];
       if (isAdmin()) {
         ops.push(sb.from("org_members").update({ display_name: fd.get("display_name")?.trim() || null, birth_date: fd.get("birth_date") || null }).eq("org_id", state.org.id).eq("user_id", m.user_id));

@@ -48,3 +48,11 @@ export async function newUser(name: string) {
   if (!j.access_token) throw new Error("signup failed: " + JSON.stringify(j));
   return { api: new Api(j.access_token, j.user.id), id: j.user.id as string, email };
 }
+
+// Torna a pessoa membro da igreja (convite da igreja) — necessário antes de entrar em times de ministério.
+export async function joinChurch(admin: Api, org: string, ...users: { api: Api }[]) {
+  for (const u of users) {
+    const tok = (await admin.rpc("create_org_invite", { p_org: org })).data;
+    await u.api.rpc("accept_invite", { p_token: tok });
+  }
+}

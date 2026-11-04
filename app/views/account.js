@@ -75,12 +75,16 @@ async function inviteView(token) {
   el.innerHTML = authShell(`${logo()}${card}
     ${inv.already_member ? `<h1>Você já faz parte ${isOrg ? "desta igreja" : "deste time"}</h1><p class="sub">Nada a fazer por aqui.</p><button class="btn primary block" id="open">${isOrg ? "Abrir o app" : "Abrir o time"}</button>`
       : isOrg ? `<h1>Tornar-se membro?</h1><p class="sub">Você será cadastrado(a) como membro da igreja. A entrada nos times é feita pelo convite do líder de cada time.</p><button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`
+      : !inv.is_church_member && T.category !== "open" ? `<h1>Convite só para membros</h1><p class="sub">${esc(T.name)} é um ministério da ${esc(inv.org.name)} e recebe apenas membros cadastrados da igreja. Peça ao administrador o convite de membro e abra este link de novo.</p><a class="btn ghost block" href="#/">Ir para o início</a>`
+      : !inv.is_church_member ? `<h1>Participar como convidado?</h1><p class="sub">Você entrará no time ${esc(T.name)} como convidado(a) de outra igreja. Verá apenas este time.</p>
+        <label class="field"><span>Sua igreja</span><input class="input" id="church" maxlength="80" placeholder="Ex.: Nova Vida Niterói"></label>
+        <button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`
       : `<h1>Entrar no time?</h1><p class="sub">Você entrará como integrante. O líder poderá definir suas funções.</p><button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`}`);
   const openIt = (orgId, teamId) => { clearPending(); try { localStorage.setItem("louvor.org", orgId); } catch {} document.dispatchEvent(new Event("session-reload")); setTimeout(() => go(teamId ? `/times/${teamId}` : "/"), 200); };
   el.querySelector("#open")?.addEventListener("click", () => openIt(inv.org.id, T?.id));
   el.querySelector("#accept")?.addEventListener("click", async (e) => {
     busy(e.target);
-    const a = await sb.rpc("accept_invite", { p_token: token });
+    const a = await sb.rpc("accept_invite", { p_token: token, p_church: el.querySelector("#church")?.value || null });
     if (a.error) { busy(e.target, false); return toast(errMsg(a.error), "err"); }
     toast(a.data.status === "already_member" ? "Você já fazia parte" : `Bem-vindo(a) ${isOrg ? "à " + inv.org.name : "ao " + T.name}!`);
     openIt(a.data.org_id, a.data.team_id);
@@ -109,7 +113,7 @@ function newOrgView() {
   el.innerHTML = authShell(`${logo()}<h1>Nova igreja</h1><p class="sub">A igreja reúne os times (equipes ministeriais), com seus integrantes, escalas e recursos.</p>
     <form id="of"><label class="field"><span>Nome da igreja *</span><input name="name" required maxlength="120" placeholder="Ex.: Nova Vida da Tijuca"></label>
       <label class="field"><span>Subtítulo (opcional)</span><input name="subtitle" maxlength="60" placeholder="Ex.: Igreja"></label>
-      <div class="field"><span>Cor de destaque</span>${colorPicker("color", "#1EA7FF")}</div>
+      <div class="field"><span>Cor de destaque</span>${colorPicker("color", "#3D8BFF")}</div>
       <button class="btn primary block" id="go">Cadastrar igreja</button></form>
     ${state.orgs.length ? `<a class="btn ghost block mt-s" href="#/">Cancelar</a>` : ""}`);
   const form = el.querySelector("#of"); bindColor(form, "color");
@@ -141,7 +145,7 @@ async function profileView(_, el) {
   const byTeam = new Map(); for (const r of tmr) { const k = r.teams?.name || ""; if (!byTeam.has(k)) byTeam.set(k, []); if (r.music_roles) byTeam.get(k).push(r.music_roles.name); }
   let photo = p.avatar_url || null;
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Meu perfil</h1></div>
-    <div class="row gap-l mb"><span id="av">${avatar({ ...p, avatar_url: photo }, 96)}</span><div class="col gap-s"><button class="btn ghost sm" id="ph">${icon("camera")} Trocar foto</button>
+    <div class="row gap-l mb"><button class="hero-av" id="av" aria-label="Trocar foto">${avatar({ ...p, avatar_url: photo }, 96)}<span class="cam">${icon("camera")}</span></button><div class="col gap-s"><button class="btn ghost sm" id="ph">${icon("camera")} ${photo ? "Trocar foto" : "Adicionar foto"}</button>
       <span class="small muted">${esc(state.user.email || "")}</span></div></div>
     <form class="card" id="pf">
       <label class="field"><span>Nome completo</span><input name="full_name" required maxlength="100" value="${attr(p.full_name || "")}"></label>
@@ -154,11 +158,12 @@ async function profileView(_, el) {
     ${byTeam.size ? `<div class="list">${[...byTeam.entries()].map(([t, rs]) => `<div class="li"><span class="grow"><span class="t">${esc(t)}</span><span class="s">${rs.length ? rs.map(esc).join(" · ") : "Sem função definida"}</span></span></div>`).join("")}</div>`
       : `<p class="small muted">As funções são definidas pelos líderes de cada time.</p>`}
     <div class="sec">${icon("org")}<h2>Igrejas</h2></div>
-    <div class="list">${state.orgs.map((o) => `<div class="li"><span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : "Integrante"}${o.display_name ? ` · aparece como "${esc(o.display_name)}"` : ""}</span></span></div>`).join("")}</div>
+    <div class="list">${state.orgs.map((o) => `<div class="li"><span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : o.role === "guest" ? "Convidado" : "Membro"}${o.display_name ? ` · aparece como "${esc(o.display_name)}"` : ""}</span></span></div>`).join("")}</div>
     <div class="row gap mt wrap"><button class="btn ghost" id="pw">${icon("lock")} Alterar senha</button><button class="btn danger" id="out">${icon("logout")} Sair</button></div>`;
+  el.querySelector("#av").onclick = () => el.querySelector("#ph").click();
   el.querySelector("#ph").onclick = async () => {
     const f = await pickFile("image/*"); if (!f) return;
-    try { photo = await uploadPublic(`avatars/${state.user.id}`, f); el.querySelector("#av").innerHTML = avatar({ ...p, avatar_url: photo }, 96);
+    try { photo = await uploadPublic(`avatars/${state.user.id}`, f); el.querySelector("#av").innerHTML = avatar({ ...p, avatar_url: photo }, 96) + `<span class="cam">${icon("camera")}</span>`;
       await must(sb.from("profiles").update({ avatar_url: photo }).eq("id", state.user.id)); state.profile.avatar_url = photo; invalidatePeople(); document.dispatchEvent(new Event("profile-changed")); toast("Foto atualizada"); }
     catch (e) { toast(errMsg(e), "err"); }
   };
@@ -225,7 +230,7 @@ async function orgSettings(_, el) {
     <div class="sec">${icon("users")}<h2>Membros da igreja</h2><button class="more" id="orginv">${icon("link")} Convidar membro</button></div>
     <p class="small muted" style="margin-top:-6px">Membros podem ser incluídos nos times pelos líderes. Administradores gerais criam times e definem os líderes.</p>
     <div class="list">${[...ppl.values()].sort((a, b) => Number(b.role === "admin") - Number(a.role === "admin") || a.display_name.localeCompare(b.display_name)).map((p) => `<div class="li">${avatar(p, 40, false)}
-      <span class="grow"><span class="t">${esc(p.display_name)}</span><span class="s">${p.role === "admin" ? "Administrador geral" : "Integrante"} · desde ${fDate(p.joined_at)}</span></span>
+      <span class="grow"><span class="t">${esc(p.display_name)}</span><span class="s">${p.role === "admin" ? "Administrador geral" : p.role === "guest" ? "Convidado de outra igreja" : "Membro"} · desde ${fDate(p.joined_at)}</span></span>
       <button class="iconbtn" data-p="${p.id}">${icon("more")}</button></div>`).join("")}</div>
 
     <div class="sec">${icon("music")}<h2>Funções por tipo de time</h2><button class="more" id="addrole">${icon("plus")} Nova</button></div>

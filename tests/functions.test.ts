@@ -5,7 +5,7 @@ import { handleSync, handleMedia, type Env } from "../supabase/functions/_shared
 import { Db } from "../supabase/functions/_shared/db.ts";
 import { FsDrive } from "./fsdrive.ts";
 import { makeProject } from "./fixtures/make-project.ts";
-import { newUser, serviceKey, anonKey, REST } from "./helpers.ts";
+import { newUser, serviceKey, anonKey, REST, joinChurch } from "./helpers.ts";
 
 const SIM = `/tmp/claude-0/fn-sim-${Date.now()}`, ROOT = `${SIM}/multitracks`;
 let env: Env, drive: FsDrive, org = "", admin: any, member: any, outsider: any, leader: any;
@@ -21,6 +21,7 @@ beforeAll(async () => {
   org = (await admin.api.rpc("create_organization", { p_name: "Org Funções" })).data;
   const team = (await admin.api.post("teams", { org_id: org, name: "T" })).data[0].id;
   const tok = (await admin.api.rpc("create_team_invite", { p_team: team })).data;
+  await joinChurch(admin.api, org, member, leader);
   await member.api.rpc("accept_invite", { p_token: tok }); await leader.api.rpc("accept_invite", { p_token: tok });
   await admin.api.patch(`team_members?team_id=eq.${team}&user_id=eq.${leader.id}`, { is_leader: true });
 });

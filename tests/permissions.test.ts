@@ -1,7 +1,7 @@
 // Testes reais de usuários, organizações, times, convites, escalas, chat e isolamento (RLS).
 // Requer: dev/stack.sh start
 import { describe, expect, test, beforeAll } from "bun:test";
-import { Api, newUser, anonKey } from "./helpers";
+import { Api, newUser, anonKey, joinChurch } from "./helpers";
 
 type U = Awaited<ReturnType<typeof newUser>>;
 let ana: U, bruno: U, carla: U, davi: U, eva: U;
@@ -63,7 +63,14 @@ describe("convites", () => {
     expect(r.ok).toBe(false);
   });
 
+  test("time de ministério: quem não é membro da igreja não entra pelo link", async () => {
+    const r = await bruno.api.rpc("accept_invite", { p_token: token });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.data)).toContain("not_church_member");
+  });
+
   test("aceitar convite entra no time como integrante comum (sem liderança nem admin)", async () => {
+    await joinChurch(ana.api, orgA, bruno, carla, davi);
     for (const u of [bruno, carla, davi]) {
       const r = await u.api.rpc("accept_invite", { p_token: token });
       expect(r.data.status).toBe("joined");
