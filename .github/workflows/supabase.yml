@@ -5,6 +5,7 @@
 #   SUPABASE_PROJECT_REF   identificador do projeto (ex.: abcdefghijklmno)
 #   GOOGLE_SERVICE_ACCOUNT conteúdo completo do arquivo JSON da conta de serviço do Google
 #   CRON_SECRET            uma senha longa qualquer (a mesma usada em supabase/setup/agendamento.sql)
+#   R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY  (opcionais) Cloudflare R2 da versão leve
 name: Publicar no Supabase
 on:
   workflow_dispatch:
@@ -22,11 +23,20 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
         run: |
           test -n "$GOOGLE_SERVICE_ACCOUNT" || { echo "Falta o secret GOOGLE_SERVICE_ACCOUNT"; exit 1; }
           test -n "$CRON_SECRET" || { echo "Falta o secret CRON_SECRET"; exit 1; }
           printf '%s' "$GOOGLE_SERVICE_ACCOUNT" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('type')=='service_account' and d.get('private_key') and d.get('client_email'); print('Conta de serviço:', d['client_email'])"
           supabase secrets set --project-ref "$PROJECT_REF" GOOGLE_SERVICE_ACCOUNT="$GOOGLE_SERVICE_ACCOUNT" CRON_SECRET="$CRON_SECRET" --yes
+          # versão leve das faixas (Cloudflare R2), quando configurada
+          if [ -n "$R2_BUCKET" ] && [ -n "$R2_ACCESS_KEY_ID" ]; then
+            supabase secrets set --project-ref "$PROJECT_REF" R2_ACCOUNT_ID="$R2_ACCOUNT_ID" R2_BUCKET="$R2_BUCKET" R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" --yes
+            echo "R2 configurado."
+          fi
       - name: Publicar funções
         run: |
           supabase functions deploy drive-sync --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes

@@ -2,6 +2,7 @@
 // Secrets necessários: GOOGLE_SERVICE_ACCOUNT (JSON da conta de serviço) e CRON_SECRET.
 import { handleSync } from "../_shared/handlers.ts";
 import { GoogleDrive, type DriveClient } from "../_shared/drive.ts";
+import { r2FromEnv } from "../_shared/r2.ts";
 
 let drive: DriveClient | null = null;
 const env = {
@@ -11,6 +12,7 @@ const env = {
   cronSecret: Deno.env.get("CRON_SECRET"),
   publicUrl: Deno.env.get("SUPABASE_URL")! + "/functions/v1/drive-sync",
   drive: () => (drive ??= new GoogleDrive(Deno.env.get("GOOGLE_SERVICE_ACCOUNT") ?? "{}")),
+  r2: r2FromEnv((k) => Deno.env.get(k)),
   // deno-lint-ignore no-explicit-any
   background: (p: Promise<unknown>) => (globalThis as any).EdgeRuntime?.waitUntil ? (globalThis as any).EdgeRuntime.waitUntil(p) : p,
 };

@@ -9,6 +9,7 @@ import { join, normalize, dirname, extname } from "node:path";
 import { createHmac } from "node:crypto";
 import { handleSync, handleMedia } from "../supabase/functions/_shared/handlers.ts";
 import { FsDrive } from "../tests/fsdrive.ts";
+import { run as runLight } from "../tools/light/convert.ts";
 import { signJwt } from "../tests/helpers.ts";
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -21,7 +22,10 @@ const exp = Math.floor(Date.now() / 1000) + 10 * 365 * 86400;
 const ANON = await signJwt({ role: "anon", iss: "supabase", exp });
 const SERVICE = await signJwt({ role: "service_role", iss: "supabase", exp });
 const drive = new FsDrive(DRIVE_ROOT);
-const env = { rest: REST, serviceKey: SERVICE, anonKey: ANON, cronSecret: "dev-cron", drive: () => drive, storage: `http://127.0.0.1:${PORT}/storage/v1` };
+// "R2" local: mesmo formato de caminho do Cloudflare (endpoint/bucket/chave), com pedidos por intervalo de bytes
+const R2DIR = join(STORE, "r2");
+const r2 = { endpoint: `http://127.0.0.1:${PORT}/r2`, bucket: "somos-dev", accessKeyId: "dev", secretAccessKey: "dev", region: "auto" };
+const env = { rest: REST, serviceKey: SERVICE, anonKey: ANON, cronSecret: "dev-cron", drive: () => drive, storage: `http://127.0.0.1:${PORT}/storage/v1`, r2: process.env.NO_R2 ? null : r2 };
 const isService = (req: Request) => req.headers.get("authorization") === `Bearer ${SERVICE}`;
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css", ".json": "application/json",
   ".svg": "image/svg+xml", ".woff": "font/woff", ".png": "image/png", ".jpg": "image/jpeg", ".webmanifest": "application/manifest+json" };
@@ -88,6 +92,27 @@ Bun.serve({
       if (p === "/functions/v1/drive-media") return handleMedia(req, env);
       if (p.startsWith("/realtime/")) return new Response("realtime indisponível no ambiente local", { status: 404 });
       if (p === "/config.js") return new Response(`window.LOUVOR_CONFIG = ${JSON.stringify({ supabaseUrl: `http://127.0.0.1:${PORT}`, supabaseAnonKey: ANON })};`, { headers: { "Content-Type": MIME[".js"] } });
+      if (p.startsWith("/r2/")) {
+        const f = normalize(join(R2DIR, decodeURIComponent(p.slice(4))));
+        if (!f.startsWith(R2DIR)) return new Response("bad", { status: 400 });
+        if (req.method === "PUT") { mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, new Uint8Array(await req.arrayBuffer())); return new Response("", { status: 200 }); }
+        if (!u.searchParams.get("X-Amz-Signature")) return new Response("AccessDenied", { status: 403, headers: CORS });
+        if (!existsSync(f)) return new Response("NoSuchKey", { status: 404, headers: CORS });
+        const all = readFileSync(f); const m = /bytes=(\d+)-(\d*)/.exec(req.headers.get("range") ?? "");
+        if (!m) return new Response(all, { headers: { ...CORS, "Content-Type": "audio/ogg" } });
+        const a = Number(m[1]), b = m[2] ? Math.min(all.length - 1, Number(m[2])) : all.length - 1;
+        return new Response(all.subarray(a, b + 1), { status: 206, headers: { ...CORS, "Content-Type": "audio/ogg", "Content-Range": `bytes ${a}-${b}/${all.length}` } });
+      }
+      if (p === "/__dev/light") {
+        // roda o conversor como o GitHub faria (fila e resultado pelo mesmo endpoint do servidor)
+        const call = (q: string, init: RequestInit = {}) => handleSync(new Request(`http://x/drive-sync?${q}`, { ...init, headers: { "x-cron-secret": "dev-cron", "Content-Type": "application/json" } }), env);
+        const res = await runLight({
+          queue: async (limit) => (await (await call(`mode=light-queue&limit=${limit}`)).json()).items,
+          done: async (items) => { await call("mode=light-done", { method: "POST", body: JSON.stringify({ items }) }); },
+          drive, upload: async (key, bytes) => { const f = join(R2DIR, r2.bucket, key); mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, bytes); },
+        }, { minutes: 5, parallel: 3, log: () => {} });
+        return Response.json(res, { headers: CORS });
+      }
       if (p === "/__dev/drive") return Response.json({ rootId: drive.idOf(DRIVE_ROOT), root: DRIVE_ROOT, service: SERVICE });
       const file = normalize(join(ROOT, p === "/" ? "index.html" : p));
       if (!file.startsWith(ROOT) || !existsSync(file) || statSync(file).isDirectory()) return new Response("not found", { status: 404 });

@@ -2,6 +2,7 @@
 import { Db, asUser } from "./db.ts";
 import { FOLDER_MIME, folderIdFromInput, type DriveClient } from "./drive.ts";
 import { syncOrg, type CoverStore } from "./sync.ts";
+import { presignGet, type R2Config } from "./r2.ts";
 
 export interface Env {
   rest: string;            // <SUPABASE_URL>/rest/v1
@@ -12,6 +13,7 @@ export interface Env {
   drive: () => DriveClient;
   storage?: string;        // <SUPABASE_URL>/storage/v1 (padrão: derivado de rest)
   publicStorage?: string;  // endereço público do armazenamento, se diferente
+  r2?: R2Config | null;    // Cloudflare R2 (versão leve das faixas); sem ele o player usa o WAV do Drive
   background?: (p: Promise<unknown>) => void;
 }
 
@@ -84,8 +86,25 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     await job; return new Response("ok");
   }
 
-  // 2) Execução agendada (pg_cron): verificação periódica de segurança + renovação do aviso de alterações
   const url = new URL(req.url);
+  // 2a) Conversor da versão leve (GitHub): pede a fila e informa o resultado. Protegido pelo mesmo segredo do agendamento.
+  const mode = url.searchParams.get("mode");
+  if (mode === "light-queue" || mode === "light-done") {
+    if (!env.cronSecret || !safeEqual(req.headers.get("x-cron-secret") ?? "", env.cronSecret)) return json({ error: "forbidden" }, 403);
+    if (mode === "light-queue") return json({ items: await db.rpc("light_queue", { p_limit: Number(url.searchParams.get("limit") ?? 40) }) });
+    const body = await req.json().catch(() => ({}));
+    for (const it of (body.items ?? []) as any[]) {
+      const prev = await db.one("light_audio", `drive_file_id=eq.${encodeURIComponent(it.drive_file_id)}&src=eq.${encodeURIComponent(it.src)}`);
+      await db.upsert("light_audio", {
+        org_id: it.org_id, drive_file_id: it.drive_file_id, src: it.src, key: it.error ? null : it.key, info: it.error ? null : it.info,
+        bytes: it.error ? null : it.bytes ?? null, error: it.error ? String(it.error).slice(0, 500) : null,
+        attempts: it.error ? (prev?.attempts ?? 0) + 1 : prev?.attempts ?? 0, updated_at: new Date().toISOString(),
+      }, "drive_file_id,src");
+    }
+    return json({ ok: true });
+  }
+
+  // 2) Execução agendada (pg_cron): verificação periódica de segurança + renovação do aviso de alterações
   if (url.searchParams.get("mode") === "cron") {
     if (!env.cronSecret || !safeEqual(req.headers.get("x-cron-secret") ?? "", env.cronSecret)) return json({ error: "forbidden" }, 403);
     const all: any[] = await db.select("drive_integrations", "status=neq.paused");
@@ -164,6 +183,30 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
 export async function handleMedia(req: Request, env: Env): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const url = new URL(req.url);
+  // Versão leve: lista, para um projeto, os links temporários (R2) das faixas já convertidas
+  if (req.method === "POST") {
+    const jwt = bearer(req);
+    if (!jwt) return json({ error: "unauthorized" }, 401);
+    const body = await req.json().catch(() => ({}));
+    const pid = String(body.project_id ?? "");
+    if (!/^[0-9a-f-]{36}$/.test(pid)) return json({ error: "projeto inválido" }, 400);
+    if (!env.r2) return json({ files: {} });
+    // o próprio banco (RLS) decide se o usuário enxerga as faixas deste projeto
+    const r = await fetch(`${env.rest}/project_media?project_id=eq.${pid}&select=drive_file_id,md5,size`, { headers: { apikey: env.anonKey, Authorization: `Bearer ${jwt}` } });
+    if (!r.ok) return json({ error: "forbidden" }, 403);
+    const media: any[] = await r.json();
+    if (!media.length) return json({ files: {} });
+    const db = new Db(env.rest, env.serviceKey);
+    const ids = [...new Set(media.map((m) => m.drive_file_id))].map((x) => `"${x}"`).join(",");
+    const rows: any[] = await db.select("light_audio", `drive_file_id=in.(${encodeURIComponent(ids)})&key=not.is.null&select=drive_file_id,src,key,info,bytes`);
+    const by = new Map(rows.map((x) => [`${x.drive_file_id}|${x.src}`, x]));
+    const files: Record<string, unknown> = {};
+    for (const m of media) {
+      const x = by.get(`${m.drive_file_id}|${m.md5 ?? "s" + m.size}`);
+      if (x) files[m.drive_file_id] = { ...x.info, key: x.key, bytes: x.bytes, url: await presignGet(env.r2, x.key, 6 * 3600) };
+    }
+    return json({ files, expires_in: 6 * 3600 });
+  }
   const fileId = url.searchParams.get("file") ?? "";
   const jwt = bearer(req) || url.searchParams.get("access_token") || "";
   if (!fileId || !jwt) return json({ error: "unauthorized" }, 401);

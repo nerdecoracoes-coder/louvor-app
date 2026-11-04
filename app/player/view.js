@@ -43,6 +43,10 @@ export async function openPlayer(songId) {
       must(sb.from("mix_presets").select("*").eq("user_id", state.user.id).eq("song_id", songId).maybeSingle()),
     ]);
     if (current !== ctrl) return;
+    // versão leve (Opus no Cloudflare R2), quando já convertida; senão o motor lê o WAV pelo servidor
+    const light = await sb.functions.invoke("drive-media", { project_id: project.id }).then((r) => r.data?.files || {}).catch(() => ({}));
+    for (const m of media) if (light[m.drive_file_id]) m.light = light[m.drive_file_id];
+    if (current !== ctrl) return;
     const mediaBase = sb.functions.url("drive-media");
     engine = new Engine({
       project, tracks, markers: markers.map((m) => ({ ...m, position: Number(m.position), end_position: m.end_position == null ? null : Number(m.end_position) })),

@@ -1,0 +1,44 @@
+# Gera a versão leve (Opus) das faixas importadas do Google Drive e envia ao Cloudflare R2.
+# Roda sozinho a cada 15 minutos (e pode ser iniciado em Actions → "Gerar versão leve" → Run workflow).
+# Enquanto uma faixa não tem versão leve, o player continua usando o WAV do Drive.
+# Secrets: SUPABASE_PROJECT_REF, CRON_SECRET, GOOGLE_SERVICE_ACCOUNT, R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
+name: Gerar versão leve
+on:
+  schedule:
+    - cron: "7,22,37,52 * * * *"
+  workflow_dispatch:
+    inputs:
+      minutes:
+        description: "Tempo máximo desta rodada (minutos)"
+        default: "40"
+concurrency:
+  group: light
+  cancel-in-progress: false
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    env:
+      SUPABASE_URL: https://${{ secrets.SUPABASE_PROJECT_REF }}.supabase.co
+      CRON_SECRET: ${{ secrets.CRON_SECRET }}
+      GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+      R2_ACCOUNT_ID: ${{ secrets.R2_ACCOUNT_ID }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      LIGHT_MINUTES: ${{ inputs.minutes || '40' }}
+    steps:
+      - name: Configurado?
+        id: cfg
+        run: |
+          if [ -z "$R2_BUCKET" ] || [ -z "$R2_ACCESS_KEY_ID" ]; then echo "Versão leve ainda não configurada (faltam os secrets do R2)."; echo "skip=1" >> "$GITHUB_OUTPUT"; fi
+      - uses: actions/checkout@v4
+        if: steps.cfg.outputs.skip != '1'
+      - uses: oven-sh/setup-bun@v2
+        if: steps.cfg.outputs.skip != '1'
+      - name: ffmpeg
+        if: steps.cfg.outputs.skip != '1'
+        run: (which ffmpeg && ffmpeg -hide_banner -encoders | grep -q libopus) || (sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg)
+      - name: Converter
+        if: steps.cfg.outputs.skip != '1'
+        run: bun tools/light/convert.ts

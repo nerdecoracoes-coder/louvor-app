@@ -291,9 +291,28 @@ with sync_playwright() as pw:
     carla.goto(f"{BASE}/#/player/{emaus_id}")
     expect(carla.locator("#mixtag")).to_have_text("Mix pessoal", timeout=20000)
     ok("mix pessoal salva e recarregada sem alterar o projeto")
+
     carla.locator("#mixreset").click(); carla.wait_for_timeout(1200)
     expect(carla.locator("#mixtag")).to_have_text("Mix do projeto")
     carla.locator("[data-x]").first.click()
+    # ------------------------------------------------------------------ versão leve (Opus no "R2" local)
+    conv = json.loads(urllib.request.urlopen(BASE + "/__dev/light").read())
+    assert conv["ok"] >= 8 and conv["fail"] == 0 and conv["outBytes"] * 5 < conv["inBytes"], conv
+    carla.goto(BASE + "/#/musicas"); carla.wait_for_timeout(500)
+    carla.goto(f"{BASE}/#/player/{emaus_id}")
+    expect(carla.locator(".player .trk")).to_have_count(9, timeout=20000)
+    reqs = []
+    carla.on("request", lambda r: reqs.append(r.url))
+    carla.locator('[data-t="play"]').click()
+    carla.wait_for_function("window.__player && window.__player.playing && window.__player.position() > 1.5", timeout=20000)
+    lt = carla.evaluate("""() => { const e = window.__player; const ms = [...e.media.values()];
+        const g = ms.find(m => m.name === 'Guide.wav'); const b = g.chunks.get(0)?.buf; let rms = 0;
+        if (b) { const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) rms += d[i] * d[i]; rms = Math.sqrt(rms / d.length); }
+        return { light: ms.filter(m => m.light).length, total: ms.length, sr: e.ctx.sampleRate, sources: e.sources.size, rms, len: b?.length } }""")
+    assert lt["light"] == lt["total"] and lt["sr"] == 48000 and lt["sources"] >= 7 and lt["rms"] > 0.02 and lt["len"] == 4 * 48000, lt
+    assert any("/r2/" in u for u in reqs) and not any("drive-media?file=" in u for u in reqs), [u for u in reqs if "drive-media" in u][:3]
+    carla.goto(BASE + "/#/musicas")
+    ok(f"versão leve: {conv['ok']} faixas convertidas ({conv['inBytes'] // 1000} KB → {conv['outBytes'] // 1000} KB); player toca direto do R2 com {lt['sources']} trechos")
 
     # ------------------------------------------------------------------ várias organizações
     carla.goto(BASE + "/#/nova-org")

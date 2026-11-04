@@ -1,3 +1,4 @@
+import { byteRange, decodeRange } from "./ogg.js";
 // Motor de áudio multitrack (Web Audio API), independente do REAPER.
 //
 // Sincronismo: todas as faixas são agendadas no MESMO relógio (AudioContext.currentTime), com posição
@@ -6,6 +7,8 @@
 // (pedidos por intervalo de bytes), converte o PCM direto em AudioBuffer e descarta o que já passou.
 // Os trechos baixados ficam no cache do navegador (Cache Storage), então a segunda reprodução é instantânea.
 // Áudios compactados (MP3/FLAC/OGG) são decodificados inteiros (o navegador não permite pedaços exatos).
+// Versão leve: quando a faixa já foi convertida para Opus (Cloudflare R2), o motor baixa só o trecho de bytes de cada
+// pedaço (índice de páginas Ogg), decodifica com o libopus (WebAssembly) e descarta a pré-rolagem, com precisão de amostra.
 
 const CHUNK = 4;            // segundos por trecho
 const AHEAD = 14;           // segundos mantidos carregados à frente
@@ -13,13 +16,32 @@ const BEHIND = 3;
 const LOOKAHEAD = 1.2;      // agendamento antecipado
 const PEAK_RATE = 50;       // pontos de forma de onda por segundo
 const CACHE_NAME = "louvor-audio-v1";
+const OPUS_RATE = 48000;
+
+// decodificador Opus (libopus em WebAssembly, MIT — ./opus-decoder.min.js), carregado só quando necessário
+let opusLib = null;
+function loadOpus() {
+  opusLib ??= new Promise((res, rej) => {
+    if (globalThis["opus-decoder"]) return res(globalThis["opus-decoder"]);
+    const sc = document.createElement("script");
+    sc.src = new URL("./opus-decoder.min.js", import.meta.url).href;
+    sc.onload = () => res(globalThis["opus-decoder"]); sc.onerror = () => { opusLib = null; rej(new Error("Não foi possível carregar o decodificador de áudio.")); };
+    document.head.appendChild(sc);
+  });
+  return opusLib;
+}
 
 export class Engine extends EventTarget {
   constructor({ project, tracks, markers, media, mediaUrl, token, anonKey, mix }) {
     super();
     this.project = project; this.markers = markers || [];
     this.mediaUrl = mediaUrl; this.token = token; this.anonKey = anonKey;
-    this.media = new Map((media || []).map((m) => [m.drive_file_id, { ...m, chunks: new Map(), full: null, peaks: null, loading: new Map() }]));
+    this.media = new Map((media || []).map((m) => [m.drive_file_id, { ...m,
+      // com versão leve, toda faixa é lida em pedaços (mesmo que o original seja MP3/FLAC)
+      format: m.light ? { ...(m.format || {}), codec: "light", duration: m.light.samples / OPUS_RATE } : m.format,
+      wavFormat: m.light && m.format?.codec !== "decode" && m.format?.dataOffset != null ? m.format : null,
+      chunks: new Map(), full: null, peaks: null, loading: new Map() }]));
+    this.decoders = new Map(); this.decQ = Promise.resolve();
     this.length = Number(project.length_sec) || 0;
     this.tracks = tracks.map((t) => ({
       ...t, orig: { volume: t.volume, pan: t.pan, muted: t.muted, soloed: t.soloed },
@@ -38,7 +60,8 @@ export class Engine extends EventTarget {
   // ------------------------------------------------------------- grafo de áudio
   async init() {
     const srs = [...this.media.values()].map((m) => m.format?.sampleRate).filter(Boolean);
-    const sr = this.project.sample_rate || srs[0] || 48000;
+    const allLight = this.media.size > 0 && [...this.media.values()].every((m) => m.light);
+    const sr = allLight ? OPUS_RATE : this.project.sample_rate || srs[0] || 48000;
     const AC = window.AudioContext || window.webkitAudioContext;
     try { this.ctx = new AC({ sampleRate: sr, latencyHint: "playback" }); } catch { this.ctx = new AC({ latencyHint: "playback" }); }
     this.masterGain = this.ctx.createGain();
@@ -167,8 +190,70 @@ export class Engine extends EventTarget {
     this.dispatch("peaks", { fileId: m.drive_file_id });
   }
 
+  // pedaço c (CHUNK segundos) da versão leve: só os bytes necessários, decodificados com pré-rolagem
+  async lightChunk(m, c) {
+    const L = m.light;
+    const s0 = Math.round(c * CHUNK * OPUS_RATE);
+    if (s0 >= L.samples) return null;
+    const s1 = Math.min(L.samples, Math.round((c + 1) * CHUNK * OPUS_RATE));
+    const { start, end } = byteRange(L, s0, s1);
+    const bytes = await this.fetchLight(m, start, end);
+    const lib = await loadOpus();
+    const nch = L.channels > 1 ? 2 : 1;
+    // um decodificador por número de canais; os pedaços passam por ele um de cada vez (reset entre eles)
+    const run = this.decQ.then(async () => {
+      let d = this.decoders.get(nch);
+      if (!d) { d = new lib.OpusDecoder(nch > 1 ? { channels: 2, streamCount: 1, coupledStreamCount: 1, channelMappingTable: [0, 1], preSkip: 0 } : { channels: 1, streamCount: 1, coupledStreamCount: 0, channelMappingTable: [0], preSkip: 0 }); this.decoders.set(nch, d); await d.ready; }
+      else await d.reset();
+      return decodeRange(d, bytes, start, L, s0, s1);
+    });
+    this.decQ = run.catch(() => {});
+    return run;
+  }
+  async fetchLight(m, start, end) {
+    const key = `https://somos.cache/light/${m.light.key}?r=${start}-${end}`;
+    let cache = null;
+    try { cache = await caches.open(CACHE_NAME); const hit = await cache.match(key); if (hit) return new Uint8Array(await hit.arrayBuffer()); } catch { cache = null; }
+    let r;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch(m.light.url, { headers: { Range: `bytes=${start}-${end}` } }).catch(() => null);
+      if (r && (r.status === 206 || r.ok)) break;
+      if (r && r.status === 403) break; // link expirado: o pedaço volta a ser lido do WAV
+      await new Promise((res) => setTimeout(res, 300 * (attempt + 1)));
+    }
+    if (!r || !(r.ok || r.status === 206)) throw Object.assign(new Error(`Falha ao carregar áudio leve (${r?.status ?? "sem conexão"})`), { light: true });
+    let buf = new Uint8Array(await r.arrayBuffer());
+    if (r.status === 200 && buf.length > end - start + 1) buf = buf.subarray(start, end + 1); // servidor ignorou o Range
+    this.bytesLoaded += buf.length;
+    try { if (cache) await cache.put(key, new Response(buf)); } catch { /* cota cheia */ }
+    return buf;
+  }
+
   async loadChunk(fileId, c, { keep = true } = {}) {
     const m = this.media.get(fileId);
+    if (m.light) {
+      if (m.chunks.has(c)) { const x = m.chunks.get(c); x.used = performance.now(); return x.buf; }
+      if (m.loading.has(c)) return m.loading.get(c);
+      const p = (async () => {
+        let chans;
+        try { chans = await this.lightChunk(m, c); }
+        catch (e) {
+          // sem a versão leve (link expirado, rede), volta para o WAV do Drive daqui em diante
+          if (!m.wavFormat) throw e;
+          m.light = null; m.format = m.wavFormat; m.loading.delete(c);
+          return this.loadChunk(fileId, c, { keep });
+        }
+        if (!chans || !chans[0].length) return null;
+        this.addPeaks(m, c * CHUNK, chans, OPUS_RATE);
+        if (!keep || this.destroyed) return null;
+        const buf = this.ctx.createBuffer(chans.length, chans[0].length, OPUS_RATE);
+        chans.forEach((d, i) => buf.copyToChannel(d, i));
+        m.chunks.set(c, { buf, used: performance.now() });
+        return buf;
+      })();
+      m.loading.set(c, p);
+      try { return await p; } finally { m.loading.delete(c); }
+    }
     const f = m.format || {};
     if (f.codec === "decode") { await this.loadFull(m); return m.full; }
     if (m.chunks.has(c)) { const x = m.chunks.get(c); x.used = performance.now(); return x.buf; }

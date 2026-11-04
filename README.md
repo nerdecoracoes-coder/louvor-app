@@ -57,6 +57,19 @@ dev/                                          ambiente local de testes
 ### 5. Verificação automática a cada 5 minutos
 No **SQL Editor**, abra [`supabase/setup/agendamento.sql`](supabase/setup/agendamento.sql), troque `SEU-PROJETO` e `SEU-SEGREDO` (o mesmo `CRON_SECRET`) e rode.
 
+### 7. Versão leve das faixas (Cloudflare R2) — player rápido
+Os WAV são pesados demais para tocar pela internet. Cada faixa ganha uma cópia em **Opus** (cerca de 15× menor),
+guardada num bucket **privado** do Cloudflare R2. O player baixa só o trecho de bytes de cada pedaço, por links
+temporários gerados pelo servidor para quem tem acesso. Enquanto uma faixa não tem versão leve, o player usa o WAV.
+1. Cloudflare → **R2** → **Create bucket** → nome `somos-audio`.
+2. No bucket → **Settings → CORS policy** → cole:
+   ```json
+   [{"AllowedOrigins":["https://somos-20g.pages.dev"],"AllowedMethods":["GET","HEAD"],"AllowedHeaders":["Range"],"ExposeHeaders":["Content-Range","Content-Length","Accept-Ranges"],"MaxAgeSeconds":86400}]
+   ```
+3. R2 → **Manage API tokens** → **Create API token** → permissão **Object Read & Write**, só no bucket `somos-audio`.
+4. GitHub → Secrets: `R2_ACCOUNT_ID`, `R2_BUCKET` (`somos-audio`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
+5. Rode **Publicar no Supabase**. A conversão (**Gerar versão leve**) roda sozinha a cada 15 minutos.
+
 ### 6. Primeiro uso
 1. Abra o app, crie sua conta e **Criar uma organização** (você vira administrador geral).
 2. Crie os times, convide os integrantes pelo link (copiar ou WhatsApp).
@@ -96,6 +109,7 @@ multitracks/
 - **O que não é reproduzido** (fica registrado como aviso na música e no player, nada é descartado em silêncio): efeitos/plugins, automações de volume/pan/mute, envios entre faixas, alterações de velocidade (PLAYRATE), MIDI, mudanças de andamento na grade. O arquivo original **nunca** é alterado.
 
 ## Player
+- Versão leve (Opus, Cloudflare R2) quando disponível: baixa só os bytes de cada pedaço e decodifica com o libopus (WebAssembly), com pré-rolagem; o resultado é idêntico, amostra a amostra, à decodificação contínua.
 - Motor próprio em Web Audio API: todas as faixas no mesmo relógio, com precisão de amostra.
 - Carrega trechos de 4 s por intervalo de bytes e descarta o que já passou: não precisa baixar nem decodificar a música inteira na memória (importante no celular). O que foi baixado fica no cache do navegador.
 - Volume, pan, mute, solo (com pastas do REAPER), master, marcadores, regiões (toque para repetir), navegação.
