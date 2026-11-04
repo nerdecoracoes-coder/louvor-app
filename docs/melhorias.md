@@ -38,16 +38,16 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - [x] **Membros da igreja**: convite da igreja (sem time). A entrada nos times é só por convite/inclusão do líder ou do administrador; ninguém solicita entrada.
 - [x] **Funções por tipo de time**: as funções atuais ficaram como funções do Louvor; novas funções podem ser criadas para cada tipo (ou para todos).
 
-## 4. Categoria do time: Ministério da igreja × Ocasião especial (definido em 04/11/2026)
+## 4. Categoria do time: Ministério da igreja × Time aberto a convidados (definido em 04/11/2026)
 - Ao criar um time, o administrador escolhe a **categoria**:
   - **Ministério da igreja**: só podem entrar **membros cadastrados** da igreja. O link de convite do time
     não serve para quem não é membro (a pessoa precisa antes receber o convite de membro da igreja).
-  - **Ocasião especial**: podem ser convidadas pessoas que **não são membros** (ex.: músicos das filiais).
+  - **Time aberto a convidados**: podem ser convidadas pessoas que **não são membros** (ex.: músicos das filiais).
     Elas entram como **convidados**: participam só daquele time (escalas, chat, repertório e player),
     não viram membros da igreja e não aparecem nas listas da igreja.
 - Quem convida: o **líder do time** (e o administrador).
 - Convidado aparece no time como "Convidado · Igreja de origem". Acesso permanente por padrão, com data de término opcional.
-- A confirmar: o time Chega Mais (culto jovem, usado sempre, com membros de filiais) entra como "Ocasião especial"?
+- Exemplos: time **Chega Mais** (culto jovem, usado sempre, com membros de filiais) e louvores de cultos especiais.
 - Status: **a implementar** no próximo pacote.
 
 ## 5. Foto de perfil dos membros (anotado em 04/11/2026)
