@@ -11,9 +11,9 @@ on:
   workflow_dispatch:
     inputs:
       migrations:
-        description: "Aplicar as migrações do banco"
+        description: "Aplicar as migrações do banco (deixe desmarcado se o banco foi criado pelo SQL Editor)"
         type: boolean
-        default: true
+        default: false
 jobs:
   deploy:
     runs-on: ubuntu-latest
