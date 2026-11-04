@@ -57,7 +57,7 @@ async function library(_, el, alive) {
     el.querySelector("#selcount").textContent = `${sel.size} selecionada(s)`;
   };
   const processing = rows.filter((r) => ["processing", "waiting_files"].includes(r.status)).length;
-  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1>${isStaff() ? `<a class="btn primary sm" href="#/musicas/nova">${icon("plus")} Adicionar</a>` : ""}</div>
+  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1><span class="row gap">${isAdmin() ? `<a class="btn ghost sm" href="#/org/drive" title="Google Drive">${icon("cloud")} Drive</a>` : ""}${isStaff() ? `<a class="btn primary sm" href="#/musicas/nova">${icon("plus")} Adicionar</a>` : ""}</span></div>
     <p class="muted small">Repertório de ${esc(state.org.name)}, compartilhado pelos times de Louvor.</p>
     ${processing ? `<div class="card mt-s row gap small">${icon("refresh", "accent")}<span>${processing} música(s) ainda sendo processada(s) a partir do Google Drive.</span></div>` : ""}
     <label class="search mt" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar por título ou artista"></label>

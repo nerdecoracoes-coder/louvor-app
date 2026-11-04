@@ -15,7 +15,7 @@ let db: Db, drive: FsDrive, org = "", team = "";
 let admin: Awaited<ReturnType<typeof newUser>>, member: Awaited<ReturnType<typeof newUser>>, outsider: Awaited<ReturnType<typeof newUser>>;
 const old = (p: string) => { const t = new Date(Date.now() - 3600e3); utimesSync(p, t, t); };
 const ageAll = async (dir: string) => { const { readdirSync, statSync } = await import("node:fs"); const w = (d: string) => { for (const n of readdirSync(d)) { const p = join(d, n); if (statSync(p).isDirectory()) w(p); old(p); } }; w(dir); old(dir); };
-const deps = () => ({ db, drive, settleMinutes: 20 });
+const deps = () => ({ db, drive, settleMinutes: 20, requireMark: false }); // marca de pronta: teste próprio no fim
 const song = async (folderName: string) => (await db.select("songs", `org_id=eq.${org}&drive_folder_name=eq.${encodeURIComponent(folderName)}`))[0];
 
 beforeAll(async () => {
@@ -266,5 +266,23 @@ describe("importação do Drive", () => {
     const st2 = await syncOrg(deps(), org, "cron");
     expect(st2.deferred).toBe(0);
     expect((await song("Antiga - Teste")).status).toBe("ready");
+  });
+  test("só entram as músicas marcadas como prontas ('- Pronta' no fim do nome); desmarcar tira do app", async () => {
+    const mk = { ...deps(), requireMark: true };
+    const grp = join(ROOT, "Marcas");
+    await makeProject({ root: grp, folder: "Pronta Um - Banda - Pronta", rppName: "Pronta Um - Banda - 100 BPM (E).rpp", seconds: 2 });
+    await makeProject({ root: grp, folder: "Pronta Dois - Banda -PRONTO", rppName: "Pronta Dois - Banda - 100 BPM (F).rpp", seconds: 2 });
+    await makeProject({ root: grp, folder: "Guardada - Banda", rppName: "Guardada - Banda - 100 BPM (G).rpp", seconds: 2 });
+    await ageAll(ROOT);
+    const st = await syncOrg(mk, org, "manual");
+    expect(st.unmarked).toBeGreaterThan(0);
+    const um = await song("Pronta Um - Banda");                      // o "- Pronta" não entra no nome
+    expect(um).toMatchObject({ status: "ready", title: "Pronta Um", artist: "Banda", song_key: "E" });
+    expect((await song("Pronta Dois - Banda")).status).toBe("ready");
+    expect(await song("Guardada - Banda")).toBeUndefined();          // não pronta: nem aparece
+    // desmarcada: sai do repertório; marcada de novo: volta, sem duplicar
+    renameSync(join(grp, "Pronta Um - Banda - Pronta"), join(grp, "Pronta Um - Banda"));
+    await syncOrg(mk, org, "cron");
+    expect((await db.select("songs", `id=eq.${um.id}`))[0].status).toBe("removed");
   });
 });

@@ -14,7 +14,7 @@ const call = (body: unknown, jwt?: string, url = "http://x/drive-sync") =>
 
 beforeAll(async () => {
   rmSync(SIM, { recursive: true, force: true }); mkdirSync(ROOT, { recursive: true });
-  await makeProject({ root: ROOT, seconds: 6 });
+  await makeProject({ root: ROOT, seconds: 6, folder: "Emaús - Morada - Pronta" }); // marcada como pronta
   drive = new FsDrive(ROOT);
   env = { rest: REST, serviceKey: await serviceKey(), anonKey: await anonKey(), cronSecret: "segredo-teste", drive: () => drive };
   [admin, member, outsider, leader] = await Promise.all(["Admin Fn", "Membro Fn", "Fora Fn", "Lider Fn"].map(newUser));
