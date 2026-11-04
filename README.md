@@ -25,7 +25,7 @@ dev/                                          ambiente local de testes
 1. Em [supabase.com](https://supabase.com) → **New project**. Anote a senha do banco.
 2. **SQL Editor** → **New query** → cole todo o conteúdo de [`supabase/setup/banco-completo.sql`](supabase/setup/banco-completo.sql) → **Run**.
 3. **Authentication → URL Configuration**:
-   - *Site URL*: `https://nerdecoracoes-coder.github.io/louvor-app/`
+   - *Site URL*: `https://somos-20g.pages.dev/`
    - *Redirect URLs*: o mesmo endereço.
 4. (Opcional) **Authentication → Providers → Email**: deixe "Confirm email" ligado (mais seguro) ou desligue para entrar direto após o cadastro.
 5. **Project Settings → API**: copie a *Project URL* e a chave *anon public*.
@@ -34,7 +34,7 @@ dev/                                          ambiente local de testes
 1. No GitHub, abra `config.js` → lápis (editar) → preencha `supabaseUrl` e `supabaseAnonKey` → *Commit*.
    A chave *anon* é pública por natureza; quem protege os dados é o RLS do banco.
 2. **Settings → Pages** → *Source: Deploy from a branch* → `main` / `/ (root)` → *Save*.
-3. Em alguns minutos o app estará em `https://nerdecoracoes-coder.github.io/louvor-app/`.
+3. Em alguns minutos o app estará em `https://somos-20g.pages.dev/`.
 
 ### 3. Google Drive (acesso somente à pasta "multitracks")
 1. Em [console.cloud.google.com](https://console.cloud.google.com): crie um projeto → **APIs e serviços → Biblioteca** → ative **Google Drive API**.
