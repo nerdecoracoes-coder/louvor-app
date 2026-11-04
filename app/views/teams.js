@@ -84,9 +84,12 @@ async function teamsList(_, el, alive) {
 
 async function newTeam(_, el) {
   if (!isAdmin()) { el.innerHTML = empty("lock", "Somente administradores gerais criam times."); return; }
+  const ppl = [...(await people(true)).values()].sort((a, b) => a.display_name.localeCompare(b.display_name));
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/times">${icon("chevronLeft")}</a><h1>Novo time</h1></div>
     <form class="card" id="f"><label class="field"><span>Nome do time *</span><input name="name" required maxlength="120" placeholder="Ex.: Louvor Domingo"></label>
     ${typeField()}
+    <label class="field"><span>Líder do time</span><select name="leader"><option value="">Definir depois</option>${ppl.map((p) => `<option value="${p.id}">${esc(p.display_name)}${p.id === state.user.id ? " (você)" : ""}</option>`).join("")}</select>
+      <span class="hint">Você cadastra o time sem precisar fazer parte dele. O líder convida e inclui os integrantes.</span></label>
     <div class="field"><span>Cor de destaque</span>${colorPicker("color", "#1EA7FF")}</div>
     <button class="btn primary block" id="save">Criar time</button></form>`;
   const form = el.querySelector("#f"); bindColor(form, "color"); bindType(form);
@@ -95,11 +98,14 @@ async function newTeam(_, el) {
     const { data, error } = await sb.from("teams").insert({ org_id: state.org.id, name: form.name.value.trim(), ...readType(form), accent_color: readColor(form, "color"), created_by: state.user.id }).select("*").single();
     busy(btn, false);
     if (error) return toast(errMsg(error), "err");
-    // quem cria o time entra nele como líder (pode sair depois, se não for participar)
-    const tm = await sb.from("team_members").insert({ team_id: data.id, user_id: state.user.id, org_id: state.org.id, is_leader: true });
-    if (tm.error) toast(errMsg(tm.error), "err");
+    // o administrador só cadastra o time; quem participa é o líder escolhido (se houver)
+    const leader = form.leader.value;
+    if (leader) {
+      const tm = await sb.from("team_members").insert({ team_id: data.id, user_id: leader, org_id: state.org.id, is_leader: true });
+      if (tm.error) toast(errMsg(tm.error), "err");
+    }
     await selectOrg(state.org.id, false);
-    toast("Time criado. Você entrou como líder."); go(`/times/${data.id}/integrantes`);
+    toast(leader ? "Time criado com o líder definido." : "Time criado. Defina o líder quando quiser."); go(`/times/${data.id}/integrantes`);
   };
 }
 
@@ -164,7 +170,7 @@ async function schedulesTab(team, box, manage) {
 async function membersTab(team, members, box, manage) {
   const [ppl, roles, tmr] = await Promise.all([
     people(true),
-    must(sb.from("music_roles").select("*").eq("org_id", state.org.id).order("sort")),
+    must(sb.from("music_roles").select("*").eq("org_id", state.org.id).order("sort")).then((rs) => rs.filter((r) => !r.team_type || r.team_type === team.team_type)),
     must(sb.from("team_member_roles").select("*").eq("team_id", team.id)),
   ]);
   const rolesOf = (uid) => tmr.filter((r) => r.user_id === uid).map((r) => roles.find((x) => x.id === r.role_id)?.name).filter(Boolean);
@@ -221,7 +227,7 @@ function memberMenu(team, m, ppl, roles, tmr, manage) {
     <div class="list menu">
       ${wa ? `<a class="li" href="${wa}" target="_blank" rel="noopener">${icon("whatsapp")}<span class="grow t">Chamar no WhatsApp</span></a>` : `<div class="li muted small">${icon("whatsapp")}<span class="grow">Sem telefone cadastrado</span></div>`}
       ${manage ? `<button class="li" data-a="edit">${icon("edit")}<span class="grow t">Editar integrante</span></button>
-        <button class="li" data-a="leader">${icon("crown")}<span class="grow t">${m.is_leader ? "Remover liderança" : "Tornar líder do time"}</span></button>
+        ${isAdmin() ? `<button class="li" data-a="leader">${icon("crown")}<span class="grow t">${m.is_leader ? "Remover liderança" : "Tornar líder do time"}</span></button>` : ""}
         <button class="li" data-a="copy">${icon("swap")}<span class="grow t">Mover ou copiar para outro time</span></button>
         <button class="li danger" data-a="remove">${icon("trash")}<span class="grow t">Remover do time</span></button>` : ""}
       ${me && !manage ? `<button class="li danger" data-a="remove">${icon("logout")}<span class="grow t">Sair do time</span></button>` : ""}
@@ -266,9 +272,10 @@ async function editMember(team, m, p, roles, tmr, ppl) {
   const others = [...ppl.values()].filter((x) => x.id !== m.user_id).sort((a, b) => a.display_name.localeCompare(b.display_name));
   const s = sheet(`<h3>Editar integrante</h3><form id="f">
     <label class="field"><span>Nome utilizado na igreja</span><input name="display_name" value="${attr(om?.display_name || "")}" placeholder="${attr(p.full_name)}" ${isAdmin() ? "" : "disabled"}></label>
-    <div class="field"><span>Funções musicais</span><div class="chips wrap" style="flex-wrap:wrap">${roles.map((r) => `<label class="chip ${myRoles.has(r.id) ? "on" : ""}"><input type="checkbox" class="sr" name="role" value="${r.id}" ${myRoles.has(r.id) ? "checked" : ""}>${icon(roleIcon(r.name))}${esc(r.name)}</label>`).join("")}
+    <div class="field"><span>Funções</span><div class="chips wrap" style="flex-wrap:wrap">${roles.map((r) => `<label class="chip ${myRoles.has(r.id) ? "on" : ""}"><input type="checkbox" class="sr" name="role" value="${r.id}" ${myRoles.has(r.id) ? "checked" : ""}>${icon(roleIcon(r.name))}${esc(r.name)}</label>`).join("")}
       <button type="button" class="chip" id="newrole">${icon("plus")} Nova função</button></div></div>
-    <div class="field"><span>Nível de acesso no time</span><select name="leader"><option value="0" ${m.is_leader ? "" : "selected"}>Integrante</option><option value="1" ${m.is_leader ? "selected" : ""}>Líder do time</option></select>
+    <div class="field"><span>Nível de acesso no time</span>${isAdmin() ? `<select name="leader"><option value="0" ${m.is_leader ? "" : "selected"}>Integrante</option><option value="1" ${m.is_leader ? "selected" : ""}>Líder do time</option></select>`
+      : `<div class="small muted" style="padding:6px 0">${m.is_leader ? "Líder do time" : "Integrante"} · a liderança é definida pelo administrador da igreja</div>`}
       ${isAdmin() ? `<label class="check"><input type="checkbox" name="admin" ${om?.role === "admin" ? "checked" : ""}> Administrador geral da igreja</label>` : ""}</div>
     <div class="two"><label class="field"><span>Data de nascimento</span><input type="date" name="birth_date" value="${attr(om?.birth_date || p.birth_date || "")}" ${isAdmin() ? "" : "disabled"}></label>
       <label class="field"><span>Limite de escalas por mês</span><input type="number" min="0" max="62" name="monthly_limit" value="${m.monthly_limit ?? ""}" placeholder="Sem limite"></label></div>
@@ -278,9 +285,9 @@ async function editMember(team, m, p, roles, tmr, ppl) {
   const form = s.el.querySelector("#f");
   form.addEventListener("change", (e) => { if (e.target.name === "role") e.target.closest(".chip").classList.toggle("on", e.target.checked); });
   s.el.querySelector("#newrole").onclick = async () => {
-    const name = prompt("Nome da nova função musical");
+    const name = prompt(`Nome da nova função (times de ${teamTypeLabel(team)})`);
     if (!name?.trim()) return;
-    const { data, error } = await sb.from("music_roles").insert({ org_id: state.org.id, name: name.trim(), sort: roles.length + 1 }).select("*").single();
+    const { data, error } = await sb.from("music_roles").insert({ org_id: state.org.id, name: name.trim(), sort: roles.length + 1, team_type: team.team_type }).select("*").single();
     if (error) return toast(errMsg(error), "err");
     roles.push(data);
     s.el.querySelector("#newrole").insertAdjacentHTML("beforebegin", `<label class="chip on"><input type="checkbox" class="sr" name="role" value="${data.id}" checked>${icon(roleIcon(data.name))}${esc(data.name)}</label>`);
@@ -292,7 +299,7 @@ async function editMember(team, m, p, roles, tmr, ppl) {
       const roleIds = fd.getAll("role");
       const ops = [
         sb.rpc("set_member_roles", { p_team: team.id, p_user: m.user_id, p_roles: roleIds }),
-        sb.from("team_members").update({ is_leader: fd.get("leader") === "1", monthly_limit: fd.get("monthly_limit") ? Number(fd.get("monthly_limit")) : null, avoid_with: fd.getAll("avoid") }).eq("team_id", team.id).eq("user_id", m.user_id),
+        sb.from("team_members").update({ ...(isAdmin() ? { is_leader: fd.get("leader") === "1" } : {}), monthly_limit: fd.get("monthly_limit") ? Number(fd.get("monthly_limit")) : null, avoid_with: fd.getAll("avoid") }).eq("team_id", team.id).eq("user_id", m.user_id),
       ];
       if (isAdmin()) {
         ops.push(sb.from("org_members").update({ display_name: fd.get("display_name")?.trim() || null, birth_date: fd.get("birth_date") || null }).eq("org_id", state.org.id).eq("user_id", m.user_id));

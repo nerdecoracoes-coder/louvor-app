@@ -145,6 +145,7 @@ export function toast(msg, kind = "") {
   setTimeout(() => t.remove(), 3000);
 }
 export function errMsg(e) {
+  if (String(e?.message).includes("only_admin_sets_leader")) return "Somente o administrador da igreja define os líderes.";
   const m = e?.message || String(e || "");
   const map = {
     forbidden: "Você não tem permissão para isso.", last_admin: "A igreja precisa de pelo menos um administrador geral.",

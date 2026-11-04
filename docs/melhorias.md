@@ -33,4 +33,7 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - [x] Textos do app: "organização" → "igreja" (nome da igreja, cadastrar igreja, configurações da igreja…).
 - [x] Campo **Tipo de time** (Louvor, Multimídia, Ministério Diaconal, Recepção, Ministério Infantil, Intercessão, Outro) no lugar da descrição.
 - [x] Repertório, menu Músicas, player, músicas na escala e música no chat exclusivos de times de Louvor (regra também no banco).
-- [x] Quem cria um time entra nele como líder (e os times já criados receberam o criador).
+- [x] O administrador cadastra os times da igreja sem precisar participar deles; no cadastro escolhe o **líder** (ou define depois).
+- [x] Só o administrador geral define ou remove líderes (regra também no banco).
+- [x] **Membros da igreja**: convite da igreja (sem time). A entrada nos times é só por convite/inclusão do líder ou do administrador; ninguém solicita entrada.
+- [x] **Funções por tipo de time**: as funções atuais ficaram como funções do Louvor; novas funções podem ser criadas para cada tipo (ou para todos).

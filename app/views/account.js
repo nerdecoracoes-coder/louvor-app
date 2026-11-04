@@ -1,6 +1,6 @@
 // Conta, convites, primeira organização, perfil, notificações e configurações da organização (incluindo Google Drive).
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fRel,
-  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon } from "../core.js";
+  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, TEAM_TYPES } from "../core.js";
 import { colorPicker, readColor, bindColor } from "./teams.js";
 
 export function register(route) {
@@ -26,7 +26,7 @@ export function authView(el, path, invite = null) {
   let mode = "login";
   const draw = () => {
     el.innerHTML = authShell(`${logo()}
-      ${invite ? `<div class="invitecard">${teamBadge(invite.team, 52)}<div><span class="tiny muted">Convite para o time</span><b style="display:block;font-size:17px">${esc(invite.team.name)}</b><span class="small muted">${esc(invite.org.name)}</span></div></div>` : ""}
+      ${invite ? `<div class="invitecard">${teamBadge(invite.team || invite.org, 52)}<div><span class="tiny muted">${invite.team ? "Convite para o time" : "Convite para ser membro da igreja"}</span><b style="display:block;font-size:17px">${esc((invite.team || invite.org).name)}</b>${invite.team ? `<span class="small muted">${esc(invite.org.name)}</span>` : ""}</div></div>` : ""}
       <h1>${mode === "login" ? "Entrar" : mode === "signup" ? "Criar conta" : "Recuperar senha"}</h1>
       <p class="sub">${mode === "login" ? "Gestão de escalas, times e repertório do ministério." : mode === "signup" ? "O cadastro é gratuito. Para entrar em um time, você precisa de um convite." : "Enviaremos um link para criar uma nova senha."}</p>
       <form id="af">
@@ -66,22 +66,24 @@ async function inviteView(token) {
   const r = await sb.rpc("get_invite", { p_token: token });
   const inv = r.data;
   if (!inv) { el.innerHTML = authShell(`${logo()}<h1>Convite não encontrado</h1><p class="sub">Confira o link com quem convidou você.</p><a class="btn ghost block" href="#/">Ir para o início</a>`); clearPending(); return; }
-  if (!inv.valid) { el.innerHTML = authShell(`${logo()}<h1>Convite expirado</h1><p class="sub">Peça um novo link ao líder do time ${esc(inv.team.name)}.</p><a class="btn ghost block" href="#/">Ir para o início</a>`); clearPending(); return; }
+  const T = inv.team, isOrg = !T;
+  if (!inv.valid) { el.innerHTML = authShell(`${logo()}<h1>Convite expirado</h1><p class="sub">${isOrg ? `Peça um novo link ao administrador da ${esc(inv.org.name)}.` : `Peça um novo link ao líder do time ${esc(T.name)}.`}</p><a class="btn ghost block" href="#/">Ir para o início</a>`); clearPending(); return; }
   if (!state.user) return authView(el, "", inv);
-  el.innerHTML = authShell(`${logo()}<div class="invitecard">${teamBadge(inv.team, 60)}<div class="grow"><span class="tiny muted">${esc(inv.org.name)}</span><b style="display:block;font-size:19px">${esc(inv.team.name)}</b><span class="small muted">${inv.team.members} integrante(s)</span></div></div>
-    ${inv.already_member ? `<h1>Você já faz parte deste time</h1><p class="sub">Nada a fazer por aqui.</p><button class="btn primary block" id="open">Abrir o time</button>`
+  const card = isOrg
+    ? `<div class="invitecard">${teamBadge(inv.org, 60)}<div class="grow"><span class="tiny muted">Igreja</span><b style="display:block;font-size:19px">${esc(inv.org.name)}</b><span class="small muted">${inv.org.members} membro(s)</span></div></div>`
+    : `<div class="invitecard">${teamBadge(T, 60)}<div class="grow"><span class="tiny muted">${esc(inv.org.name)}</span><b style="display:block;font-size:19px">${esc(T.name)}</b><span class="small muted">${T.members} integrante(s)</span></div></div>`;
+  el.innerHTML = authShell(`${logo()}${card}
+    ${inv.already_member ? `<h1>Você já faz parte ${isOrg ? "desta igreja" : "deste time"}</h1><p class="sub">Nada a fazer por aqui.</p><button class="btn primary block" id="open">${isOrg ? "Abrir o app" : "Abrir o time"}</button>`
+      : isOrg ? `<h1>Tornar-se membro?</h1><p class="sub">Você será cadastrado(a) como membro da igreja. A entrada nos times é feita pelo convite do líder de cada time.</p><button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`
       : `<h1>Entrar no time?</h1><p class="sub">Você entrará como integrante. O líder poderá definir suas funções.</p><button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`}`);
-  const openTeam = (orgId, teamId) => { clearPending(); try { localStorage.setItem("louvor.org", orgId); } catch {} document.dispatchEvent(new Event("session-reload")); setTimeout(() => go(`/times/${teamId}`), 200); };
-  el.querySelector("#open")?.addEventListener("click", () => openTeam(inv.org.id, inv.team.id));
+  const openIt = (orgId, teamId) => { clearPending(); try { localStorage.setItem("louvor.org", orgId); } catch {} document.dispatchEvent(new Event("session-reload")); setTimeout(() => go(teamId ? `/times/${teamId}` : "/"), 200); };
+  el.querySelector("#open")?.addEventListener("click", () => openIt(inv.org.id, T?.id));
   el.querySelector("#accept")?.addEventListener("click", async (e) => {
     busy(e.target);
     const a = await sb.rpc("accept_invite", { p_token: token });
     if (a.error) { busy(e.target, false); return toast(errMsg(a.error), "err"); }
-    toast(a.data.status === "already_member" ? "Você já fazia parte deste time" : `Bem-vindo(a) ao ${inv.team.name}!`);
-    try { localStorage.setItem("louvor.org", a.data.org_id); } catch {}
-    clearPending();
-    document.dispatchEvent(new Event("session-reload"));
-    setTimeout(() => go(`/times/${a.data.team_id}`), 200);
+    toast(a.data.status === "already_member" ? "Você já fazia parte" : `Bem-vindo(a) ${isOrg ? "à " + inv.org.name : "ao " + T.name}!`);
+    openIt(a.data.org_id, a.data.team_id);
   });
 }
 const clearPending = () => { try { localStorage.removeItem("louvor.pendingInvite"); } catch {} };
@@ -220,13 +222,14 @@ async function orgSettings(_, el) {
     <div class="card small">${integ ? `<div class="row gap">${icon("check", "ok")}<span class="grow">Pasta <b>${esc(integ.folder_name || "")}</b> conectada${integ.last_success_at ? ` · última sincronização ${fRel(integ.last_success_at)}` : ""}</span></div>${integ.last_error ? `<p class="danger-t">${esc(integ.last_error)}</p>` : ""}`
       : `<span class="muted">Conecte a pasta "multitracks" para importar os projetos do REAPER automaticamente.</span>`}</div>
 
-    <div class="sec">${icon("shield")}<h2>Pessoas e administradores</h2></div>
+    <div class="sec">${icon("users")}<h2>Membros da igreja</h2><button class="more" id="orginv">${icon("link")} Convidar membro</button></div>
+    <p class="small muted" style="margin-top:-6px">Membros podem ser incluídos nos times pelos líderes. Administradores gerais criam times e definem os líderes.</p>
     <div class="list">${[...ppl.values()].sort((a, b) => Number(b.role === "admin") - Number(a.role === "admin") || a.display_name.localeCompare(b.display_name)).map((p) => `<div class="li">${avatar(p, 40, false)}
       <span class="grow"><span class="t">${esc(p.display_name)}</span><span class="s">${p.role === "admin" ? "Administrador geral" : "Integrante"} · desde ${fDate(p.joined_at)}</span></span>
       <button class="iconbtn" data-p="${p.id}">${icon("more")}</button></div>`).join("")}</div>
 
-    <div class="sec">${icon("music")}<h2>Funções musicais</h2><button class="more" id="addrole">${icon("plus")} Nova</button></div>
-    <div class="list" id="roles">${roles.map((r) => `<div class="li">${icon(roleIcon(r.name), "accent")}<span class="grow t">${esc(r.name)}</span><button class="iconbtn" data-er="${r.id}">${icon("edit")}</button><button class="iconbtn" data-dr="${r.id}">${icon("trash")}</button></div>`).join("")}</div>
+    <div class="sec">${icon("music")}<h2>Funções por tipo de time</h2><button class="more" id="addrole">${icon("plus")} Nova</button></div>
+    <div class="list" id="roles">${roles.sort((a, b) => String(a.team_type).localeCompare(String(b.team_type)) || a.sort - b.sort).map((r) => `<div class="li">${icon(roleIcon(r.name), "accent")}<span class="grow"><span class="t">${esc(r.name)}</span><span class="s">${r.team_type ? esc(TEAM_TYPES.find((x) => x[0] === r.team_type)?.[1] || r.team_type) : "Todos os tipos"}</span></span><button class="iconbtn" data-er="${r.id}">${icon("edit")}</button><button class="iconbtn" data-dr="${r.id}">${icon("trash")}</button></div>`).join("")}</div>
 
     <div class="card mt"><h3 class="danger-t" style="font-size:16px">Excluir igreja</h3><p class="small muted">Apaga todos os times, escalas, chats e o repertório desta igreja. As contas das pessoas continuam existindo. Os arquivos do Google Drive não são tocados.</p>
       <button class="btn danger sm" id="delorg">${icon("trash")} Excluir igreja</button></div>`;
@@ -257,9 +260,14 @@ async function orgSettings(_, el) {
       if (me && a !== "name") document.dispatchEvent(new Event("session-reload")); else orgSettings(_, el);
     });
   });
+  el.querySelector("#orginv").onclick = () => orgInviteSheet();
   el.querySelector("#addrole").onclick = async () => {
-    const n = prompt("Nome da função musical"); if (!n?.trim()) return;
-    const r = await sb.from("music_roles").insert({ org_id: o.id, name: n.trim(), sort: roles.length + 1 });
+    const sh = sheet(`<h3>Nova função</h3><form id="rf"><label class="field"><span>Nome</span><input name="n" required maxlength="60" placeholder="Ex.: Projeção"></label>
+      <label class="field"><span>Para qual tipo de time</span><select name="t">${TEAM_TYPES.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}<option value="">Todos os tipos</option></select></label>
+      <button class="btn primary block">Criar função</button></form>`);
+    const res = await new Promise((ok) => (sh.el.querySelector("#rf").onsubmit = (e) => { e.preventDefault(); ok({ n: e.target.n.value.trim(), t: e.target.t.value || null }); }));
+    sh.close();
+    const r = await sb.from("music_roles").insert({ org_id: o.id, name: res.n, sort: roles.length + 1, team_type: res.t });
     if (r.error) return toast(errMsg(r.error), "err"); orgSettings(_, el);
   };
   on(el, "click", "[data-er]", async (e, b) => {
@@ -278,6 +286,20 @@ async function orgSettings(_, el) {
     try { localStorage.removeItem("louvor.org"); } catch {}
     toast("Igreja excluída"); document.dispatchEvent(new Event("session-reload")); go("/");
   };
+}
+
+export async function orgInviteSheet() {
+  const s = sheet(`<h3>Convidar membro para ${esc(state.org.name)}</h3>${spinner()}`);
+  const r = await sb.rpc("create_org_invite", { p_org: state.org.id });
+  if (r.error) { s.close(); return toast(errMsg(r.error), "err"); }
+  const link = `${location.origin}${location.pathname}#/convite/${r.data}`;
+  const text = `Você foi convidado(a) para ser membro da ${state.org.name} no app. Entre pelo link: ${link}`;
+  s.el.innerHTML = `<div class="grab"></div><h3>Convidar membro para ${esc(state.org.name)}</h3>
+    <p class="small muted">Quem abrir o link cria a conta (ou entra) e passa a ser membro da igreja, sem entrar em nenhum time. Depois, os líderes incluem os membros nos times. O link vale por 30 dias.</p>
+    <label class="field"><span>Link de convite da igreja</span><input class="input" readonly value="${attr(link)}" id="lnk"></label>
+    <div class="two"><button class="btn ghost" id="cp">${icon("copy")} Copiar link</button>
+      <a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">${icon("whatsapp")} WhatsApp</a></div>`;
+  s.el.querySelector("#cp").onclick = async () => { try { await navigator.clipboard.writeText(link); toast("Link copiado"); } catch { s.el.querySelector("#lnk").select(); document.execCommand("copy"); toast("Link copiado"); } };
 }
 
 // ---------------------------------------------------------------- Google Drive

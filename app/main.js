@@ -16,6 +16,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
 
 // ---------------------------------------------------------------- rotas
 home.register(route); teams.register(route); schedules.register(route); songs.register(route); chat.register(route); account.register(route);
+route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
 
 function navActive(path) {
@@ -72,8 +73,9 @@ function addMenu() {
   if (isStaff()) items.push(["calendar", "Nova escala", "Criar e escalar integrantes", "#/escala/nova"]);
   if (isRepertoireStaff()) items.push(["music", "Nova música", "Cadastrar no repertório", "#/musicas/nova"]);
   if (isStaff()) items.push(["megaphone", "Novo aviso", "Comunicado para a igreja ou um time", "#/avisos/novo"]);
-  if (managed.length || isAdmin()) items.push(["link", "Convidar integrante", "Gerar link exclusivo de um time", "#/convidar"]);
+  if (managed.length || isAdmin()) items.push(["link", "Convidar para um time", "Link exclusivo de um time (só líderes e administradores)", "#/convidar"]);
   if (isAdmin()) items.push(["users", "Novo time", "Criar um time na igreja", "#/times/novo"]);
+  if (isAdmin()) items.push(["org", "Convidar membro da igreja", "Cadastrar alguém como membro, sem time", "#/convidar-membro"]);
   items.push(["lock", "Bloquear datas", "Informar minha indisponibilidade", "#/bloqueios"]);
   const s = sheet(`<h3>Adicionar</h3><div class="list menu">${items.map(([ic, t, d, h]) => `<a class="li" href="${h}">${icon(ic)}<span class="grow"><span class="t">${t}</span><span class="s">${d}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`);
   s.el.addEventListener("click", (e) => { if (e.target.closest("a")) s.close(); });

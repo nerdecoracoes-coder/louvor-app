@@ -59,3 +59,45 @@ describe("tipos de time", () => {
     expect((await midia.api.get(`/songs?org_id=eq.${org}`)).data).toHaveLength(1);
   });
 });
+
+describe("liderança, membros da igreja e funções por tipo", () => {
+  test("líder não define líderes; só o administrador", async () => {
+    const r = await louvorLider.api.patch(`team_members?team_id=eq.${louvor}&user_id=eq.${louvorMembro.id}`, { is_leader: true });
+    expect(r.ok).toBe(false);
+    expect(JSON.stringify(r.data)).toContain("only_admin_sets_leader");
+    const self = await louvorLider.api.patch(`team_members?team_id=eq.${louvor}&user_id=eq.${louvorLider.id}`, { is_leader: false });
+    expect(self.ok).toBe(false);
+    // o líder continua podendo editar funções e limite mensal
+    expect((await louvorLider.api.patch(`team_members?team_id=eq.${louvor}&user_id=eq.${louvorMembro.id}`, { monthly_limit: 3 })).ok).toBe(true);
+    expect((await admin.api.patch(`team_members?team_id=eq.${louvor}&user_id=eq.${louvorMembro.id}`, { is_leader: true })).ok).toBe(true);
+    await admin.api.patch(`team_members?team_id=eq.${louvor}&user_id=eq.${louvorMembro.id}`, { is_leader: false });
+  });
+
+  test("convite da igreja: vira membro sem entrar em time; só admin gera", async () => {
+    expect((await louvorLider.api.rpc("create_org_invite", { p_org: org })).ok).toBe(false);
+    const tok = (await admin.api.rpc("create_org_invite", { p_org: org })).data;
+    const novo = await newUser("Novo Membro");
+    const prev = (await novo.api.rpc("get_invite", { p_token: tok })).data;
+    expect(prev.team).toBeNull(); expect(prev.org.name).toBe("Igreja Tipos");
+    expect((await novo.api.rpc("accept_invite", { p_token: tok })).data.status).toBe("joined");
+    expect((await novo.api.get(`/org_members?org_id=eq.${org}&user_id=eq.${novo.id}`)).data[0].role).toBe("member");
+    expect((await novo.api.get(`/team_members?user_id=eq.${novo.id}`)).data).toHaveLength(0);
+    expect((await novo.api.rpc("accept_invite", { p_token: tok })).data.status).toBe("already_member");
+    // o líder do Louvor inclui o membro da igreja no time
+    expect((await louvorLider.api.rpc("add_team_members", { p_team: louvor, p_users: [novo.id] })).data).toBe(1);
+  });
+
+  test("funções são separadas por tipo de time", async () => {
+    const roles = (await admin.api.get(`/music_roles?org_id=eq.${org}`)).data;
+    expect(roles.every((r: any) => r.team_type === "louvor")).toBe(true);
+    const proj = (await admin.api.post("music_roles", { org_id: org, name: "Projeção", team_type: "multimidia" })).data[0];
+    const guitarra = roles.find((r: any) => r.name === "Guitarra");
+    // função de Louvor não vai para integrante da Multimídia, e vice-versa
+    await admin.api.rpc("set_member_roles", { p_team: multimidia, p_user: midia.id, p_roles: [guitarra.id, proj.id] });
+    const got = (await admin.api.get(`/team_member_roles?team_id=eq.${multimidia}&user_id=eq.${midia.id}`)).data;
+    expect(got.map((g: any) => g.role_id)).toEqual([proj.id]);
+    expect((await admin.api.post("team_member_roles", { team_id: louvor, user_id: louvorMembro.id, role_id: proj.id, org_id: org })).ok).toBe(false);
+    // mesmo nome pode existir em tipos diferentes
+    expect((await admin.api.post("music_roles", { org_id: org, name: "Guitarra", team_type: "multimidia" })).ok).toBe(true);
+  });
+});
