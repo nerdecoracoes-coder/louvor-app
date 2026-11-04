@@ -52,6 +52,11 @@ export function createClient(url, anonKey) {
     if (session && session.expires_at * 1000 - Date.now() < 30_000) await refresh().catch(() => {});
     return session?.access_token || anonKey;
   }
+  // Chaves novas do Supabase ("sb_publishable_...") não são JWT: sem login, vão só no cabeçalho apikey.
+  async function authz() {
+    const t = await token();
+    return t.startsWith("sb_") ? {} : { Authorization: `Bearer ${t}` };
+  }
 
   const auth = {
     get session() { return session; },
@@ -84,7 +89,7 @@ export function createClient(url, anonKey) {
     let attempt = 0;
     for (;;) {
       const r = await fetch(`${url}/rest/v1${path}`, {
-        method, headers: { apikey: anonKey, Authorization: `Bearer ${await token()}`, "Content-Type": "application/json", ...headers },
+        method, headers: { apikey: anonKey, ...(await authz()), "Content-Type": "application/json", ...headers },
         body: body === undefined ? undefined : JSON.stringify(body),
       });
       if (r.status === 401 && attempt++ === 0 && session) { await refresh().catch(() => {}); continue; }
@@ -142,7 +147,7 @@ export function createClient(url, anonKey) {
         async upload(path, file, { upsert = false, contentType } = {}) {
           const r = await fetch(`${url}/storage/v1/object/${bucket}/${path.split("/").map(encodeURIComponent).join("/")}`, {
             method: "POST", body: file,
-            headers: { apikey: anonKey, Authorization: `Bearer ${await token()}`, "x-upsert": String(upsert), "Content-Type": contentType || file.type || "application/octet-stream", "cache-control": "3600" },
+            headers: { apikey: anonKey, ...(await authz()), "x-upsert": String(upsert), "Content-Type": contentType || file.type || "application/octet-stream", "cache-control": "3600" },
           });
           const j = await r.json().catch(() => ({}));
           return r.ok ? { data: { path }, error: null } : { data: null, error: { message: j.message || j.error || `Erro ${r.status}` } };
@@ -150,7 +155,7 @@ export function createClient(url, anonKey) {
         publicUrl(path) { return `${url}/storage/v1/object/public/${bucket}/${path.split("/").map(encodeURIComponent).join("/")}`; },
         async signedUrl(path, expiresIn = 3600) {
           const r = await fetch(`${url}/storage/v1/object/sign/${bucket}/${path.split("/").map(encodeURIComponent).join("/")}`, {
-            method: "POST", headers: { apikey: anonKey, Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" }, body: JSON.stringify({ expiresIn }),
+            method: "POST", headers: { apikey: anonKey, ...(await authz()), "Content-Type": "application/json" }, body: JSON.stringify({ expiresIn }),
           });
           const j = await r.json().catch(() => ({}));
           if (!r.ok) return { data: null, error: { message: j.message || `Erro ${r.status}` } };
@@ -158,7 +163,7 @@ export function createClient(url, anonKey) {
           return { data: { url: s.startsWith("http") ? s : `${url}/storage/v1${s}` }, error: null };
         },
         async remove(paths) {
-          const r = await fetch(`${url}/storage/v1/object/${bucket}`, { method: "DELETE", headers: { apikey: anonKey, Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" }, body: JSON.stringify({ prefixes: paths }) });
+          const r = await fetch(`${url}/storage/v1/object/${bucket}`, { method: "DELETE", headers: { apikey: anonKey, ...(await authz()), "Content-Type": "application/json" }, body: JSON.stringify({ prefixes: paths }) });
           return r.ok ? { error: null } : { error: { message: `Erro ${r.status}` } };
         },
       };
@@ -169,7 +174,7 @@ export function createClient(url, anonKey) {
     url: (name) => `${url}/functions/v1/${name}`,
     async invoke(name, body) {
       const r = await fetch(`${url}/functions/v1/${name}`, {
-        method: "POST", headers: { apikey: anonKey, Authorization: `Bearer ${await token()}`, "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}),
+        method: "POST", headers: { apikey: anonKey, ...(await authz()), "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}),
       });
       const j = await r.json().catch(() => ({}));
       return r.ok ? { data: j, error: null } : { data: j, error: { status: r.status, message: j.error || `Erro ${r.status}` } };
