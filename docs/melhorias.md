@@ -58,5 +58,5 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - [x] **Funções por tipo de time**: as funções atuais ficaram como funções do Louvor; novas funções podem ser criadas para cada tipo (ou para todos).
 - [x] Categoria do time (Ministério da igreja / Aberto a convidados) e convidados de outras igrejas (líder e administrador convidam).
 - [x] Foto de perfil em evidência (tocar na própria foto; aviso na tela inicial enquanto não houver foto).
-- [x] Nova aparência (revisada em 04/11 a partir da referência do usuário): Inter em peso leve nos títulos (fonte no próprio app), luz da cor da igreja no topo, botões redondos de vidro, menu flutuante só com ícones, listas em linhas,
+- [x] Nova aparência (revisada em 04/11 a partir da referência do usuário): Sora com títulos encorpados (fonte no próprio app), luz da cor da igreja no topo, botões redondos de vidro, menu flutuante só com ícones, listas em linhas,
       próxima escala em cartão na cor da igreja.
