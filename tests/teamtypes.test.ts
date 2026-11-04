@@ -101,4 +101,21 @@ describe("liderança, membros da igreja e funções por tipo", () => {
     // mesmo nome pode existir em tipos diferentes
     expect((await admin.api.post("music_roles", { org_id: org, name: "Guitarra", team_type: "multimidia" })).ok).toBe(true);
   });
+  test("recursos do time: Louvor já vem com repertório; o admin pode ligar em outro time; o líder não", async () => {
+    const midia = await newUser("Só Mídia"); await joinChurch(admin.api, org, midia);
+    await admin.api.rpc("add_team_members", { p_team: multimidia, p_users: [midia.id] });
+    const t = (await admin.api.get(`/teams?id=in.(${louvor},${multimidia})&select=id,features`)).data;
+    expect(t.find((x: any) => x.id === louvor).features).toEqual(["repertorio"]);
+    expect(t.find((x: any) => x.id === multimidia).features).toEqual([]);
+    const r = await midiaLider.api.patch(`teams?id=eq.${multimidia}`, { features: ["repertorio"] });
+    expect(JSON.stringify(r.data)).toContain("only_admin_sets_features");
+    expect((await midia.api.get(`/songs?org_id=eq.${org}`)).data).toHaveLength(0);
+    await admin.api.patch(`teams?id=eq.${multimidia}`, { features: ["repertorio"] });
+    expect((await midia.api.get(`/songs?org_id=eq.${org}`)).data.length).toBeGreaterThan(0);
+    // líder de time com repertório acompanha o Google Drive; integrante comum não
+    expect((await midiaLider.api.rpc("is_repertoire_staff", { p_org: org })).data).toBe(true);
+    expect((await midia.api.rpc("is_repertoire_staff", { p_org: org })).data).toBe(false);
+    await admin.api.patch(`teams?id=eq.${multimidia}`, { features: [] });
+    expect((await midia.api.get(`/songs?org_id=eq.${org}`)).data).toHaveLength(0);
+  });
 });

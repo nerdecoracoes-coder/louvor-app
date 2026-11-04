@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, loadSession, selectOrg, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel } from "./core.js";
 import * as home from "./views/home.js";
 import * as teams from "./views/teams.js";
 import * as schedules from "./views/schedules.js";
@@ -19,65 +19,109 @@ home.register(route); teams.register(route); schedules.register(route); songs.re
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
 
+// Dois lugares: o TIME (onde a pessoa passa a maior parte do tempo) e a IGREJA (avisos gerais, calendário, membros, times).
+// O app abre no último time usado; o seletor no topo troca de time ou leva para a igreja.
+function navItems() {
+  const t = state.space;
+  if (t) return [
+    ["inicio", "home", "Início", "#/"],
+    ["escalas", "calendar", "Escalas", `#/times/${t.id}/escalas`],
+    ...(teamHasRepertoire(t) ? [["musicas", "music", "Músicas", "#/musicas"]] : []),
+    ["chat", "chat", "Chat", `#/chat/${t.id}`],
+    ["time", "users", "Time", `#/times/${t.id}/integrantes`],
+  ];
+  return [
+    ["inicio", "home", "Início", "#/"],
+    ["times", "users", "Times", "#/times"],
+    ["calendario", "calendar", "Calendário", "#/calendario"],
+    ...(hasRepertoire() && !state.myTeams.length ? [["musicas", "music", "Músicas", "#/musicas"]] : []),
+    ["chat", "chat", "Chat", "#/chat"],
+  ];
+}
 function navActive(path) {
-  if (path.startsWith("/times")) return "times";
+  const t = state.space;
+  if (path === "/" || path === "/inicio" || path === "") return "inicio";
   if (path.startsWith("/musica")) return "musicas";
   if (path.startsWith("/chat")) return "chat";
-  if (path === "/" || path === "/inicio" || path === "") return "inicio";
+  if (t) {
+    if (path.startsWith(`/times/${t.id}/integrantes`) || path.startsWith(`/times/${t.id}/config`) || path.startsWith(`/times/${t.id}/arquivos`) || path.startsWith(`/times/${t.id}/avisos`)) return "time";
+    if (path.startsWith(`/times/${t.id}`) || path.startsWith("/escala") || path.startsWith("/calendario")) return "escalas";
+    return "";
+  }
+  if (path.startsWith("/times")) return "times";
+  if (path.startsWith("/calendario")) return "calendario";
   return "";
 }
 
 function brandHtml() {
   const o = state.org;
   if (!o) return "";
+  const t = state.space;
+  if (t) return `${teamBadge(t, 34)}<span class="wm"><b>${esc(t.name)}</b><small>${esc(o.name)}</small></span>${icon("chevronDown", "chev")}`;
   const eq = `<span class="eq">${[10, 18, 24, 14, 20, 9].map((h) => `<i style="height:${h}px"></i>`).join("")}</span>`;
   const word = o.logo_url ? `<img src="${attr(o.logo_url)}" alt="${attr(o.name)}">` : `<span class="wm"><b>${esc(o.name)}</b>${o.subtitle ? `<small>${esc(o.subtitle)}</small>` : ""}</span>${eq}`;
-  return `${word}${state.orgs.length > 1 ? icon("chevronDown", "chev") : ""}`;
+  return `${word}${icon("chevronDown", "chev")}`;
+}
+const navKey = () => (state.space?.id || "igreja") + ":" + navItems().map((x) => x[0]).join(",");
+function navHtml() {
+  const items = navItems();
+  return items.map(([k, ic, l, h]) => `<a href="${h}" data-nav="${k}">${icon(ic)}<span>${l}</span>${k === "chat" ? `<span class="dot hidden" id="chat-dot" style="position:absolute;top:14px;right:calc(50% - 18px);width:8px;height:8px;border-radius:8px;background:var(--accent);box-shadow:0 0 8px var(--accent)"></span>` : ""}</a>`).join("");
 }
 
 function renderShell() {
+  const items = navItems();
   app.innerHTML = `${WAVES}<div class="shell">
     <header class="topbar">
-      <button class="brand" data-act="orgs" aria-label="Igreja">${brandHtml()}</button>
-      <a class="iconbtn" href="#/calendario" aria-label="Calendário">${icon("calendar")}</a>
+      <button class="brand${state.space ? " team" : ""}" data-act="space" aria-label="Trocar de time ou ir para a igreja">${brandHtml()}</button>
+      <button class="iconbtn" data-act="add" aria-label="Adicionar">${icon("plus")}</button>
       <a class="iconbtn" href="#/notificacoes" aria-label="Notificações">${icon("bell")}<span class="dot hidden" id="bell-dot"></span></a>
       <a href="#/perfil" aria-label="Perfil" style="margin-left:4px">${avatar(state.profile, 40)}</a>
     </header>
-    <nav class="bottomnav" aria-label="Navegação principal" style="grid-template-columns:repeat(${hasRepertoire() ? 5 : 4},1fr)">
-      <a href="#/" data-nav="inicio">${icon("home")}<span>Início</span></a>
-      <a href="#/times" data-nav="times">${icon("users")}<span>Times</span></a>
-      <button class="fab" data-act="add" aria-label="Adicionar">${icon("plus")}</button>
-      ${hasRepertoire() ? `<a href="#/musicas" data-nav="musicas">${icon("music")}<span>Músicas</span></a>` : ""}
-      <a href="#/chat" data-nav="chat">${icon("chat")}<span>Chat</span><span class="dot hidden" id="chat-dot" style="position:absolute;top:14px;right:calc(50% - 18px);width:8px;height:8px;border-radius:8px;background:var(--accent);box-shadow:0 0 8px var(--accent)"></span></a>
-    </nav>
+    <nav class="bottomnav" aria-label="Navegação principal" data-key="${attr(navKey())}" style="grid-template-columns:repeat(${items.length},1fr)">${navHtml()}</nav>
     <main class="view" id="view"></main>
   </div>`;
 }
 
-on(document, "click", "[data-act=orgs]", () => orgSwitcher());
+on(document, "click", "[data-act=space]", () => spaceSwitcher());
+on(document, "click", "[data-act=orgs]", () => spaceSwitcher());
 on(document, "click", "[data-act=add]", () => addMenu());
 
-function orgSwitcher() {
-  const s = sheet(`<h3>Igrejas</h3><div class="list menu">
-    ${state.orgs.map((o) => `<button class="li" data-org="${o.org_id}">${o.organizations.logo_url ? `<span class="tbadge" style="--s:40px"><img src="${attr(o.organizations.logo_url)}" alt=""></span>` : `<span class="tbadge" style="--s:40px;--tc:${attr(o.organizations.accent_color)}"><span>${esc(o.organizations.name[0])}</span></span>`}
-      <span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : o.role === "guest" ? "Convidado" : "Membro"}</span></span>${o.org_id === state.org?.id ? icon("check", "accent") : ""}</button>`).join("")}
-  </div><div class="list menu mt">
+function spaceSwitcher() {
+  const o = state.org;
+  const orgBadge = (org, size = 40) => org.logo_url ? `<span class="tbadge" style="--s:${size}px"><img src="${attr(org.logo_url)}" alt=""></span>` : `<span class="tbadge" style="--s:${size}px;--tc:${attr(org.accent_color)}"><span>${esc(org.name[0])}</span></span>`;
+  const others = state.orgs.filter((x) => x.org_id !== o.id);
+  const s = sheet(`<h3>Meus times</h3><div class="list menu">
+    ${state.myTeams.map((t) => `<button class="li" data-space="${t.id}">${teamBadge(t, 40)}<span class="grow"><span class="t">${esc(t.name)}</span><span class="s">${esc(teamTypeLabel(t))}${t.is_leader ? " · Líder" : ""}</span></span>${state.space?.id === t.id ? icon("check", "accent") : ""}</button>`).join("")
+      || `<div class="li muted small">Você ainda não participa de nenhum time.</div>`}
+  </div>
+  <h3 class="mt">Igreja</h3><div class="list menu">
+    <button class="li" data-space="">${orgBadge(o)}<span class="grow"><span class="t">${esc(o.name)}</span><span class="s">Avisos gerais, calendário, membros e times</span></span>${!state.space ? icon("check", "accent") : ""}</button>
     ${isAdmin() ? `<a class="li" href="#/org">${icon("settings")}<span class="grow t">Configurações da igreja</span></a>` : ""}
-    <a class="li" href="#/nova-org">${icon("plus")}<span class="grow t">Cadastrar outra igreja</span></a></div>`);
+  </div>
+  ${others.length ? `<h3 class="mt">Outras igrejas</h3><div class="list menu">${others.map((x) => `<button class="li" data-org="${x.org_id}">${orgBadge(x.organizations)}<span class="grow"><span class="t">${esc(x.organizations.name)}</span><span class="s">${x.role === "admin" ? "Administrador geral" : x.role === "guest" ? "Convidado" : "Membro"}</span></span></button>`).join("")}</div>` : ""}
+  <div class="list menu mt"><a class="li" href="#/nova-org">${icon("plus")}<span class="grow t">Cadastrar outra igreja</span></a></div>`);
+  on(s.el, "click", "[data-space]", (e, b) => { s.close(); setSpace(b.dataset.space || null); renderShell(); go("/"); });
   on(s.el, "click", "[data-org]", async (e, b) => { s.close(); await selectOrg(b.dataset.org); renderShell(); go("/"); toast(`Você está em ${state.org.name}`); });
+  s.el.addEventListener("click", (e) => { if (e.target.closest("a")) s.close(); });
 }
 
 function addMenu() {
-  const managed = state.myTeams.filter((t) => canManageTeam(t.id));
+  const t = state.space;
   const items = [];
-  if (isStaff()) items.push(["calendar", "Nova escala", "Criar e escalar integrantes", "#/escala/nova"]);
-  if (isRepertoireStaff()) items.push(["music", "Nova música", "Cadastrar no repertório", "#/musicas/nova"]);
-  if (isStaff()) items.push(["megaphone", "Novo aviso", "Comunicado para a igreja ou um time", "#/avisos/novo"]);
-  if (managed.length || isAdmin()) items.push(["link", "Convidar para um time", "Link exclusivo de um time (só líderes e administradores)", "#/convidar"]);
-  if (isAdmin()) items.push(["users", "Novo time", "Criar um time na igreja", "#/times/novo"]);
-  if (isAdmin()) items.push(["org", "Convidar membro da igreja", "Cadastrar alguém como membro, sem time", "#/convidar-membro"]);
+  if (t) {
+    if (canManageTeam(t.id)) items.push(["calendar", "Nova escala", `Escala do ${t.name}`, `#/escala/nova/${t.id}`]);
+    if (canManageTeam(t.id) && teamHasRepertoire(t) && isRepertoireStaff()) items.push(["music", "Nova música", "Cadastrar no repertório", "#/musicas/nova"]);
+    if (canManageTeam(t.id)) items.push(["megaphone", "Novo aviso do time", `Comunicado para o ${t.name}`, `#/times/${t.id}/aviso`]);
+    if (canManageTeam(t.id)) items.push(["link", "Convidar para o time", "Link exclusivo deste time", `#/times/${t.id}/integrantes?convidar=1`]);
+  } else {
+    if (isStaff()) items.push(["calendar", "Nova escala", "Criar e escalar integrantes", "#/escala/nova"]);
+    if (isStaff()) items.push(["megaphone", "Novo aviso", "Comunicado para a igreja ou um time", "#/avisos/novo"]);
+    if (state.myTeams.some((x) => canManageTeam(x.id)) || isAdmin()) items.push(["link", "Convidar para um time", "Link exclusivo de um time (só líderes e administradores)", "#/convidar"]);
+    if (isAdmin()) items.push(["users", "Novo time", "Criar um time na igreja", "#/times/novo"]);
+    if (isAdmin()) items.push(["org", "Convidar membro da igreja", "Cadastrar alguém como membro, sem time", "#/convidar-membro"]);
+  }
   items.push(["lock", "Bloquear datas", "Informar minha indisponibilidade", "#/bloqueios"]);
-  const s = sheet(`<h3>Adicionar</h3><div class="list menu">${items.map(([ic, t, d, h]) => `<a class="li" href="${h}">${icon(ic)}<span class="grow"><span class="t">${t}</span><span class="s">${d}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`);
+  const s = sheet(`<h3>Adicionar</h3><div class="list menu">${items.map(([ic, ti, d, h]) => `<a class="li" href="${h}">${icon(ic)}<span class="grow"><span class="t">${esc(ti)}</span><span class="s">${esc(d)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`);
   s.el.addEventListener("click", (e) => { if (e.target.closest("a")) s.close(); });
 }
 
@@ -120,6 +164,10 @@ async function render() {
   if (m?.opts.overlay) { await m.handler(m.params); return; }
   closePlayer();
   if (m?.opts.noOrg || m?.opts.public) { document.body.classList.remove("in-chat"); return m.handler(m.params, app); }
+  // abrir a página (ou o chat) de um dos meus times leva para dentro dele
+  if (path === "/igreja" && state.space) { setSpace(null); renderShell(); }
+  const tm = /^\/(?:times|chat|t)\/([0-9a-f-]{36})/.exec(path);
+  if (tm && tm[1] !== state.space?.id && state.myTeams.some((t) => t.id === tm[1])) { setSpace(tm[1]); renderShell(); }
   if (!document.getElementById("view")) renderShell();
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navActive(path)));
   // elemento novo a cada navegação: nenhum ouvinte de evento sobra da tela anterior
@@ -138,10 +186,10 @@ async function render() {
 window.addEventListener("hashchange", render);
 document.addEventListener("org-changed", () => {
   if (!document.getElementById("view")) return;
+  // time ou recursos mudaram: refaz o topo e o menu
+  const nav = document.querySelector(".bottomnav");
+  if (nav && nav.dataset.key !== navKey()) { renderShell(); render(); return; }
   const b = document.querySelector(".brand"); if (b) b.innerHTML = brandHtml();
-  // o menu Músicas depende dos times do usuário
-  const hasMus = !!document.querySelector('[data-nav="musicas"]');
-  if (hasMus !== hasRepertoire()) { renderShell(); render(); }
 });
 document.addEventListener("profile-changed", () => { const a = document.querySelector('.topbar a[href="#/perfil"]'); if (a) a.innerHTML = avatar(state.profile, 40); });
 document.addEventListener("session-reload", async () => { await loadSession(); renderShell(); startBadges(); render(); });

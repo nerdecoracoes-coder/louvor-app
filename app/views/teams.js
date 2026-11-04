@@ -1,5 +1,5 @@
 // Times: lista, criação, página do time (Escalas, Integrantes, Arquivos, Avisos), configurações e integrantes.
-import { TEAM_TYPES, REPERTOIRE_TYPES, teamTypeLabel, sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, invalidatePeople, isAdmin, canManageTeam, sheet, toast, errMsg, busy,
+import { TEAM_TYPES, REPERTOIRE_TYPES, FEATURES, featurePreset, teamHasRepertoire, isRepertoireStaff, teamTypeLabel, sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, invalidatePeople, isAdmin, canManageTeam, sheet, toast, errMsg, busy,
   on, go, empty, spinner, fDate, uploadPublic, pickFile, confirmDialog, applyAccent, waLink, roleIcon, selectOrg, linkify, safeUrl } from "../core.js";
 import { schedRow } from "./home.js";
 import { noticeForm } from "./home.js";
@@ -27,10 +27,22 @@ const bindType = (form) => {
     const v = form.team_type.value;
     form.querySelector("#tlab").classList.toggle("hidden", v !== "outro");
     form.team_type_label.required = v === "outro";
-    form.querySelector("#thint").textContent = REPERTOIRE_TYPES.includes(v) ? "Times de Louvor usam o repertório de músicas e o player multitrack." : "Repertório e player ficam disponíveis só para times de Louvor.";
+    form.querySelector("#thint").textContent = "";
   };
   form.team_type.addEventListener("change", sync); sync();
 };
+// Recursos do time: o tipo sugere; só o administrador altera
+export const featuresField = (t = {}) => `<div class="field"><span>Recursos do time</span>
+  ${FEATURES.map(([k, l, d]) => `<label class="li" style="padding:10px 0;border:0"><span class="grow"><span class="t">${l}</span><span class="s">${d}</span></span>
+    <span class="switch"><input type="checkbox" name="feat_${k}" ${(Array.isArray(t.features) ? t.features : featurePreset(t.team_type || "louvor")).includes(k) ? "checked" : ""} ${isAdmin() ? "" : "disabled"}><i></i></span></label>`).join("")}
+  <span class="hint">${isAdmin() ? "Já vêm marcados os recursos do tipo escolhido; ajuste se precisar." : "Só o administrador da igreja altera os recursos do time."}</span></div>`;
+const bindFeatures = (form, presetOnTypeChange) => {
+  if (!presetOnTypeChange) return;
+  let touched = false;
+  form.querySelectorAll("[name^=feat_]").forEach((c) => c.addEventListener("change", () => (touched = true)));
+  form.team_type.addEventListener("change", () => { if (touched) return; const p = featurePreset(form.team_type.value); FEATURES.forEach(([k]) => (form[`feat_${k}`].checked = p.includes(k))); });
+};
+const readFeatures = (form) => FEATURES.filter(([k]) => form[`feat_${k}`]?.checked).map(([k]) => k);
 const readType = (form) => ({ category: form.querySelector("input[name=category]:checked")?.value || "ministry", team_type: form.team_type.value, team_type_label: form.team_type.value === "outro" ? form.team_type_label.value.trim() || null : null });
 export const colorPicker = (name, value) => `<div class="colors">${COLORS.map((c) => `<label style="background:${c}"><input type="radio" name="${name}" value="${c}" ${c.toLowerCase() === (value || "").toLowerCase() ? "checked" : ""}><i></i></label>`).join("")}
   <label title="Outra cor" style="box-shadow:none"><input type="color" name="${name}_custom" value="${attr(COLORS.includes(value) ? "#1EA7FF" : value || "#1EA7FF")}"></label></div>`;
@@ -91,14 +103,16 @@ async function newTeam(_, el) {
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/times">${icon("chevronLeft")}</a><h1>Novo time</h1></div>
     <form class="card" id="f"><label class="field"><span>Nome do time *</span><input name="name" required maxlength="120" placeholder="Ex.: Louvor Domingo"></label>
     ${typeField()}
+    ${featuresField()}
     <label class="field"><span>Líder do time</span><select name="leader"><option value="">Definir depois</option>${ppl.map((p) => `<option value="${p.id}">${esc(p.display_name)}${p.id === state.user.id ? " (você)" : ""}</option>`).join("")}</select>
       <span class="hint">Você cadastra o time sem precisar fazer parte dele. O líder convida e inclui os integrantes.</span></label>
     <div class="field"><span>Cor de destaque</span>${colorPicker("color", "#3D8BFF")}</div>
     <button class="btn primary block" id="save">Criar time</button></form>`;
-  const form = el.querySelector("#f"); bindColor(form, "color"); bindType(form);
+  const form = el.querySelector("#f"); bindColor(form, "color"); bindType(form); bindFeatures(form, true);
+  const hasFeat = state.myTeams.length ? Array.isArray(state.myTeams[0].features) : (await sb.from("teams").select("features").limit(1)).error == null;
   form.onsubmit = async (e) => {
     e.preventDefault(); const btn = el.querySelector("#save"); busy(btn);
-    const { data, error } = await sb.from("teams").insert({ org_id: state.org.id, name: form.name.value.trim(), ...readType(form), accent_color: readColor(form, "color"), created_by: state.user.id }).select("*").single();
+    const { data, error } = await sb.from("teams").insert({ org_id: state.org.id, name: form.name.value.trim(), ...readType(form), ...(hasFeat ? { features: readFeatures(form) } : {}), accent_color: readColor(form, "color"), created_by: state.user.id }).select("*").single();
     busy(btn, false);
     if (error) return toast(errMsg(error), "err");
     // o administrador só cadastra o time; quem participa é o líder escolhido (se houver)
@@ -147,12 +161,14 @@ async function teamView(id, tab, el, alive) {
   if (team.apply_theme && team.accent_color) applyAccent(document.documentElement, team.accent_color);
   const tabs = [["escalas", "Escalas", "calendar"], ["integrantes", "Integrantes", "users"], ["arquivos", "Arquivos", "file"], ["avisos", "Avisos", "megaphone"]];
   if (!tabs.some((t) => t[0] === tab)) tab = "escalas";
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/times">${icon("chevronLeft")}</a>${teamBadge(team, 52)}
+  const here = state.space?.id === id; // dentro do próprio time: o menu de baixo já leva ao chat e às escalas
+  el.innerHTML = `<div class="pagehead">${here ? "" : `<a class="back" href="#/times">${icon("chevronLeft")}</a>`}${teamBadge(team, 52)}
       <div class="grow" style="min-width:0"><h1 class="ellipsis" style="font-size:22px">${esc(team.name)}</h1><span class="small muted">${esc(teamTypeLabel(team))} · ${members.length} integrante${members.length === 1 ? "" : "s"}</span></div>
-      ${isMember ? `<a class="iconbtn" href="#/chat/${id}" aria-label="Chat">${icon("chat")}</a>` : ""}${manage ? `<a class="iconbtn" href="#/times/${id}/config" aria-label="Configurações">${icon("settings")}</a>` : ""}</div>
+      ${isMember && !here ? `<a class="iconbtn" href="#/chat/${id}" aria-label="Chat">${icon("chat")}</a>` : ""}${manage ? `<a class="iconbtn" href="#/times/${id}/config" aria-label="Configurações">${icon("settings")}</a>` : ""}</div>
     <div class="tabs">${tabs.map(([k, l, ic]) => `<a href="#/times/${id}/${k}" class="${tab === k ? "on" : ""}">${icon(ic)}${l}</a>`).join("")}</div>
     <div id="tab"></div>`;
   const box = el.querySelector("#tab");
+  if (manage && /[?&]convidar=1/.test(location.hash)) { history.replaceState(null, "", `#/times/${id}/${tab}`); inviteSheet(team); }
   if (tab === "escalas") return schedulesTab(team, box, manage);
   if (tab === "integrantes") return membersTab(team, members, box, manage);
   if (tab === "arquivos") return filesTab(team, box, manage);
@@ -385,11 +401,14 @@ async function teamSettings(id, el) {
     <div class="row gap mb"><span id="logo">${teamBadge(team, 72)}</span><div class="col gap-s"><button type="button" class="btn ghost sm" id="up">${icon("image")} Trocar logotipo</button>${team.logo_url ? `<button type="button" class="link small" id="rm" style="text-align:left">Remover</button>` : ""}</div></div>
     <label class="field"><span>Nome</span><input name="name" value="${attr(team.name)}" required maxlength="120"></label>
     ${typeField(team)}
+    ${Array.isArray(team.features) ? featuresField(team) : ""}
     <div class="field"><span>Cor de destaque do time</span>${colorPicker("color", team.accent_color || "#1EA7FF")}</div>
     <label class="li" style="padding:12px 0;border:0"><span class="grow"><span class="t">Aplicar a cor nas telas do time</span><span class="s">Desligado: a cor aparece só no logotipo e nas identificações, mantendo o visual principal do app.</span></span>
       <span class="switch"><input type="checkbox" name="apply_theme" ${team.apply_theme ? "checked" : ""}><i></i></span></label>
     <button class="btn primary block mt" id="save">Salvar</button>
   </form>
+  ${teamHasRepertoire(team) && isRepertoireStaff() ? `<div class="card mt"><div class="row between"><span><h3 style="font-size:16px">Repertório e Google Drive</h3><span class="small muted">Pasta "multitracks", importação e histórico de sincronização.</span></span>
+    <a class="btn ghost sm" href="#/org/drive">${icon("cloud")} Abrir</a></div></div>` : ""}
   ${isAdmin() ? `<div class="card mt"><h3 class="danger-t" style="font-size:16px">Excluir time</h3><p class="small muted">Remove o time, suas escalas, chat e arquivos. As contas dos integrantes continuam existindo.</p><button class="btn danger sm" id="del">${icon("trash")} Excluir time</button></div>` : ""}`;
   const form = el.querySelector("#f"); bindColor(form, "color"); bindType(form);
   let logo = team.logo_url;
@@ -401,7 +420,7 @@ async function teamSettings(id, el) {
   el.querySelector("#rm")?.addEventListener("click", () => { logo = null; el.querySelector("#logo").innerHTML = teamBadge({ ...team, logo_url: null }, 72); });
   form.onsubmit = async (e) => {
     e.preventDefault(); const btn = el.querySelector("#save"); busy(btn);
-    const r = await sb.from("teams").update({ name: form.name.value.trim(), ...readType(form), accent_color: readColor(form, "color"), apply_theme: form.apply_theme.checked, logo_url: logo }).eq("id", id);
+    const r = await sb.from("teams").update({ name: form.name.value.trim(), ...readType(form), ...(isAdmin() && Array.isArray(team.features) ? { features: readFeatures(form) } : {}), accent_color: readColor(form, "color"), apply_theme: form.apply_theme.checked, logo_url: logo }).eq("id", id);
     busy(btn, false);
     if (r.error) return toast(errMsg(r.error), "err");
     await selectOrg(state.org.id, false); toast("Time atualizado"); go(`/times/${id}`);

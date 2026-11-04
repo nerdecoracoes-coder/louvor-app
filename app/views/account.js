@@ -1,6 +1,6 @@
-// Conta, convites, primeira organização, perfil, notificações e configurações da organização (incluindo Google Drive).
+// Conta, convites, primeira organização, perfil, notificações, configurações da igreja e o Google Drive do repertório.
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fRel,
-  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, TEAM_TYPES } from "../core.js";
+  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, TEAM_TYPES, isRepertoireStaff } from "../core.js";
 import { colorPicker, readColor, bindColor } from "./teams.js";
 
 export function register(route) {
@@ -80,7 +80,12 @@ async function inviteView(token) {
         <label class="field"><span>Sua igreja</span><input class="input" id="church" maxlength="80" placeholder="Ex.: Nova Vida Niterói"></label>
         <button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`
       : `<h1>Entrar no time?</h1><p class="sub">Você entrará como integrante. O líder poderá definir suas funções.</p><button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`}`);
-  const openIt = (orgId, teamId) => { clearPending(); try { localStorage.setItem("louvor.org", orgId); } catch {} document.dispatchEvent(new Event("session-reload")); setTimeout(() => go(teamId ? `/times/${teamId}` : "/"), 200); };
+  // troca o endereço sem disparar a navegação e recarrega a sessão, que então abre a tela certa (já dentro do time)
+  const openIt = (orgId, teamId) => {
+    clearPending(); try { localStorage.setItem("louvor.org", orgId); if (teamId) localStorage.setItem(`somos.space:${orgId}`, teamId); } catch {}
+    history.replaceState(null, "", `#${teamId ? `/times/${teamId}` : "/"}`);
+    document.dispatchEvent(new Event("session-reload"));
+  };
   el.querySelector("#open")?.addEventListener("click", () => openIt(inv.org.id, T?.id));
   el.querySelector("#accept")?.addEventListener("click", async (e) => {
     busy(e.target);
@@ -211,7 +216,7 @@ async function notificationsView(_, el) {
 async function orgSettings(_, el) {
   if (!isAdmin()) { el.innerHTML = empty("lock", "Somente administradores gerais acessam esta página."); return; }
   const o = state.org;
-  const [ppl, roles, integ] = await Promise.all([people(true), must(sb.from("music_roles").select("*").eq("org_id", o.id).order("sort")), must(sb.from("drive_integrations").select("*").eq("org_id", o.id).maybeSingle())]);
+  const [ppl, roles] = await Promise.all([people(true), must(sb.from("music_roles").select("*").eq("org_id", o.id).order("sort"))]);
   let logoUrl = o.logo_url;
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Igreja</h1></div>
     <form class="card" id="of">
@@ -222,10 +227,6 @@ async function orgSettings(_, el) {
       <label class="field"><span>Subtítulo (opcional)</span><input name="subtitle" maxlength="60" value="${attr(o.subtitle || "")}" placeholder="Ex.: Igreja"></label>
       <div class="field"><span>Cor de destaque</span>${colorPicker("color", o.accent_color)}</div>
       <button class="btn primary block" id="save">Salvar</button></form>
-
-    <div class="sec">${icon("cloud")}<h2>Google Drive</h2><a href="#/org/drive">${integ ? "Gerenciar" : "Conectar"} ${icon("chevronRight")}</a></div>
-    <div class="card small">${integ ? `<div class="row gap">${icon("check", "ok")}<span class="grow">Pasta <b>${esc(integ.folder_name || "")}</b> conectada${integ.last_success_at ? ` · última sincronização ${fRel(integ.last_success_at)}` : ""}</span></div>${integ.last_error ? `<p class="danger-t">${esc(integ.last_error)}</p>` : ""}`
-      : `<span class="muted">Conecte a pasta "multitracks" para importar os projetos do REAPER automaticamente.</span>`}</div>
 
     <div class="sec">${icon("users")}<h2>Membros da igreja</h2><button class="more" id="orginv">${icon("link")} Convidar membro</button></div>
     <p class="small muted" style="margin-top:-6px">Membros podem ser incluídos nos times pelos líderes. Administradores gerais criam times e definem os líderes.</p>
@@ -309,7 +310,7 @@ export async function orgInviteSheet() {
 
 // ---------------------------------------------------------------- Google Drive
 async function driveSettings(_, el) {
-  if (!isAdmin()) { el.innerHTML = empty("lock", "Somente administradores gerais."); return; }
+  if (!isRepertoireStaff()) { el.innerHTML = empty("lock", "Somente o administrador e os líderes dos times com repertório."); return; }
   el.innerHTML = spinner();
   const [integ, info, runs, events, pend] = await Promise.all([
     must(sb.from("drive_integrations").select("*").eq("org_id", state.org.id).maybeSingle()),
@@ -319,7 +320,8 @@ async function driveSettings(_, el) {
     must(sb.from("songs").select("id,title,status,status_message,drive_folder_name").eq("org_id", state.org.id).eq("source", "drive").in("status", ["processing", "waiting_files", "error"])),
   ]);
   const email = info.data?.service_email;
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/org">${icon("chevronLeft")}</a><h1>Google Drive</h1></div>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/musicas">${icon("chevronLeft")}</a><h1>Google Drive</h1></div>
+    <p class="muted small">Repertório dos times com músicas${state.space ? ` · ${esc(state.space.name)}` : ""}.</p>
     <div class="card"><h3 style="font-size:16px">Como funciona</h3>
       <ol class="small muted" style="padding-left:18px;margin:8px 0 0;line-height:1.7">
         <li>Na conta Google da igreja, abra a pasta <b>multitracks</b> e toque em <b>Compartilhar</b>.</li>

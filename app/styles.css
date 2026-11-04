@@ -468,3 +468,8 @@ input[type=range].fader::-moz-range-thumb { width: 15px; height: 15px; border-ra
   .seg2 { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+
+/* topo dentro de um time: logotipo do time + nome do time e da igreja */
+.brand .tbadge { flex: none; }
+.brand .tbadge img { height: 100%; width: 100%; max-width: none; object-fit: cover; }
+.brand.team .wm b { font-size: 17px; }

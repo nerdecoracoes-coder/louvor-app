@@ -20,10 +20,12 @@ beforeAll(async () => {
   [admin, member, outsider, leader] = await Promise.all(["Admin Fn", "Membro Fn", "Fora Fn", "Lider Fn"].map(newUser));
   org = (await admin.api.rpc("create_organization", { p_name: "Org Funções" })).data;
   const team = (await admin.api.post("teams", { org_id: org, name: "T" })).data[0].id;
+  const midia = (await admin.api.post("teams", { org_id: org, name: "Mídia", team_type: "multimidia" })).data[0].id; // time sem repertório
   const tok = (await admin.api.rpc("create_team_invite", { p_team: team })).data;
   await joinChurch(admin.api, org, member, leader);
   await member.api.rpc("accept_invite", { p_token: tok }); await leader.api.rpc("accept_invite", { p_token: tok });
-  await admin.api.patch(`team_members?team_id=eq.${team}&user_id=eq.${leader.id}`, { is_leader: true });
+  await admin.api.rpc("add_team_members", { p_team: midia, p_users: [leader.id] });
+  await admin.api.patch(`team_members?team_id=eq.${midia}&user_id=eq.${leader.id}`, { is_leader: true }); // líder só da Mídia
 });
 
 describe("drive-sync", () => {
@@ -31,7 +33,7 @@ describe("drive-sync", () => {
     const r = await call({ action: "info" }, member.api.token);
     expect((await r.json()).service_email).toContain("gserviceaccount.com");
   });
-  test("sem login: 401; não administrador (nem líder): 403", async () => {
+  test("sem login: 401; quem não é admin nem líder de time com repertório: 403", async () => {
     expect((await call({ action: "sync", org_id: org })).status).toBe(401);
     expect((await call({ action: "connect", org_id: org, folder: drive.idOf(ROOT) }, member.api.token)).status).toBe(403);
     expect((await call({ action: "connect", org_id: org, folder: drive.idOf(ROOT) }, leader.api.token)).status).toBe(403);

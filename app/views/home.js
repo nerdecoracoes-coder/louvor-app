@@ -1,10 +1,12 @@
 // Início: perfil, atalhos, avisos, próximas escalas, aniversariantes e bloqueio de datas.
 import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDate, fDateLong, ymd, people, personName, myName, isStaff, isAdmin,
-  canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire, invalidatePeople } from "../core.js";
+  canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire, invalidatePeople,
+  teamBadge, teamHasRepertoire, teamTypeLabel } from "../core.js";
 
 export function register(route) {
-  route("/", homeView);
-  route("/inicio", homeView);
+  route("/", (p, el, a) => (state.space ? teamHome(state.space, el, a) : homeView(p, el, a)));
+  route("/inicio", (p, el, a) => (state.space ? teamHome(state.space, el, a) : homeView(p, el, a)));
+  route("/igreja", homeView);
   route("/avisos", noticesView);
   route("/avisos/novo", (p, el) => noticeForm(el, null));
   route("/bloqueios", blocksView);
@@ -57,7 +59,7 @@ async function homeView(_, el, alive) {
   el.innerHTML = spinner();
   const [roles, notices, ups, ppl] = await Promise.all([
     myRoles(),
-    must(sb.from("announcements").select("*").eq("org_id", state.org.id).order("created_at", { ascending: false }).limit(5)),
+    must(sb.from("announcements").select("*").eq("org_id", state.org.id).is("team_id", null).order("created_at", { ascending: false }).limit(5)),
     upcomingAssignments(),
     people(),
   ]);
@@ -98,6 +100,73 @@ async function homeView(_, el, alive) {
       await must(sb.from("profiles").update({ avatar_url: url }).eq("id", state.user.id));
       state.profile.avatar_url = url; invalidatePeople(); document.dispatchEvent(new Event("profile-changed"));
       toast("Foto adicionada"); homeView(_, el, alive);
+    } catch (e) { toast(errMsg(e), "err"); }
+  };
+  el.querySelector("#addphoto")?.addEventListener("click", pickPhoto);
+  el.querySelector("#heroav").onclick = () => (noPhoto ? pickPhoto() : go("/perfil"));
+  const car = el.querySelector("#notices");
+  if (car) car.addEventListener("scroll", () => {
+    const i = Math.round(car.scrollLeft / car.clientWidth);
+    el.querySelectorAll("#ndots i").forEach((d, k) => d.classList.toggle("on", k === i));
+  }, { passive: true });
+  on(el, "click", "[data-notice]", (e, b) => openNotice(notices.find((n) => n.id === b.dataset.notice), ppl));
+  await blocksWidget(el.querySelector("#blocks"), { compact: true });
+}
+
+// ---------------------------------------------------------------- início do time
+async function teamHome(team, el, alive) {
+  el.innerHTML = spinner();
+  const now = new Date(Date.now() - 3 * 3600e3).toISOString();
+  const [roles, mine, next, notices, members, ppl] = await Promise.all([
+    must(sb.from("team_member_roles").select("music_roles(name,sort)").eq("user_id", state.user.id).eq("team_id", team.id)),
+    upcomingAssignments(20),
+    must(sb.from("schedules").select("*").eq("team_id", team.id).eq("status", "published").gte("starts_at", now).order("starts_at").limit(4)),
+    must(sb.from("announcements").select("*").eq("team_id", team.id).order("created_at", { ascending: false }).limit(5)),
+    must(sb.from("team_members").select("user_id").eq("team_id", team.id)),
+    people(),
+  ]);
+  if (!alive()) return;
+  const myUps = mine.filter((s) => s.team_id === team.id).slice(0, 4);
+  const mineIds = new Set(myUps.map((s) => s.id));
+  const others = next.filter((s) => !mineIds.has(s.id)).slice(0, 3);
+  const roleNames = roles.map((r) => r.music_roles).filter(Boolean).sort((a, b) => a.sort - b.sort).map((r) => r.name);
+  const memberIds = new Set(members.map((m) => m.user_id));
+  const bdays = [...ppl.values()].filter((p) => memberIds.has(p.id)).map((p) => ({ p, b: nextBirthday(p.birth_date) })).filter((x) => x.b && x.b.days <= 30).sort((a, b) => a.b.days - b.b.days).slice(0, 6);
+  const name = myName().split(" ")[0] || "você";
+  const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date()));
+  const hello = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
+  const noPhoto = !state.profile?.avatar_url;
+  const manage = canManageTeam(team.id);
+  el.innerHTML = `
+  <section class="hero">
+    <div class="grow"><p class="hello">${hello},</p><h1>${esc(name)}</h1>
+      <p class="roles">${esc([roleNames.length > 3 ? `${roleNames.slice(0, 3).join(", ")} +${roleNames.length - 3}` : roleNames.join(", "), team.is_leader ? "Líder" : ""].filter(Boolean).join(" · ") || teamTypeLabel(team))}</p></div>
+    <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 76)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
+  </section>
+  ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
+
+  <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/times/${team.id}/escalas">Todas ${icon("chevronRight")}</a></div>
+  <div id="ups">${myUps.length ? myUps.map((s, i) => schedRow(s, { feature: i === 0, showTeam: false })).join("") : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
+  ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div>${others.map((s) => schedRow(s, { showTeam: false })).join("")}` : ""}
+
+  <div class="sec"><h2>Avisos do time</h2>${manage ? `<a href="#/times/${team.id}/aviso">Novo ${icon("plus")}</a>` : `<a href="#/times/${team.id}/avisos">Todos ${icon("chevronRight")}</a>`}</div>
+  ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>
+    ${notices.length > 1 ? `<div class="dots" id="ndots">${notices.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}`
+    : `<div class="card small muted">Nenhum aviso do time. Os comunicados gerais ficam na <a class="link" href="#/igreja" data-church>área da igreja</a>.</div>`}
+
+  ${bdays.length ? `<div class="sec"><h2>Aniversariantes do time</h2></div>
+  <div class="bdays">${bdays.map(({ p, b }) => `<div class="bday">${avatar(p, 56, b.days === 0)}
+      <b>${esc(p.display_name.split(" ")[0])}</b><span class="when">${b.days === 0 ? "Hoje" : b.days === 1 ? "Amanhã" : fDate(b.date)}${b.age ? `, ${b.age} anos` : ""}</span></div>`).join("")}</div>` : ""}
+
+  <div class="sec"><h2>Disponibilidade</h2><a href="#/bloqueios">Abrir ${icon("chevronRight")}</a></div>
+  <div class="card" id="blocks"></div>`;
+  const pickPhoto = async () => {
+    const f = await pickFile("image/*"); if (!f) return;
+    try {
+      const url = await uploadPublic(`avatars/${state.user.id}`, f);
+      await must(sb.from("profiles").update({ avatar_url: url }).eq("id", state.user.id));
+      state.profile.avatar_url = url; invalidatePeople(); document.dispatchEvent(new Event("profile-changed"));
+      toast("Foto adicionada"); teamHome(team, el, alive);
     } catch (e) { toast(errMsg(e), "err"); }
   };
   el.querySelector("#addphoto")?.addEventListener("click", pickPhoto);

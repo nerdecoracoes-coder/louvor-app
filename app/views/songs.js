@@ -51,14 +51,14 @@ async function library(_, el, alive) {
       .filter((r) => !ql || r.title.toLowerCase().includes(ql) || (r.artist || "").toLowerCase().includes(ql))
       .filter((r) => !artist || r.artist === artist).filter((r) => !onlyVs || r.current_project_id);
     el.querySelector("#list").innerHTML = list.length ? list.map((r) => songRow(r, { selectable: selecting, selected: sel.has(r.id) })).join("")
-      : `<div style="padding:10px">${empty("music", rows.length ? "Nenhuma música encontrada" : "Repertório vazio", rows.length ? "" : isAdmin() ? `Cadastre músicas manualmente ou <a class="link" href="#/org/drive">conecte a pasta do Google Drive</a>.` : "")}</div>`;
+      : `<div style="padding:10px">${empty("music", rows.length ? "Nenhuma música encontrada" : "Repertório vazio", rows.length ? "" : isStaff() ? `Cadastre músicas manualmente ou <a class="link" href="#/org/drive">conecte a pasta do Google Drive</a>.` : "")}</div>`;
     el.querySelector("#count").textContent = `${list.length} música${list.length === 1 ? "" : "s"}`;
     el.querySelector("#selbar").classList.toggle("hidden", !selecting);
     el.querySelector("#selcount").textContent = `${sel.size} selecionada(s)`;
   };
   const processing = rows.filter((r) => ["processing", "waiting_files"].includes(r.status)).length;
-  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1><span class="row gap">${isAdmin() ? `<a class="btn ghost sm" href="#/org/drive" title="Google Drive">${icon("cloud")} Drive</a>` : ""}${isStaff() ? `<a class="btn primary sm" href="#/musicas/nova">${icon("plus")} Adicionar</a>` : ""}</span></div>
-    <p class="muted small">Repertório de ${esc(state.org.name)}, compartilhado pelos times de Louvor.</p>
+  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1><span class="row gap">${isStaff() ? `<a class="btn ghost sm" href="#/org/drive" title="Google Drive">${icon("cloud")} Drive</a>` : ""}${isStaff() ? `<a class="btn primary sm" href="#/musicas/nova">${icon("plus")} Adicionar</a>` : ""}</span></div>
+    <p class="muted small">Repertório${state.space ? ` do ${esc(state.space.name)}` : ` de ${esc(state.org.name)}`}.</p>
     ${processing ? `<div class="card mt-s row gap small">${icon("refresh", "accent")}<span>${processing} música(s) ainda sendo processada(s) a partir do Google Drive.</span></div>` : ""}
     <label class="search mt" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar por título ou artista"></label>
     <div class="row gap mt-s" style="flex-wrap:wrap">

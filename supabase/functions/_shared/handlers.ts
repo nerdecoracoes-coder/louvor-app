@@ -114,8 +114,9 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     catch (e) { return json({ error: "Conta de serviço do Google não configurada no servidor.", detail: String((e as Error).message) }, 500); }
   }
   const orgId = String(body.org_id ?? "");
-  const isAdmin = await asUser(env.rest, env.anonKey, jwt, "is_org_admin", { p_org: orgId });
-  if (isAdmin !== true) return json({ error: "Somente administradores gerais podem gerenciar a integração." }, 403);
+  // administrador da igreja ou líder de um time com repertório
+  const allowed = await asUser(env.rest, env.anonKey, jwt, "is_repertoire_staff", { p_org: orgId });
+  if (allowed !== true) return json({ error: "Somente o administrador e os líderes dos times com repertório podem gerenciar a integração." }, 403);
 
   if (action === "connect") {
     const folderId = folderIdFromInput(String(body.folder ?? ""));

@@ -60,3 +60,17 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - [x] Foto de perfil em evidência (tocar na própria foto; aviso na tela inicial enquanto não houver foto).
 - [x] Nova aparência (revisada em 04/11 a partir da referência do usuário): Sora com títulos encorpados (fonte no próprio app), luz da cor da igreja no topo, botões redondos de vidro, menu flutuante só com ícones, listas em linhas,
       próxima escala em cartão na cor da igreja.
+
+## 6. App centrado no time (definido em 04/11/2026)
+- O app abre direto no time que a pessoa usou por último. No topo, o nome do time; tocando nele, troca de time ou vai para a **Igreja**.
+- Menu dentro do time: Início (escalas da pessoa, avisos e aniversariantes do time), Escalas, Músicas (se o time tiver repertório), Chat e Time.
+- Área da Igreja: avisos gerais, Times, Calendário, Chat e configurações (administrador).
+- **Recursos do time**: o tipo sugere os recursos (Louvor já vem com Repertório e player) e o administrador ajusta. O acesso ao repertório depende do recurso.
+- O **Google Drive** saiu das configurações da igreja: fica em Músicas (botão Drive) e nas configurações do time com repertório; administrador e líderes desses times gerenciam.
+- Status: **implementado** em 04/11/2026.
+
+## 7. Google Drive: pastas de cantor/grupo, capa e "- Editar" (04/11/2026)
+- multitracks/Cantor ou Grupo/Música (ou a música direto em multitracks).
+- Imagem JPEG na pasta da música vira a capa.
+- Música ainda não pronta: "- Editar" no fim do nome da pasta; o app não lê e tira do app; tirar o "- Editar" traz de volta.
+- Status: **implementado** em 04/11/2026.

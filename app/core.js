@@ -15,8 +15,23 @@ export const state = {
   role: null,          // 'admin' | 'member' na organização selecionada
   myTeams: [],         // times do usuário na org (com is_leader)
   leaderOf: new Set(),
+  space: null,         // onde o usuário está: um time (objeto de myTeams) ou null = área da igreja
   unread: 0,
 };
+// O app abre no último time usado; a igreja é um lugar para onde a pessoa vai quando quiser.
+const spaceKey = () => `somos.space:${state.org?.id || ""}`;
+export function setSpace(teamId, persist = true) {
+  state.space = (teamId && state.myTeams.find((t) => t.id === teamId)) || null;
+  if (persist) try { localStorage.setItem(spaceKey(), state.space ? state.space.id : "church"); } catch {}
+  applyOrgTheme();
+  document.dispatchEvent(new CustomEvent("space-changed"));
+}
+function restoreSpace() {
+  let saved = null; try { saved = localStorage.getItem(spaceKey()); } catch {}
+  if (saved === "church") return setSpace(null, false);
+  setSpace(state.myTeams.find((t) => t.id === saved)?.id || state.myTeams[0]?.id || null, false);
+}
+export const inTeam = () => !!state.space;
 export const isAdmin = () => state.role === "admin";
 export const isGuest = () => state.role === "guest";
 export const canManageTeam = (teamId) => isAdmin() || state.leaderOf.has(teamId);
@@ -26,7 +41,10 @@ export const TEAM_TYPES = [["louvor", "Louvor"], ["multimidia", "Multimídia"], 
   ["infantil", "Ministério Infantil"], ["intercessao", "Intercessão"], ["outro", "Outro"]];
 export const REPERTOIRE_TYPES = ["louvor"];
 export const teamTypeLabel = (t) => (t?.team_type === "outro" ? t.team_type_label || "Outro" : TEAM_TYPES.find((x) => x[0] === t?.team_type)?.[1] || "");
-export const teamHasRepertoire = (t) => REPERTOIRE_TYPES.includes(t?.team_type);
+// Recursos de cada time: o tipo sugere (igual ao banco: team_feature_preset) e o administrador ajusta.
+export const FEATURES = [["repertorio", "Repertório e player", "Músicas, player multitrack e Google Drive"]];
+export const featurePreset = (type) => (REPERTOIRE_TYPES.includes(type) ? ["repertorio"] : []);
+export const teamHasRepertoire = (t) => (Array.isArray(t?.features) ? t.features.includes("repertorio") : REPERTOIRE_TYPES.includes(t?.team_type));
 export const hasRepertoire = () => isAdmin() || state.myTeams.some(teamHasRepertoire);
 export const isRepertoireStaff = () => isAdmin() || state.myTeams.some((t) => t.is_leader && teamHasRepertoire(t));
 
@@ -222,7 +240,10 @@ export function applyAccent(el, hex) {
   el.style.setProperty("--accent", `rgb(${rgb.join(",")})`);
   el.style.setProperty("--accent-rgb", rgb.join(","));
 }
-export function applyOrgTheme() { applyAccent(document.documentElement, state.org?.accent_color || "#3D8BFF"); }
+export function applyOrgTheme() {
+  const t = state.space;
+  applyAccent(document.documentElement, (t?.apply_theme && t.accent_color) || state.org?.accent_color || "#3D8BFF");
+}
 
 // ---------------------------------------------------------------- dados da sessão
 export async function loadSession() {
@@ -249,6 +270,8 @@ export async function selectOrg(orgId, persist = true) {
     state.myTeams = (t.data || []).filter((x) => x.teams).map((x) => ({ ...x.teams, is_leader: x.is_leader })).sort((a, b) => a.name.localeCompare(b.name));
     state.leaderOf = new Set(state.myTeams.filter((x) => x.is_leader).map((x) => x.id));
   }
+  if (state.space) state.space = state.myTeams.find((t) => t.id === state.space.id) || null; // dados atualizados do time
+  if (persist || !state.space) restoreSpace();
   applyOrgTheme();
   document.dispatchEvent(new CustomEvent("org-changed"));
 }
