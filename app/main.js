@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, loadSession, selectOrg, sheet, on, toast, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, loadSession, selectOrg, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg } from "./core.js";
 import * as home from "./views/home.js";
 import * as teams from "./views/teams.js";
 import * as schedules from "./views/schedules.js";
@@ -37,16 +37,16 @@ function brandHtml() {
 function renderShell() {
   app.innerHTML = `${WAVES}<div class="shell">
     <header class="topbar">
-      <button class="brand" data-act="orgs" aria-label="Organização">${brandHtml()}</button>
+      <button class="brand" data-act="orgs" aria-label="Igreja">${brandHtml()}</button>
       <a class="iconbtn" href="#/calendario" aria-label="Calendário">${icon("calendar")}</a>
       <a class="iconbtn" href="#/notificacoes" aria-label="Notificações">${icon("bell")}<span class="dot hidden" id="bell-dot"></span></a>
       <a href="#/perfil" aria-label="Perfil" style="margin-left:4px">${avatar(state.profile, 40)}</a>
     </header>
-    <nav class="bottomnav" aria-label="Navegação principal">
+    <nav class="bottomnav" aria-label="Navegação principal" style="grid-template-columns:repeat(${hasRepertoire() ? 5 : 4},1fr)">
       <a href="#/" data-nav="inicio">${icon("home")}<span>Início</span></a>
       <a href="#/times" data-nav="times">${icon("users")}<span>Times</span></a>
       <button class="fab" data-act="add" aria-label="Adicionar">${icon("plus")}</button>
-      <a href="#/musicas" data-nav="musicas">${icon("music")}<span>Músicas</span></a>
+      ${hasRepertoire() ? `<a href="#/musicas" data-nav="musicas">${icon("music")}<span>Músicas</span></a>` : ""}
       <a href="#/chat" data-nav="chat">${icon("chat")}<span>Chat</span><span class="dot hidden" id="chat-dot" style="position:absolute;top:14px;right:calc(50% - 18px);width:8px;height:8px;border-radius:8px;background:var(--accent);box-shadow:0 0 8px var(--accent)"></span></a>
     </nav>
     <main class="view" id="view"></main>
@@ -57,12 +57,12 @@ on(document, "click", "[data-act=orgs]", () => orgSwitcher());
 on(document, "click", "[data-act=add]", () => addMenu());
 
 function orgSwitcher() {
-  const s = sheet(`<h3>Organizações</h3><div class="list menu">
+  const s = sheet(`<h3>Igrejas</h3><div class="list menu">
     ${state.orgs.map((o) => `<button class="li" data-org="${o.org_id}">${o.organizations.logo_url ? `<span class="tbadge" style="--s:40px"><img src="${attr(o.organizations.logo_url)}" alt=""></span>` : `<span class="tbadge" style="--s:40px;--tc:${attr(o.organizations.accent_color)}"><span>${esc(o.organizations.name[0])}</span></span>`}
       <span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : "Integrante"}</span></span>${o.org_id === state.org?.id ? icon("check", "accent") : ""}</button>`).join("")}
   </div><div class="list menu mt">
-    ${isAdmin() ? `<a class="li" href="#/org">${icon("settings")}<span class="grow t">Configurações da organização</span></a>` : ""}
-    <a class="li" href="#/nova-org">${icon("plus")}<span class="grow t">Criar nova organização</span></a></div>`);
+    ${isAdmin() ? `<a class="li" href="#/org">${icon("settings")}<span class="grow t">Configurações da igreja</span></a>` : ""}
+    <a class="li" href="#/nova-org">${icon("plus")}<span class="grow t">Cadastrar outra igreja</span></a></div>`);
   on(s.el, "click", "[data-org]", async (e, b) => { s.close(); await selectOrg(b.dataset.org); renderShell(); go("/"); toast(`Você está em ${state.org.name}`); });
 }
 
@@ -70,10 +70,10 @@ function addMenu() {
   const managed = state.myTeams.filter((t) => canManageTeam(t.id));
   const items = [];
   if (isStaff()) items.push(["calendar", "Nova escala", "Criar e escalar integrantes", "#/escala/nova"]);
-  if (isStaff()) items.push(["music", "Nova música", "Cadastrar no repertório geral", "#/musicas/nova"]);
-  if (isStaff()) items.push(["megaphone", "Novo aviso", "Comunicado para a organização ou um time", "#/avisos/novo"]);
+  if (isRepertoireStaff()) items.push(["music", "Nova música", "Cadastrar no repertório", "#/musicas/nova"]);
+  if (isStaff()) items.push(["megaphone", "Novo aviso", "Comunicado para a igreja ou um time", "#/avisos/novo"]);
   if (managed.length || isAdmin()) items.push(["link", "Convidar integrante", "Gerar link exclusivo de um time", "#/convidar"]);
-  if (isAdmin()) items.push(["users", "Novo time", "Criar um time na organização", "#/times/novo"]);
+  if (isAdmin()) items.push(["users", "Novo time", "Criar um time na igreja", "#/times/novo"]);
   items.push(["lock", "Bloquear datas", "Informar minha indisponibilidade", "#/bloqueios"]);
   const s = sheet(`<h3>Adicionar</h3><div class="list menu">${items.map(([ic, t, d, h]) => `<a class="li" href="${h}">${icon(ic)}<span class="grow"><span class="t">${t}</span><span class="s">${d}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`);
   s.el.addEventListener("click", (e) => { if (e.target.closest("a")) s.close(); });
@@ -134,7 +134,13 @@ async function render() {
   window.scrollTo({ top: 0 });
 }
 window.addEventListener("hashchange", render);
-document.addEventListener("org-changed", () => { if (document.getElementById("view")) { const b = document.querySelector(".brand"); if (b) b.innerHTML = brandHtml(); } });
+document.addEventListener("org-changed", () => {
+  if (!document.getElementById("view")) return;
+  const b = document.querySelector(".brand"); if (b) b.innerHTML = brandHtml();
+  // o menu Músicas depende dos times do usuário
+  const hasMus = !!document.querySelector('[data-nav="musicas"]');
+  if (hasMus !== hasRepertoire()) { renderShell(); render(); }
+});
 document.addEventListener("profile-changed", () => { const a = document.querySelector('.topbar a[href="#/perfil"]'); if (a) a.innerHTML = avatar(state.profile, 40); });
 document.addEventListener("session-reload", async () => { await loadSession(); renderShell(); startBadges(); render(); });
 

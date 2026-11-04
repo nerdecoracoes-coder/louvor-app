@@ -1,5 +1,5 @@
 // Player multitrack: abas Faixas, Mix e Letra, linha do tempo com marcadores/regiões e transporte.
-import { sb, state, must, esc, attr, icon, toast, errMsg, isStaff, fDur } from "../core.js";
+import { sb, state, must, esc, attr, icon, toast, errMsg, isRepertoireStaff as isStaff, fDur } from "../core.js";
 import { Engine, gainToDb } from "./engine.js";
 
 let current = null;

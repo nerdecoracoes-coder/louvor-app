@@ -1,12 +1,14 @@
 // Biblioteca geral (uma por organização): lista, filtros, cadastro manual, detalhe, anexos e letra.
-import { sb, state, must, esc, attr, icon, isStaff, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fDur, safeUrl, confirmDialog, uploadPublic, pickFile } from "../core.js";
+import { sb, state, must, esc, attr, icon, isRepertoireStaff as isStaff, hasRepertoire, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fDur, safeUrl, confirmDialog, uploadPublic, pickFile } from "../core.js";
 
+const onlyRep = (fn) => (p, el, a) => hasRepertoire() ? fn(p, el, a)
+  : (el.innerHTML = empty("music", "Repertório disponível para times de Louvor", "Você não participa de nenhum time que usa o repertório."));
 export function register(route) {
-  route("/musicas", library);
-  route("/musicas/nova", (p, el) => songForm(el, null));
-  route("/musica/:id", (p, el) => songDetail(el, p.id));
-  route("/musica/:id/editar", (p, el) => songForm(el, p.id));
-  route("/musica/:id/letra", (p, el) => lyricsEditor(el, p.id));
+  route("/musicas", onlyRep(library));
+  route("/musicas/nova", onlyRep((p, el) => songForm(el, null)));
+  route("/musica/:id", onlyRep((p, el) => songDetail(el, p.id)));
+  route("/musica/:id/editar", onlyRep((p, el) => songForm(el, p.id)));
+  route("/musica/:id/letra", onlyRep((p, el) => lyricsEditor(el, p.id)));
 }
 
 const STATUS = {
@@ -56,7 +58,7 @@ async function library(_, el, alive) {
   };
   const processing = rows.filter((r) => ["processing", "waiting_files"].includes(r.status)).length;
   el.innerHTML = `<div class="pagehead"><h1>Músicas</h1>${isStaff() ? `<a class="btn primary sm" href="#/musicas/nova">${icon("plus")} Adicionar</a>` : ""}</div>
-    <p class="muted small">Repertório geral de ${esc(state.org.name)}, compartilhado por todos os times.</p>
+    <p class="muted small">Repertório de ${esc(state.org.name)}, compartilhado pelos times de Louvor.</p>
     ${processing ? `<div class="card mt-s row gap small">${icon("refresh", "accent")}<span>${processing} música(s) ainda sendo processada(s) a partir do Google Drive.</span></div>` : ""}
     <label class="search mt" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar por título ou artista"></label>
     <div class="row gap mt-s" style="flex-wrap:wrap">
@@ -96,7 +98,7 @@ function itunesSearch(term) {
 }
 
 async function songForm(el, id) {
-  if (!isStaff()) { el.innerHTML = empty("lock", "Somente administradores e líderes cadastram músicas."); return; }
+  if (!isStaff()) { el.innerHTML = empty("lock", "Somente administradores e líderes de times de Louvor cadastram músicas."); return; }
   const s = id ? await must(sb.from("songs").select("*").eq("id", id).maybeSingle()) : null;
   if (id && !s) { el.innerHTML = empty("alert", "Música não encontrada"); return; }
   const drive = s?.source === "drive";

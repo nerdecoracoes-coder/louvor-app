@@ -1,6 +1,6 @@
 // Chat por time: conversas, mensagens em tempo real, anexos (câmera, galeria, arquivos, música, enquete).
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
-  fRel, fTime, fDate, linkify, pickFile, shrinkImage, confirmDialog } from "../core.js";
+  fRel, fTime, fDate, linkify, pickFile, shrinkImage, confirmDialog, teamHasRepertoire } from "../core.js";
 import { songPicker } from "./schedules.js";
 
 export function register(route) {
@@ -189,7 +189,7 @@ async function conversation(teamId, el, alive) {
   el.querySelector("#att").onclick = () => {
     const s = sheet(`<h3>Anexar</h3><div class="attgrid">
       <button data-a="camera">${icon("camera")}Câmera</button><button data-a="gallery">${icon("image")}Foto ou galeria</button>
-      <button data-a="file">${icon("file")}Arquivo</button><button data-a="song">${icon("music")}Música</button><button data-a="poll">${icon("poll")}Enquete</button></div>`);
+      <button data-a="file">${icon("file")}Arquivo</button>${teamHasRepertoire(team) ? `<button data-a="song">${icon("music")}Música</button>` : ""}<button data-a="poll">${icon("poll")}Enquete</button></div>`);
     s.el.addEventListener("click", async (e) => {
       const a = e.target.closest("[data-a]")?.dataset.a; if (!a) return;
       s.close();
@@ -240,8 +240,8 @@ async function conversation(teamId, el, alive) {
 
 // Compartilhar músicas da biblioteca no chat de um time
 export function shareSongsToChat(songIds) {
-  const teams = state.myTeams;
-  if (!teams.length) return toast("Você não participa de nenhum time.");
+  const teams = state.myTeams.filter(teamHasRepertoire);
+  if (!teams.length) return toast("Você não participa de nenhum time de Louvor.");
   const s = sheet(`<h3>Enviar para qual time?</h3><div class="list">${teams.map((t) => `<button class="li" data-t="${t.id}">${teamBadge(t, 40)}<span class="grow t">${esc(t.name)}</span>${icon("chevronRight", "chev")}</button>`).join("")}</div>`);
   on(s.el, "click", "[data-t]", async (e, b) => {
     busy(b);

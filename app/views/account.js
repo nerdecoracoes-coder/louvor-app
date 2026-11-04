@@ -91,8 +91,8 @@ export function onboarding(el) {
   let pending = null; try { pending = localStorage.getItem("louvor.pendingInvite"); } catch {}
   if (pending) return go(`/convite/${pending}`);
   el.innerHTML = authShell(`${logo()}<h1>Olá, ${esc((state.profile?.full_name || "").split(" ")[0])}!</h1>
-    <p class="sub">Sua conta está pronta, mas você ainda não participa de nenhuma organização.</p>
-    <div class="list menu"><a class="li" href="#/nova-org">${icon("org")}<span class="grow"><span class="t">Criar uma organização</span><span class="s">Você será o administrador geral</span></span>${icon("chevronRight", "chev")}</a>
+    <p class="sub">Sua conta está pronta, mas você ainda não participa de nenhuma igreja.</p>
+    <div class="list menu"><a class="li" href="#/nova-org">${icon("org")}<span class="grow"><span class="t">Cadastrar uma igreja</span><span class="s">Você será o administrador geral</span></span>${icon("chevronRight", "chev")}</a>
       <button class="li" id="paste">${icon("link")}<span class="grow"><span class="t">Tenho um link de convite</span><span class="s">Cole o link enviado pelo líder</span></span>${icon("chevronRight", "chev")}</button></div>
     <button class="btn ghost block mt" id="out">${icon("logout")} Sair da conta</button>`);
   el.querySelector("#paste").onclick = () => {
@@ -104,11 +104,11 @@ export function onboarding(el) {
 
 function newOrgView() {
   const el = root();
-  el.innerHTML = authShell(`${logo()}<h1>Nova organização</h1><p class="sub">Igreja, ministério ou grupo que terá seus próprios times, escalas e repertório.</p>
-    <form id="of"><label class="field"><span>Nome *</span><input name="name" required maxlength="120" placeholder="Ex.: INVT Tijuca"></label>
-      <label class="field"><span>Subtítulo</span><input name="subtitle" maxlength="60" placeholder="Ex.: Ministério de Louvor"></label>
+  el.innerHTML = authShell(`${logo()}<h1>Nova igreja</h1><p class="sub">A igreja reúne os times (equipes ministeriais), com seus integrantes, escalas e recursos.</p>
+    <form id="of"><label class="field"><span>Nome da igreja *</span><input name="name" required maxlength="120" placeholder="Ex.: Nova Vida da Tijuca"></label>
+      <label class="field"><span>Subtítulo (opcional)</span><input name="subtitle" maxlength="60" placeholder="Ex.: Igreja"></label>
       <div class="field"><span>Cor de destaque</span>${colorPicker("color", "#1EA7FF")}</div>
-      <button class="btn primary block" id="go">Criar organização</button></form>
+      <button class="btn primary block" id="go">Cadastrar igreja</button></form>
     ${state.orgs.length ? `<a class="btn ghost block mt-s" href="#/">Cancelar</a>` : ""}`);
   const form = el.querySelector("#of"); bindColor(form, "color");
   form.onsubmit = async (e) => {
@@ -116,7 +116,7 @@ function newOrgView() {
     const r = await sb.rpc("create_organization", { p_name: form.name.value, p_accent: readColor(form, "color"), p_subtitle: form.subtitle.value || null });
     if (r.error) { busy(btn, false); return toast(errMsg(r.error), "err"); }
     try { localStorage.setItem("louvor.org", r.data); } catch {}
-    toast("Organização criada. Agora crie o primeiro time.");
+    toast("Igreja cadastrada. Agora crie o primeiro time.");
     document.dispatchEvent(new Event("session-reload"));
     setTimeout(() => go("/times/novo"), 250);
   };
@@ -151,7 +151,7 @@ async function profileView(_, el) {
     <div class="sec">${icon("music")}<h2>Minhas funções</h2></div>
     ${byTeam.size ? `<div class="list">${[...byTeam.entries()].map(([t, rs]) => `<div class="li"><span class="grow"><span class="t">${esc(t)}</span><span class="s">${rs.length ? rs.map(esc).join(" · ") : "Sem função definida"}</span></span></div>`).join("")}</div>`
       : `<p class="small muted">As funções são definidas pelos líderes de cada time.</p>`}
-    <div class="sec">${icon("org")}<h2>Organizações</h2></div>
+    <div class="sec">${icon("org")}<h2>Igrejas</h2></div>
     <div class="list">${state.orgs.map((o) => `<div class="li"><span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : "Integrante"}${o.display_name ? ` · aparece como "${esc(o.display_name)}"` : ""}</span></span></div>`).join("")}</div>
     <div class="row gap mt wrap"><button class="btn ghost" id="pw">${icon("lock")} Alterar senha</button><button class="btn danger" id="out">${icon("logout")} Sair</button></div>`;
   el.querySelector("#ph").onclick = async () => {
@@ -206,13 +206,13 @@ async function orgSettings(_, el) {
   const o = state.org;
   const [ppl, roles, integ] = await Promise.all([people(true), must(sb.from("music_roles").select("*").eq("org_id", o.id).order("sort")), must(sb.from("drive_integrations").select("*").eq("org_id", o.id).maybeSingle())]);
   let logoUrl = o.logo_url;
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Organização</h1></div>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Igreja</h1></div>
     <form class="card" id="of">
       <div class="row gap mb"><span class="tbadge" id="lg" style="--s:72px">${logoUrl ? `<img src="${attr(logoUrl)}" alt="">` : `<span>${esc(o.name[0])}</span>`}</span>
         <div class="col gap-s"><button type="button" class="btn ghost sm" id="up">${icon("image")} Logotipo</button>${logoUrl ? `<button type="button" class="link small" id="rm" style="text-align:left">Remover logotipo</button>` : ""}
         <span class="tiny muted">Sem logotipo, o nome aparece escrito no cabeçalho.</span></div></div>
-      <label class="field"><span>Nome</span><input name="name" required maxlength="120" value="${attr(o.name)}"></label>
-      <label class="field"><span>Subtítulo</span><input name="subtitle" maxlength="60" value="${attr(o.subtitle || "")}" placeholder="Ex.: Ministério de Louvor"></label>
+      <label class="field"><span>Nome da igreja</span><input name="name" required maxlength="120" value="${attr(o.name)}"></label>
+      <label class="field"><span>Subtítulo (opcional)</span><input name="subtitle" maxlength="60" value="${attr(o.subtitle || "")}" placeholder="Ex.: Igreja"></label>
       <div class="field"><span>Cor de destaque</span>${colorPicker("color", o.accent_color)}</div>
       <button class="btn primary block" id="save">Salvar</button></form>
 
@@ -228,8 +228,8 @@ async function orgSettings(_, el) {
     <div class="sec">${icon("music")}<h2>Funções musicais</h2><button class="more" id="addrole">${icon("plus")} Nova</button></div>
     <div class="list" id="roles">${roles.map((r) => `<div class="li">${icon(roleIcon(r.name), "accent")}<span class="grow t">${esc(r.name)}</span><button class="iconbtn" data-er="${r.id}">${icon("edit")}</button><button class="iconbtn" data-dr="${r.id}">${icon("trash")}</button></div>`).join("")}</div>
 
-    <div class="card mt"><h3 class="danger-t" style="font-size:16px">Excluir organização</h3><p class="small muted">Apaga todos os times, escalas, chats e o repertório desta organização. As contas das pessoas continuam existindo. Os arquivos do Google Drive não são tocados.</p>
-      <button class="btn danger sm" id="delorg">${icon("trash")} Excluir organização</button></div>`;
+    <div class="card mt"><h3 class="danger-t" style="font-size:16px">Excluir igreja</h3><p class="small muted">Apaga todos os times, escalas, chats e o repertório desta igreja. As contas das pessoas continuam existindo. Os arquivos do Google Drive não são tocados.</p>
+      <button class="btn danger sm" id="delorg">${icon("trash")} Excluir igreja</button></div>`;
   const form = el.querySelector("#of"); bindColor(form, "color");
   el.querySelector("#up").onclick = async () => { const f = await pickFile("image/*"); if (!f) return; try { logoUrl = await uploadPublic(`orgs/${o.id}`, f); el.querySelector("#lg").innerHTML = `<img src="${attr(logoUrl)}" alt="">`; } catch (e) { toast(errMsg(e), "err"); } };
   el.querySelector("#rm")?.addEventListener("click", () => { logoUrl = null; el.querySelector("#lg").innerHTML = `<span>${esc(o.name[0])}</span>`; });
@@ -238,20 +238,20 @@ async function orgSettings(_, el) {
     const r = await sb.from("organizations").update({ name: form.name.value.trim(), subtitle: form.subtitle.value || null, accent_color: readColor(form, "color"), logo_url: logoUrl }).eq("id", o.id).select("*").single();
     busy(btn, false);
     if (r.error) return toast(errMsg(r.error), "err");
-    toast("Organização atualizada"); document.dispatchEvent(new Event("session-reload"));
+    toast("Igreja atualizada"); document.dispatchEvent(new Event("session-reload"));
   };
   on(el, "click", "[data-p]", (e, b) => {
     const p = ppl.get(b.dataset.p); const me = p.id === state.user.id;
     const s = sheet(`<div class="row gap mb">${avatar(p, 48)}<h3 style="margin:0">${esc(p.display_name)}</h3></div><div class="list menu">
       <button class="li" data-a="admin">${icon("shield")}<span class="grow t">${p.role === "admin" ? "Remover administração geral" : "Tornar administrador geral"}</span></button>
-      <button class="li" data-a="name">${icon("edit")}<span class="grow t">Nome na organização</span></button>
-      <button class="li danger" data-a="remove">${icon("trash")}<span class="grow t">${me ? "Sair da organização" : "Remover da organização"}</span></button></div>`);
+      <button class="li" data-a="name">${icon("edit")}<span class="grow t">Nome na igreja</span></button>
+      <button class="li danger" data-a="remove">${icon("trash")}<span class="grow t">${me ? "Sair da igreja" : "Remover da igreja"}</span></button></div>`);
     s.el.addEventListener("click", async (ev) => {
       const a = ev.target.closest("[data-a]")?.dataset.a; if (!a) return;
       let r;
       if (a === "admin") r = await sb.rpc("set_org_admin", { p_org: o.id, p_user: p.id, p_admin: p.role !== "admin" });
-      if (a === "name") { const n = prompt("Nome utilizado na organização", p.display_name); if (n === null) return; r = await sb.from("org_members").update({ display_name: n.trim() || null }).eq("org_id", o.id).eq("user_id", p.id); }
-      if (a === "remove") { if (!(await confirmDialog(me ? "Sair desta organização?" : `Remover ${p.display_name} da organização e de todos os times dela?`, "Remover", true))) return; r = await sb.from("org_members").delete().eq("org_id", o.id).eq("user_id", p.id); }
+      if (a === "name") { const n = prompt("Nome utilizado na igreja", p.display_name); if (n === null) return; r = await sb.from("org_members").update({ display_name: n.trim() || null }).eq("org_id", o.id).eq("user_id", p.id); }
+      if (a === "remove") { if (!(await confirmDialog(me ? "Sair desta igreja?" : `Remover ${p.display_name} da igreja e de todos os times dela?`, "Remover", true))) return; r = await sb.from("org_members").delete().eq("org_id", o.id).eq("user_id", p.id); }
       if (r?.error) return toast(errMsg(r.error), "err");
       s.close(); invalidatePeople(); toast("Atualizado");
       if (me && a !== "name") document.dispatchEvent(new Event("session-reload")); else orgSettings(_, el);
@@ -271,12 +271,12 @@ async function orgSettings(_, el) {
     const r = await sb.from("music_roles").delete().eq("id", b.dataset.dr); if (r.error) return toast(errMsg(r.error), "err"); orgSettings(_, el);
   });
   el.querySelector("#delorg").onclick = async () => {
-    const typed = prompt(`Para confirmar, digite o nome da organização: ${o.name}`);
+    const typed = prompt(`Para confirmar, digite o nome da igreja: ${o.name}`);
     if (typed?.trim() !== o.name) return toast("Nome não confere. Nada foi excluído.");
     const r = await sb.from("organizations").delete().eq("id", o.id);
     if (r.error) return toast(errMsg(r.error), "err");
     try { localStorage.removeItem("louvor.org"); } catch {}
-    toast("Organização excluída"); document.dispatchEvent(new Event("session-reload")); go("/");
+    toast("Igreja excluída"); document.dispatchEvent(new Event("session-reload")); go("/");
   };
 }
 

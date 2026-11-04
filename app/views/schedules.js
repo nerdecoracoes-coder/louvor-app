@@ -1,6 +1,6 @@
 // Escalas: criação/edição com sugestão automática, detalhe e calendários (geral, do time e pessoal).
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, isAdmin, canManageTeam, isStaff, sheet, toast, errMsg, busy, on, go,
-  empty, spinner, fDate, fDateLong, fTime, fDow, fDay, fMon, ymd, fromLocal, confirmDialog, roleIcon, linkify, fDur, fMonthYear, cap } from "../core.js";
+  empty, spinner, fDate, fDateLong, fTime, fDow, fDay, fMon, ymd, fromLocal, confirmDialog, roleIcon, linkify, fDur, fMonthYear, cap, teamHasRepertoire } from "../core.js";
 import { schedRow } from "./home.js";
 
 export function register(route) {
@@ -98,12 +98,12 @@ async function editor(el, scheduleId, teamId) {
       <label class="field"><span>Observações</span><textarea name="notes" maxlength="2000" placeholder="Roupa, horário de passagem de som, etc.">${esc(f.notes)}</textarea></label>
     </form>
 
-    <div class="sec">${icon("music")}<h2>Músicas</h2><button class="more" id="addsong">${icon("plus")} Adicionar</button></div>
+    ${teamHasRepertoire(team) ? `<div class="sec">${icon("music")}<h2>Músicas</h2><button class="more" id="addsong">${icon("plus")} Adicionar</button></div>
     <div class="list" id="songs">${f.songs.length ? f.songs.map((s, i) => `<div class="li"><span class="dim small" style="width:18px">${i + 1}</span>
       <span class="grow" style="min-width:0"><span class="t ellipsis" style="display:block">${esc(s.title)}${s.removed ? ` <span class="tag gray">fora do repertório</span>` : ""}</span><span class="s">${esc(s.artist || "")}</span></span>
       <input class="input" style="width:66px;height:38px;padding:0 8px;text-align:center" data-key="${i}" value="${attr(s.song_key || "")}" placeholder="Tom" aria-label="Tom">
       <button class="iconbtn" data-up="${i}" aria-label="Subir" ${i === 0 ? "disabled" : ""}>${icon("chevronUp")}</button>
-      <button class="iconbtn" data-rm="${i}" aria-label="Remover">${icon("x")}</button></div>`).join("") : `<div class="li muted small">Nenhuma música selecionada.</div>`}</div>
+      <button class="iconbtn" data-rm="${i}" aria-label="Remover">${icon("x")}</button></div>`).join("") : `<div class="li muted small">Nenhuma música selecionada.</div>`}</div>` : ""}
 
     <div class="sec">${icon("users")}<h2>Integrantes</h2><button class="more" id="suggest">${icon("sparkle")} Sugerir escala</button></div>
     ${teamRoles.length ? `<div class="list">${teamRoles.map((r) => {
@@ -125,7 +125,7 @@ async function editor(el, scheduleId, teamId) {
 
   const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date, time: d.time, end: d.end, location: d.location, notes: d.notes }); if (d.team) f.team = d.team; };
   el.addEventListener("change", async (e) => {
-    if (e.target.name === "team") { readForm(); f.picks.clear(); await loadTeam(); await loadCandidates(); draw(); return; }
+    if (e.target.name === "team") { readForm(); f.picks.clear(); if (!teamHasRepertoire(teams.find((t) => t.id === e.target.value))) f.songs = []; await loadTeam(); await loadCandidates(); draw(); return; }
     if (["date", "time", "end"].includes(e.target.name)) { readForm(); await loadCandidates(); draw(); }
     if (e.target.dataset.key !== undefined) f.songs[Number(e.target.dataset.key)].song_key = e.target.value.trim() || null;
   });
@@ -269,14 +269,14 @@ async function detail(el, id) {
       <div class="info"><h3>${esc(cap(fDateLong(s.starts_at)))}</h3><div class="meta"><span>${icon("clock")}${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""}</span>${s.location ? `<span>${icon("pin")}${esc(s.location)}</span>` : ""}</div></div><div></div></div>
     ${unseen ? `<button class="btn primary block" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length ? `<p class="small ok row gap-s">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
     ${s.notes ? `<div class="card mt"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}
-    <div class="sec">${icon("music")}<h2>Repertório</h2></div>
+    ${teamHasRepertoire(s.teams) || songs.length ? `<div class="sec">${icon("music")}<h2>Repertório</h2></div>
     <div class="list">${songs.length ? songs.map((x, i) => {
       const live = x.songs && x.songs.status !== "removed";
       return `<div class="song"><span class="cover">${x.songs?.cover_url ? `<img src="${attr(x.songs.cover_url)}" alt="">` : `<b style="font-size:18px">${i + 1}</b>`}</span>
         <a class="grow" style="color:inherit;min-width:0" ${live ? `href="#/musica/${x.song_id}"` : ""}><div class="t ellipsis">${esc(x.title_snapshot)}</div>
           <div class="s">${esc(x.artist_snapshot || "")}${x.song_key ? `<span>Tom ${esc(x.song_key)}</span>` : ""}${x.songs?.bpm ? `<span>${Number(x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
         ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
-    }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>
+    }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>` : ""}
     <div class="sec">${icon("users")}<h2>Escalados</h2></div>
     <div class="list">${[...byRole.entries()].map(([role, list]) => list.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(role)}</span></span>
       ${s.status === "published" ? (a.seen_at ? `<span class="tiny ok row gap-s">${icon("check")} Visto</span>` : `<span class="tiny muted">Não visto</span>`) : ""}</div>`).join("")).join("") || `<div class="li muted small">Ninguém escalado ainda.</div>`}</div>

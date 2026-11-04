@@ -28,3 +28,9 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
   - Abrir o repertório para a igreja toda fica para o futuro, quando houver um jeito que faça sentido para todos.
   - Os recursos dos outros tipos de time serão definidos depois de uma pesquisa com os líderes de cada time.
 - A definir: quais tipos de time, além de Louvor, terão acesso ao repertório.
+
+## Implementado em 04/11/2026
+- [x] Textos do app: "organização" → "igreja" (nome da igreja, cadastrar igreja, configurações da igreja…).
+- [x] Campo **Tipo de time** (Louvor, Multimídia, Ministério Diaconal, Recepção, Ministério Infantil, Intercessão, Outro) no lugar da descrição.
+- [x] Repertório, menu Músicas, player, músicas na escala e música no chat exclusivos de times de Louvor (regra também no banco).
+- [x] Quem cria um time entra nele como líder (e os times já criados receberam o criador).

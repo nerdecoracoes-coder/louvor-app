@@ -20,6 +20,14 @@ export const state = {
 export const isAdmin = () => state.role === "admin";
 export const canManageTeam = (teamId) => isAdmin() || state.leaderOf.has(teamId);
 export const isStaff = () => isAdmin() || state.leaderOf.size > 0;
+// Tipos de time. O repertório (músicas, player) é exclusivo dos tipos em REPERTOIRE_TYPES (igual ao banco: repertoire_types()).
+export const TEAM_TYPES = [["louvor", "Louvor"], ["multimidia", "Multimídia"], ["diaconal", "Ministério Diaconal"], ["recepcao", "Recepção"],
+  ["infantil", "Ministério Infantil"], ["intercessao", "Intercessão"], ["outro", "Outro"]];
+export const REPERTOIRE_TYPES = ["louvor"];
+export const teamTypeLabel = (t) => (t?.team_type === "outro" ? t.team_type_label || "Outro" : TEAM_TYPES.find((x) => x[0] === t?.team_type)?.[1] || "");
+export const teamHasRepertoire = (t) => REPERTOIRE_TYPES.includes(t?.team_type);
+export const hasRepertoire = () => isAdmin() || state.myTeams.some(teamHasRepertoire);
+export const isRepertoireStaff = () => isAdmin() || state.myTeams.some((t) => t.is_leader && teamHasRepertoire(t));
 
 // ---------------------------------------------------------------- html
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
@@ -139,7 +147,7 @@ export function toast(msg, kind = "") {
 export function errMsg(e) {
   const m = e?.message || String(e || "");
   const map = {
-    forbidden: "Você não tem permissão para isso.", last_admin: "A organização precisa de pelo menos um administrador geral.",
+    forbidden: "Você não tem permissão para isso.", last_admin: "A igreja precisa de pelo menos um administrador geral.",
     invite_expired: "Este convite expirou ou foi cancelado.", invite_not_found: "Convite não encontrado.",
     not_authenticated: "Faça login para continuar.", "Invalid login credentials": "E-mail ou senha incorretos.",
     "User already registered": "Este e-mail já tem conta. Faça login.", protected_fields: "Este campo é controlado pelo sistema.",

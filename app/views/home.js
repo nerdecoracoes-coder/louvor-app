@@ -1,6 +1,6 @@
 // Início: perfil, atalhos, avisos, próximas escalas, aniversariantes e bloqueio de datas.
 import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDate, fDateLong, ymd, people, personName, myName, isStaff, isAdmin,
-  canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap } from "../core.js";
+  canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire } from "../core.js";
 
 export function register(route) {
   route("/", homeView);
@@ -72,14 +72,14 @@ async function homeView(_, el, alive) {
   <nav class="shortcuts">
     <a href="#/calendario/meu">${icon("music")}<span>Escalas</span></a>
     <a href="#/times">${icon("users")}<span>Times</span></a>
-    <a href="#/musicas">${icon("file")}<span>Músicas</span></a>
+    ${hasRepertoire() ? `<a href="#/musicas">${icon("file")}<span>Músicas</span></a>` : `<a href="#/calendario">${icon("calendar")}<span>Agenda</span></a>`}
     <a href="#/chat">${icon("chat")}<span>Chat</span></a>
   </nav>
 
   <div class="sec">${icon("megaphone")}<h2>Avisos</h2><a href="#/avisos">Ver todos ${icon("chevronRight")}</a></div>
   ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>
     ${notices.length > 1 ? `<div class="dots" id="ndots">${notices.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}`
-    : `<div class="card">${empty("megaphone", "Nenhum aviso por enquanto", isStaff() ? `<a class="link" href="#/avisos/novo">Publicar um aviso</a>` : "Os comunicados da organização aparecem aqui.")}</div>`}
+    : `<div class="card">${empty("megaphone", "Nenhum aviso por enquanto", isStaff() ? `<a class="link" href="#/avisos/novo">Publicar um aviso</a>` : "Os comunicados da igreja aparecem aqui.")}</div>`}
 
   <div class="sec">${icon("calendar")}<h2>Minhas próximas escalas</h2><a href="#/calendario/meu">Ver agenda ${icon("chevronRight")}</a></div>
   <div id="ups">${ups.length ? ups.map((s) => schedRow(s)).join("") : `<div class="card">${empty("calendar", "Você não tem escalas futuras", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>`}</div>
@@ -150,7 +150,7 @@ export async function noticeForm(el, teamId) {
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/avisos">${icon("chevronLeft")}</a><h1>Novo aviso</h1></div>
   <form class="card" id="f">
     <label class="field"><span>Para quem</span><select name="team_id">
-      ${isStaff() ? `<option value="">Toda a organização</option>` : ""}${allTeams.map((t) => `<option value="${t.id}" ${t.id === teamId ? "selected" : ""}>Time: ${esc(t.name)}</option>`).join("")}</select></label>
+      ${isStaff() ? `<option value="">Toda a igreja</option>` : ""}${allTeams.map((t) => `<option value="${t.id}" ${t.id === teamId ? "selected" : ""}>Time: ${esc(t.name)}</option>`).join("")}</select></label>
     <label class="field"><span>Título *</span><input name="title" required maxlength="140" placeholder="Ex.: Ensaio Geral"></label>
     <label class="field"><span>Mensagem</span><textarea name="body" maxlength="4000" placeholder="Detalhes do comunicado"></textarea></label>
     <div class="two"><label class="field"><span>Etiqueta</span><input name="tag" maxlength="24" placeholder="Ex.: Reunião"></label>
