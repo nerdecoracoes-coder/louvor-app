@@ -27,9 +27,10 @@ export interface SyncDeps {
   maxProjectsPerRun?: number;   // limite de projetos reprocessados por execução (tempo da função)
   settleMinutes?: number;       // tempo de espera por arquivos ainda sendo enviados
   concurrency?: number;
-  timeBudgetMs?: number;        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
+  timeBudgetMs?: number;
+  projectConcurrency?: number;  // projetos processados ao mesmo tempo        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
 }
-export interface SyncStats { busy?: boolean; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
+export interface SyncStats { busy?: boolean; processed?: number; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
 const IGNORE = /(\.rpp-bak|\.reapeaks|\.rpp-undo|\.reapindex|\.ds_store|desktop\.ini|thumbs\.db)$/i;
 const IMAGE_EXT = /\.(jpe?g|png|webp)$/i;
@@ -157,7 +158,8 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
     })));
     for (let i = 0; i < rows.length; i += 500) await db.upsert("drive_items", rows.slice(i, i + 500), "org_id,file_id");
 
-    let budget = deps.maxProjectsPerRun ?? 6;
+    // 1º as pastas novas ou alteradas mais recentemente (um envio novo aparece logo, mesmo com fila grande)
+    const work: { folder: DriveFile & { group?: string }; files: FolderFile[]; song: any; signature: string; latest: string }[] = [];
     for (const { folder, files, error } of listings) {
       let song = byFolder.get(folder.id);
       if (error) { stats.errors++; await event("error", `Não foi possível ler a pasta "${folder.name}": ${error}`, { folder_id: folder.id, song_id: song?.id }); continue; }
@@ -169,7 +171,6 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
       const needs = !song || song.drive_signature !== signature || song.status === "removed"
         || (["error", "waiting_files", "processing"].includes(song.status) && retryDue);
       if (!needs) { stats.unchanged++; continue; }
-
       if (!song) {
         const n = bestName(null, folder.name);
         try {
@@ -183,11 +184,23 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
         byFolder.set(folder.id, song);
         await syncCover(deps, orgId, song, files).catch((e) => event("warn", `"${folder.name}": não foi possível copiar a capa (${(e as Error).message}).`, { folder_id: folder.id, song_id: song.id }));
       }
-      if (budget <= 0 || now().getTime() - runStart.getTime() > (deps.timeBudgetMs ?? 90_000)) { stats.deferred++; continue; }
-      budget--;
-      const res = await processFolder(deps, orgId, run.id, folder, files, song, signature, latest, event);
-      stats[res]++;
+      work.push({ folder, files, song, signature, latest });
     }
+    const fresh = (w: (typeof work)[number]) => (w.song.drive_signature !== w.signature ? 0 : 1); // alterada antes de nova tentativa de erro
+    work.sort((a, b) => fresh(a) - fresh(b) || b.latest.localeCompare(a.latest));
+    let budget = deps.maxProjectsPerRun ?? 60;
+    const limitMs = deps.timeBudgetMs ?? 90_000;
+    stats.processed = 0;
+    await pool(work, deps.projectConcurrency ?? 3, async (w) => {
+      if (budget <= 0 || now().getTime() - runStart.getTime() > limitMs) { stats.deferred++; return; }
+      budget--; stats.processed!++;
+      try {
+        const res = await processFolder(deps, orgId, run.id, w.folder, w.files, w.song, w.signature, w.latest, event);
+        stats[res]++;
+      } catch (e) {
+        stats.errors++; await event("error", `"${w.folder.name}": ${(e as Error).message}`, { folder_id: w.folder.id, song_id: w.song.id });
+      }
+    });
 
     // pastas que sumiram (excluídas ou movidas para fora de "multitracks")
     const present = new Set(folders.map((f) => f.id));

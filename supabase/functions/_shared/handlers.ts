@@ -59,6 +59,14 @@ async function ensureWatch(env: Env, db: Db, integ: any) {
   return w;
 }
 
+// Fila grande (ex.: primeira importação): ao terminar uma rodada com músicas ainda na fila, já chama a próxima,
+// sem esperar os 5 minutos do agendamento. Só continua se a rodada conseguiu processar algo (evita repetição infinita).
+function continueIfQueued(env: Env, stats: any) {
+  if (!stats || stats.busy || !(stats.deferred > 0) || !(stats.processed > 0) || !env.publicUrl || !env.cronSecret) return;
+  const p = fetch(`${env.publicUrl}?mode=cron&chain=1`, { method: "POST", headers: { "x-cron-secret": env.cronSecret } }).catch(() => {});
+  env.background ? env.background(p) : void p;
+}
+
 export async function handleSync(req: Request, env: Env): Promise<Response> {
   if (req.method === "OPTIONS") return new Response(null, { status: 204, headers: CORS });
   const db = new Db(env.rest, env.serviceKey);
@@ -71,7 +79,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     if (req.headers.get("x-goog-resource-state") === "sync") return new Response("ok");
     // o aviso do Drive não diz qual pasta mudou; sincroniza todas as organizações ligadas (é barato quando nada mudou)
     const all: any[] = await db.select("drive_integrations", "status=neq.paused&select=org_id");
-    const job = (async () => { for (const i of all) await syncOrg({ db, drive: env.drive(), covers: coverStore(env) }, i.org_id, "webhook").catch(() => {}); })();
+    const job = (async () => { for (const i of all) continueIfQueued(env, await syncOrg({ db, drive: env.drive(), covers: coverStore(env) }, i.org_id, "webhook").catch(() => null)); })();
     if (env.background) { env.background(job); return new Response("accepted", { status: 202 }); }
     await job; return new Response("ok");
   }
@@ -82,11 +90,16 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     if (!env.cronSecret || !safeEqual(req.headers.get("x-cron-secret") ?? "", env.cronSecret)) return json({ error: "forbidden" }, 403);
     const all: any[] = await db.select("drive_integrations", "status=neq.paused");
     const results: Record<string, unknown> = {};
-    for (const i of all) {
-      try { results[i.org_id] = await syncOrg({ db, drive: env.drive(), covers: coverStore(env) }, i.org_id, "cron"); }
-      catch (e) { results[i.org_id] = { error: String((e as Error).message) }; }
-      await ensureWatch(env, db, i).catch(() => null);
-    }
+    const job = async () => {
+      for (const i of all) {
+        try { results[i.org_id] = await syncOrg({ db, drive: env.drive(), covers: coverStore(env) }, i.org_id, "cron"); continueIfQueued(env, results[i.org_id]); }
+        catch (e) { results[i.org_id] = { error: String((e as Error).message) }; }
+        await ensureWatch(env, db, i).catch(() => null);
+      }
+    };
+    // continuação da fila: responde na hora e trabalha em segundo plano
+    if (url.searchParams.get("chain") && env.background) { env.background(job()); return json({ ok: true, started: true }, 202); }
+    await job();
     return json({ ok: true, results });
   }
 
@@ -121,7 +134,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
       last_error: null, connected_at: new Date().toISOString(), watch_channel_id: null, watch_token: null, watch_expires_at: null,
     }, "org_id");
     await ensureWatch(env, db, integ).catch((e) => warnings.push(`Aviso automático de alterações indisponível (${(e as Error).message}); a verificação periódica continua ativa.`));
-    const job = syncOrg({ db, drive, covers: coverStore(env) }, orgId, "connect");
+    const job = syncOrg({ db, drive, covers: coverStore(env) }, orgId, "connect").then((st) => { continueIfQueued(env, st); return st; });
     if (env.background) { env.background(job.catch(() => {})); return json({ ok: true, folder: f.name, warnings, started: true }); }
     const stats = await job.catch((e) => ({ error: String((e as Error).message) }));
     return json({ ok: true, folder: f.name, warnings, stats });
@@ -133,6 +146,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     try {
       const stats = await syncOrg({ db, drive: env.drive(), covers: coverStore(env) }, orgId, "manual");
       if (stats.busy) return json({ error: "Já existe uma sincronização em andamento. Aguarde um pouco e tente de novo." }, 409);
+      continueIfQueued(env, stats);
       return json({ ok: true, stats });
     }
     catch (e) { return json({ error: String((e as Error).message) }, 502); }

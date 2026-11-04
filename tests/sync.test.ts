@@ -250,4 +250,21 @@ describe("importação do Drive", () => {
     expect((await song("Emaús - Morada")).cover_url).toContain("manual.jpg");
     s = s2; void s;
   });
+  test("fila grande: a música enviada por último é processada primeiro; o resto fica na fila", async () => {
+    const grp = join(ROOT, "Fila");
+    await makeProject({ root: grp, folder: "Antiga - Teste", rppName: "Antiga - Teste - 120 BPM (C).rpp", seconds: 2 });
+    await makeProject({ root: grp, folder: "Nova - Teste", rppName: "Nova - Teste - 120 BPM (D).rpp", seconds: 2 });
+    await ageAll(ROOT);
+    const t = new Date(Date.now() - 30 * 60e3); // a "Nova" foi enviada há 30 min (já terminou), a "Antiga" há 1 h
+    const { readdirSync } = await import("node:fs");
+    const touch = (d: string) => { for (const n of readdirSync(d, { recursive: true }) as string[]) utimesSync(join(d, n), t, t); utimesSync(d, t, t); };
+    touch(join(grp, "Nova - Teste"));
+    const st = await syncOrg({ ...deps(), maxProjectsPerRun: 1 }, org, "webhook");
+    expect(st.processed).toBe(1); expect(st.deferred).toBeGreaterThan(0);
+    expect((await song("Nova - Teste")).status).toBe("ready");
+    expect((await song("Antiga - Teste")).status).toBe("processing");
+    const st2 = await syncOrg(deps(), org, "cron");
+    expect(st2.deferred).toBe(0);
+    expect((await song("Antiga - Teste")).status).toBe("ready");
+  });
 });
