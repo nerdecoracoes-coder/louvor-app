@@ -37,3 +37,13 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - [x] Só o administrador geral define ou remove líderes (regra também no banco).
 - [x] **Membros da igreja**: convite da igreja (sem time). A entrada nos times é só por convite/inclusão do líder ou do administrador; ninguém solicita entrada.
 - [x] **Funções por tipo de time**: as funções atuais ficaram como funções do Louvor; novas funções podem ser criadas para cada tipo (ou para todos).
+
+## 4. Entrada nos times e convidados de outras igrejas (em discussão, 04/11/2026)
+- Regra geral: só **membros da igreja** podem ser adicionados a um time.
+- Caso especial: culto especial com músicos de igrejas filiais participando de um louvor.
+- Opções levantadas:
+  - **Convidado do time**: o líder gera um convite "de convidado". A pessoa entra só naquele time (escala, chat, repertório e player),
+    não vira membro da igreja, não aparece nas listas da igreja e o acesso expira numa data definida (ex.: depois do culto).
+  - **Filiais como igrejas no app**: cada filial é uma igreja própria; a pessoa da filial já tem conta e é convidada como convidada.
+  - **Time temporário**: um time criado para o evento, com os convidados, arquivado depois da data.
+- Decidir: qual opção, quem pode convidar convidados (só admin ou também o líder) e por quanto tempo o acesso vale.
