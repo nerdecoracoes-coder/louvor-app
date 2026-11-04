@@ -72,7 +72,7 @@ async function homeView(_, el, alive) {
   el.innerHTML = `
   <section class="hero">
     <div class="grow"><p class="hello">${hello},</p><h1>${esc(name)}</h1>
-      <p class="roles">${[roles.join(", "), teamsLine].filter(Boolean).map(esc).join(" — ") || esc(state.org.name)}</p></div>
+      <p class="roles">${[roles.length > 3 ? `${roles.slice(0, 3).join(", ")} +${roles.length - 3}` : roles.join(", "), teamsLine].filter(Boolean).map(esc).join(" — ") || esc(state.org.name)}</p></div>
     <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 76)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
   </section>
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
