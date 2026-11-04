@@ -13,3 +13,16 @@
 - Ideia para avaliar depois: o tipo do time ligar/desligar partes do app (ex.: player multitrack e repertório para Louvor;
   Multimídia/Diaconal talvez usem só escalas, integrantes, chat e avisos) e sugerir funções padrão conforme o tipo
   (ex.: Louvor → Ministro, Guitarra…; Multimídia → Projeção, Câmera, Transmissão…).
+
+## 3. Recursos por tipo de time × recursos gerais da igreja (direção definida em 04/11/2026)
+A maior parte do que já existe faz sentido só para certos tipos de time. A estrutura passa a ser:
+- **Recursos gerais da igreja** (para todos, antes dos times) — a definir. Rascunho para discutir:
+  perfil, avisos da igreja, calendário geral, aniversariantes, bloqueio de datas, notificações, convites e administração.
+- **Recursos de todo time** (rascunho): integrantes, escalas, chat, arquivos, avisos do time.
+- **Recursos por tipo de time**:
+  - Louvor: repertório/biblioteca, player multitrack, integração com o Google Drive, funções musicais, músicas na escala.
+  - Multimídia, Ministério Diaconal e outros: recursos próprios a criar.
+- Pontos a decidir:
+  - O repertório hoje é um só por igreja, compartilhado por todos os times. Ele continua assim, aparecendo só para os times de Louvor?
+  - Quais recursos novos cada tipo de time terá.
+  - Os itens do menu (Músicas, por exemplo) aparecem só para quem participa de um time que usa aquele recurso.
