@@ -1,7 +1,8 @@
 // Sincronização da pasta "multitracks" do Google Drive com o repertório da organização.
 //
-// Cada subpasta direta de "multitracks" é uma música (identificada pelo ID da pasta no Drive, que não muda
-// quando a pasta é renomeada — por isso não há duplicação). A cada execução:
+// Cada pasta de música fica direto em "multitracks" ou dentro de uma pasta de cantor/grupo (multitracks/Grupo/Música);
+// a pasta de música é identificada pelo ID da pasta no Drive, que não muda
+// (que não muda quando a pasta é renomeada ou movida para dentro de um grupo — por isso não há duplicação). A cada execução:
 //   1. lista as pastas e seus arquivos (inclusive subpastas como "Tracks 1/");
 //   2. calcula uma assinatura do conteúdo; se nada mudou, não reprocessa;
 //   3. se mudou: lê o .RPP, associa cada FILE do projeto ao áudio correspondente, lê o cabeçalho dos WAVs
@@ -84,7 +85,24 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
     const rootKids = await drive.listChildren(integ.folder_id);
     const loose = rootKids.filter((k) => k.mimeType !== FOLDER_MIME && /\.rpp$/i.test(k.name));
     for (const l of loose) await event("warn", `"${l.name}" está solto na pasta principal. Coloque cada música em sua própria pasta, junto com os áudios.`, { folder_id: integ.folder_id });
-    const folders = rootKids.filter((k) => k.mimeType === FOLDER_MIME);
+    // Dois jeitos de organizar (podem ser misturados):
+    //   multitracks/Música/…                 (a pasta tem o .RPP ou áudios logo dentro dela)
+    //   multitracks/Cantor ou Grupo/Música/… (pasta só com subpastas: cada subpasta é uma música)
+    const topFolders = rootKids.filter((k) => k.mimeType === FOLDER_MIME);
+    const tops = await pool(topFolders, deps.concurrency ?? 6, async (f) => {
+      try { return { f, kids: await drive.listChildren(f.id), error: null as string | null }; }
+      catch (e) { return { f, kids: [] as DriveFile[], error: String((e as Error).message ?? e) }; }
+    });
+    const folders: (DriveFile & { group?: string })[] = [];
+    const groupIds = new Set<string>();
+    for (const { f, kids, error } of tops) {
+      const isSong = error || kids.some((k) => k.mimeType !== FOLDER_MIME && (/\.rpp$/i.test(k.name) || AUDIO_EXT.test(k.name)));
+      const subs = kids.filter((k) => k.mimeType === FOLDER_MIME);
+      if (isSong || !subs.length) { folders.push(f); continue; }
+      groupIds.add(f.id);
+      for (const k of kids) if (k.mimeType !== FOLDER_MIME && /\.rpp$/i.test(k.name)) await event("warn", `"${f.name}/${k.name}" está solto na pasta do grupo. Coloque cada música em sua própria pasta.`, { folder_id: f.id });
+      for (const sf of subs) folders.push({ ...sf, group: f.name });
+    }
     stats.folders = folders.length;
 
     const songs: any[] = await db.select("songs", `org_id=eq.${orgId}&source=eq.drive&select=*`);
@@ -115,7 +133,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
 
       if (!song) {
         const n = bestName(null, folder.name);
-        [song] = await db.insert("songs", { org_id: orgId, title: n.title || folder.name, artist: n.artist, source: "drive", status: "processing",
+        [song] = await db.insert("songs", { org_id: orgId, title: n.title || folder.name, artist: n.artist ?? folder.group ?? null, source: "drive", status: "processing",
           status_message: "Na fila para processamento", drive_folder_id: folder.id, drive_folder_name: folder.name });
         byFolder.set(folder.id, song);
       }
@@ -128,7 +146,13 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
     // pastas que sumiram (excluídas ou movidas para fora de "multitracks")
     const present = new Set(folders.map((f) => f.id));
     for (const s of songs) {
-      if (s.status === "removed" || present.has(s.drive_folder_id)) continue;
+      if (present.has(s.drive_folder_id)) continue;
+      if (groupIds.has(s.drive_folder_id)) {
+        // a pasta é de um cantor/grupo (não é uma música): o registro foi criado por engano numa leitura anterior
+        const used = await db.select("schedule_songs", `song_id=eq.${s.id}&select=id&limit=1`);
+        if (!used.length) { await db.delete("songs", `id=eq.${s.id}`); await event("info", `"${s.drive_folder_name ?? s.title}" é uma pasta de cantor/grupo; as músicas dela foram lidas das subpastas.`, { folder_id: s.drive_folder_id }); continue; }
+      }
+      if (s.status === "removed") continue;
       await db.update("songs", `id=eq.${s.id}`, { status: "removed", status_message: "A pasta foi removida do Google Drive. O histórico das escalas foi preservado.", drive_signature: null });
       await event("info", `"${s.title}" saiu do repertório (pasta removida do Drive).`, { song_id: s.id, folder_id: s.drive_folder_id });
       stats.removed++;
@@ -149,7 +173,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
 
 type Outcome = "created" | "updated" | "unchanged" | "waiting" | "errors";
 
-async function processFolder(deps: SyncDeps, orgId: string, runId: string, folder: DriveFile, files: FolderFile[], song: any,
+async function processFolder(deps: SyncDeps, orgId: string, runId: string, folder: DriveFile & { group?: string }, files: FolderFile[], song: any,
   signature: string, latest: string, event: (l: "info" | "warn" | "error", m: string, x?: Record<string, unknown>) => Promise<unknown>): Promise<Outcome> {
   const { db, drive } = deps;
   const now = deps.now ?? (() => new Date());
@@ -289,7 +313,7 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
 
   const isNew = !song.current_project_id;
   const [updated] = await db.update("songs", `id=eq.${song.id}`, {
-    title: naming.title || folder.name, artist: naming.artist, song_key: naming.key, bpm: naming.bpm ?? project.tempo,
+    title: naming.title || folder.name, artist: naming.artist ?? folder.group ?? null, song_key: naming.key, bpm: naming.bpm ?? project.tempo,
     duration_sec: Math.round(project.length), status: "ready",
     status_message: allWarnings.length ? `${allWarnings.length} aviso(s) na importação` : null,
     current_project_id: projectId, drive_signature: signature, drive_folder_name: folder.name, drive_modified_at: latest || null,

@@ -185,4 +185,25 @@ describe("importação do Drive", () => {
     expect((await member.api.get(`/sync_events?org_id=eq.${org}`)).data).toHaveLength(0); // log só para admins
     expect((await admin.api.get(`/sync_events?org_id=eq.${org}`)).data.length).toBeGreaterThan(0);
   });
+  test("pastas de cantor/grupo: multitracks/Grupo/Música, misturado com músicas soltas", async () => {
+    const grp = join(ROOT, "Morada");
+    mkdirSync(grp, { recursive: true });
+    // registro criado por engano por uma leitura antiga (que tratava a pasta do grupo como música)
+    await db.insert("songs", { org_id: org, title: "Morada", source: "drive", status: "error", drive_folder_id: drive.idOf(grp), drive_folder_name: "Morada" });
+    await makeProject({ root: grp, folder: "Grande É o Senhor", rppName: "Grande É o Senhor.rpp" });
+    await makeProject({ root: grp, folder: "Ousado Amor - Isaias Saad", rppName: "Ousado Amor - Isaias Saad - 136 BPM (A).rpp" });
+    await ageAll(ROOT);
+    const st = await syncOrg(deps(), org, "manual");
+    expect(st.errors).toBe(0);
+    const g = await song("Grande É o Senhor");
+    expect(g).toMatchObject({ status: "ready", title: "Grande É o Senhor", artist: "Morada" }); // artista vem da pasta do grupo
+    expect((await song("Emaús - Morada")).status).toBe("ready");                                 // música solta continua
+    expect((await db.select("songs", `org_id=eq.${org}&drive_folder_id=eq.${drive.idOf(grp)}`))).toHaveLength(0);
+    // o player pode ler os áudios das músicas dentro do grupo
+    const fileId = (await db.select("project_media", `project_id=eq.${g.current_project_id}&limit=1`))[0].drive_file_id;
+    expect((await member.api.rpc("can_read_drive_file", { p_file_id: fileId })).data).toBe(true);
+    // rodar de novo não reprocessa
+    const st2 = await syncOrg(deps(), org, "cron");
+    expect(st2.created + st2.updated).toBe(0);
+  });
 });

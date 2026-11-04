@@ -66,15 +66,22 @@ No **SQL Editor**, abra [`supabase/setup/agendamento.sql`](supabase/setup/agenda
 
 ## Como a importação funciona
 
-Cada subpasta direta de "multitracks" é uma música:
+Cada pasta de música vira uma música. Ela pode ficar direto em "multitracks" ou dentro de uma pasta de cantor/grupo (os dois jeitos podem ser misturados):
 
 ```
 multitracks/
-  Emaús - Morada/
-    Emaús - Morada - 140 BPM (B).rpp
-    Tracks 1/
-      Click.wav  Guide.wav  Drums.wav ...
+  Morada/                                   pasta de cantor/grupo (só tem subpastas)
+    Emaús/
+      Emaús - Morada - 140 BPM (B).rpp
+      Tracks 1/
+        Click.wav  Guide.wav  Drums.wav ...
+  Ousado Amor - Isaias Saad/                música direto na pasta principal
+    Ousado Amor - Isaias Saad - 136 BPM (A).rpp
+    ...
 ```
+
+- Uma pasta com o .RPP ou áudios logo dentro dela é uma **música**; uma pasta só com subpastas é de um **cantor/grupo**, e cada subpasta dela é uma música.
+- Se o nome do projeto não trouxer o artista, o nome da pasta do cantor/grupo é usado como artista.
 
 - **Nome**: `Música - Artista - BPM (Tom)` → título, artista, BPM e tom extraídos automaticamente (ex.: "Emaús", "Morada", 140, "B"). Títulos com " - " são aceitos ("Te Louvarei - Ao Vivo - Morada - 140 BPM (B)"). Tom inválido ou nome fora do padrão vira aviso, nunca um dado inventado.
 - **.RPP**: lê andamento, compasso, taxa de amostragem, faixas, pastas (ISBUS), volume, pan, mute, solo, inversão de fase, envio para o master, itens (posição, duração, deslocamento na fonte, volume, fades, takes), marcadores e regiões, volume do master.
