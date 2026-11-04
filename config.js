@@ -1,6 +1,5 @@
-// Configuração pública do app (pode ficar no GitHub: a chave "anon" é pública e os dados são protegidos pelo RLS).
-// Preencha com os dados do SEU projeto Supabase: Project Settings → API.
+// Configuração pública do app (pode ficar no GitHub: a chave publicável é pública e os dados são protegidos pelo RLS).
 window.LOUVOR_CONFIG = {
-  supabaseUrl: "",       // ex.: "https://abcdefghijklmno.supabase.co"
-  supabaseAnonKey: "",   // chave "anon public"
+  supabaseUrl: "https://vqjcnrkbajgtlflklkfx.supabase.co",
+  supabaseAnonKey: "sb_publishable_Y4nOsOO4tcQbB9eFZSKLLQ_n4PhdFgy",
 };
