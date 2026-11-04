@@ -73,9 +73,16 @@ export async function signHeaders(cfg: R2Config, method: string, key: string, he
   return out;
 }
 
-export async function put(cfg: R2Config, key: string, body: Uint8Array, contentType: string) {
+export async function put(cfg: R2Config, key: string, body: Uint8Array, contentType: string, tries = 4) {
   const t = target(cfg, key);
-  const h = await signHeaders(cfg, "PUT", key, { "content-type": contentType }, await sha256Hex(body));
-  const r = await fetch(`${t.origin}${t.path}`, { method: "PUT", headers: h, body });
-  if (!r.ok) throw new Error(`R2 ${r.status}: ${(await r.text()).slice(0, 300)}`);
+  const hash = await sha256Hex(body);
+  for (let i = 0; ; i++) {
+    const h = await signHeaders(cfg, "PUT", key, { "content-type": contentType }, hash);
+    const r = await fetch(`${t.origin}${t.path}`, { method: "PUT", headers: h, body }).catch((e) => e as Error);
+    if (r instanceof Response && r.ok) return;
+    const transient = !(r instanceof Response) || r.status >= 500 || r.status === 429;
+    const msg = r instanceof Response ? `R2 ${r.status}: ${(await r.text()).slice(0, 300)}` : `R2: ${r.message}`;
+    if (!transient || i >= tries - 1) throw new Error(msg);
+    await new Promise((res) => setTimeout(res, 1000 * 2 ** i)); // erro temporário do Cloudflare: tenta de novo
+  }
 }

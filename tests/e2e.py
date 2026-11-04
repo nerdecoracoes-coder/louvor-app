@@ -346,6 +346,18 @@ with sync_playwright() as pw:
     expect(carla.get_by_text("Pedido pronto: Vídeo de abertura do retiro")).to_be_visible(timeout=10000)
     ok("Multimídia: recursos do tipo, checklist sugerido, roteiro com as músicas e letras do louvor, pedido de mídia até a entrega")
 
+    # ------------------------------------------------------------------ integrantes de teste
+    ana.goto(BASE + "/#/org"); ana.reload()
+    ana.locator("#df select[name=team]").select_option(label="Jovens"); ana.locator("#df select[name=count]").select_option("2")
+    ana.locator("#dgo").click()
+    expect(ana.locator(".sheet")).to_contain_text("Teste · Direção", timeout=15000)
+    expect(ana.locator(".sheet")).to_contain_text("@exemplo.com")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/integrantes"); ana.reload()
+    expect(ana.get_by_text("Teste · Projeção")).to_be_visible(timeout=10000)
+    ana.goto(BASE + "/#/org"); ana.locator("#ddel").click(); ana.locator(".sheet [data-ok]").click()
+    toast_has(ana, "conta(s) de teste apagada(s)")
+    ok("integrantes de teste criados no time com função e login, e apagados")
+
     # ------------------------------------------------------------------ várias organizações
     carla.goto(BASE + "/#/nova-org")
     carla.fill("input[name=name]", "Igreja do Bairro"); carla.locator("#go").click()

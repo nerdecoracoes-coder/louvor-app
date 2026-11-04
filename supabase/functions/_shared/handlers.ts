@@ -3,6 +3,7 @@ import { Db, asUser } from "./db.ts";
 import { FOLDER_MIME, folderIdFromInput, type DriveClient } from "./drive.ts";
 import { syncOrg, type CoverStore } from "./sync.ts";
 import { presignGet, type R2Config } from "./r2.ts";
+import { createDemo, deleteDemo, cleanupDemo } from "./demo.ts";
 
 export interface Env {
   rest: string;            // <SUPABASE_URL>/rest/v1
@@ -14,6 +15,7 @@ export interface Env {
   storage?: string;        // <SUPABASE_URL>/storage/v1 (padrão: derivado de rest)
   publicStorage?: string;  // endereço público do armazenamento, se diferente
   r2?: R2Config | null;    // Cloudflare R2 (versão leve das faixas); sem ele o player usa o WAV do Drive
+  auth?: string;           // <SUPABASE_URL>/auth/v1 (padrão: derivado de rest) — contas de teste
   background?: (p: Promise<unknown>) => void;
 }
 
@@ -39,6 +41,8 @@ export function coverStore(env: Env): CoverStore {
     },
   };
 }
+
+const authBase = (env: Env) => env.auth ?? env.rest.replace(/\/rest\/v1\/?$/, "/auth/v1");
 
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status, headers: { ...CORS, "Content-Type": "application/json" } });
 const bearer = (req: Request) => req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
@@ -115,6 +119,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
         catch (e) { results[i.org_id] = { error: String((e as Error).message) }; }
         await ensureWatch(env, db, i).catch(() => null);
       }
+      await cleanupDemo({ auth: authBase(env), serviceKey: env.serviceKey }, db).catch(() => 0); // contas de teste vencidas
     };
     // continuação da fila: responde na hora e trabalha em segundo plano
     if (url.searchParams.get("chain") && env.background) { env.background(job()); return json({ ok: true, started: true }, 202); }
@@ -133,6 +138,20 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     catch (e) { return json({ error: "Conta de serviço do Google não configurada no servidor.", detail: String((e as Error).message) }, 500); }
   }
   const orgId = String(body.org_id ?? "");
+  // integrantes de teste (só o administrador da igreja)
+  if (action === "demo-create" || action === "demo-delete") {
+    if ((await asUser(env.rest, env.anonKey, jwt, "is_org_admin", { p_org: orgId })) !== true) return json({ error: "Somente o administrador da igreja." }, 403);
+    const denv = { auth: authBase(env), serviceKey: env.serviceKey };
+    try {
+      if (action === "demo-create") {
+        const me = await fetch(`${authBase(env)}/user`, { headers: { apikey: env.anonKey, Authorization: `Bearer ${jwt}` } }).then((r) => r.json());
+        const count = Math.max(1, Math.min(8, Number(body.count) || 1)), days = Math.max(1, Math.min(30, Number(body.days) || 7));
+        return json(await createDemo(denv, db, { orgId, teamId: String(body.team_id ?? ""), count, days, by: me.id }));
+      }
+      const ids = Array.isArray(body.user_ids) && body.user_ids.length ? `&user_id=in.(${body.user_ids.map((x: string) => encodeURIComponent(x)).join(",")})` : "";
+      return json({ deleted: await deleteDemo(denv, db, `org_id=eq.${orgId}${ids}`) });
+    } catch (e) { return json({ error: String((e as Error).message) }, 400); }
+  }
   // administrador da igreja ou líder de um time com repertório
   const allowed = await asUser(env.rest, env.anonKey, jwt, "is_repertoire_staff", { p_org: orgId });
   if (allowed !== true) return json({ error: "Somente o administrador e os líderes dos times com repertório podem gerenciar a integração." }, 403);

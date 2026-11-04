@@ -237,6 +237,7 @@ async function orgSettings(_, el) {
     <div class="sec">${icon("music")}<h2>Funções por tipo de time</h2><button class="more" id="addrole">${icon("plus")} Nova</button></div>
     <div class="list" id="roles">${roles.sort((a, b) => String(a.team_type).localeCompare(String(b.team_type)) || a.sort - b.sort).map((r) => `<div class="li">${icon(roleIcon(r.name), "accent")}<span class="grow"><span class="t">${esc(r.name)}</span><span class="s">${r.team_type ? esc(TEAM_TYPES.find((x) => x[0] === r.team_type)?.[1] || r.team_type) : "Todos os tipos"}</span></span><button class="iconbtn" data-er="${r.id}">${icon("edit")}</button><button class="iconbtn" data-dr="${r.id}">${icon("trash")}</button></div>`).join("")}</div>
 
+    <div id="demo"></div>
     <div class="card mt"><h3 class="danger-t" style="font-size:16px">Excluir igreja</h3><p class="small muted">Apaga todos os times, escalas, chats e o repertório desta igreja. As contas das pessoas continuam existindo. Os arquivos do Google Drive não são tocados.</p>
       <button class="btn danger sm" id="delorg">${icon("trash")} Excluir igreja</button></div>`;
   const form = el.querySelector("#of"); bindColor(form, "color");
@@ -284,6 +285,7 @@ async function orgSettings(_, el) {
     if (!(await confirmDialog("Excluir esta função? Ela sai de todos os integrantes.", "Excluir", true))) return;
     const r = await sb.from("music_roles").delete().eq("id", b.dataset.dr); if (r.error) return toast(errMsg(r.error), "err"); orgSettings(_, el);
   });
+  demoSection(el.querySelector("#demo")).catch((e) => console.warn(e));
   el.querySelector("#delorg").onclick = async () => {
     const typed = prompt(`Para confirmar, digite o nome da igreja: ${o.name}`);
     if (typed?.trim() !== o.name) return toast("Nome não confere. Nada foi excluído.");
@@ -361,5 +363,40 @@ async function driveSettings(_, el) {
     if (!(await confirmDialog("Desconectar a pasta? As músicas já importadas continuam no repertório, mas deixam de ser atualizadas.", "Desconectar", true))) return;
     const r = await sb.functions.invoke("drive-sync", { action: "disconnect", org_id: state.org.id });
     if (r.error) return toast(errMsg(r.error), "err"); driveSettings(_, el);
+  });
+}
+
+// ---------------------------------------------------------------- integrantes de teste
+// Contas fictícias num time, com função e prazo, para testar escalas, roteiro, checklist e pedidos.
+async function demoSection(box) {
+  const [rows, teams] = await Promise.all([must(sb.from("demo_users").select("*").eq("org_id", state.org.id).order("created_at")), must(sb.from("teams").select("id,name").eq("org_id", state.org.id).order("name"))]);
+  const tname = (id) => teams.find((t) => t.id === id)?.name || "";
+  box.innerHTML = `<div class="sec">${icon("sparkle")}<h2>Integrantes de teste</h2></div>
+    <div class="card"><p class="small muted" style="margin-top:0">Crie pessoas fictícias num time para testar escalas, roteiro, checklist e pedidos. Cada uma recebe uma função do time e um login.
+      Quando o prazo vence, as contas e tudo o que elas fizeram são apagados automaticamente.</p>
+      <form id="df"><div class="two"><label class="field"><span>Time</span><select name="team" required>${teams.map((t) => `<option value="${t.id}">${esc(t.name)}</option>`).join("")}</select></label>
+        <label class="field"><span>Quantas pessoas</span><select name="count">${[1, 2, 3, 4, 5, 6, 8].map((n) => `<option ${n === 4 ? "selected" : ""}>${n}</option>`).join("")}</select></label></div>
+        <label class="field"><span>Apagar depois de</span><select name="days"><option value="1">1 dia</option><option value="3">3 dias</option><option value="7" selected>7 dias</option><option value="14">14 dias</option><option value="30">30 dias</option></select></label>
+        <button class="btn ghost block" id="dgo">${icon("plus")} Criar integrantes de teste</button></form>
+      ${rows.length ? `<div class="list mt">${rows.map((r) => `<div class="li"><span class="grow"><span class="t">${esc(r.label)}</span><span class="s">${esc(tname(r.team_id))} · ${esc(r.email)} · apaga em ${fDate(r.expires_at)}</span></span></div>`).join("")}</div>
+        <button class="btn danger sm mt" id="ddel">${icon("trash")} Apagar todos agora</button>` : ""}</div>`;
+  box.querySelector("#df").onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target; const btn = box.querySelector("#dgo"); busy(btn);
+    const r = await sb.functions.invoke("drive-sync", { action: "demo-create", org_id: state.org.id, team_id: f.team.value, count: Number(f.count.value), days: Number(f.days.value) });
+    busy(btn, false);
+    if (r.error) return toast(r.data?.error || errMsg(r.error), "err");
+    invalidatePeople();
+    const text = r.data.users.map((u) => `${u.name}\n${u.email}\nSenha: ${u.password}`).join("\n\n");
+    const sh = sheet(`<h3>Integrantes de teste criados</h3><p class="small muted">Já estão no time, com a função definida. Para ver o app como um deles, abra uma janela anônima e entre com o e-mail e a senha. As senhas aparecem só agora.</p>
+      <div class="list">${r.data.users.map((u) => `<div class="li"><span class="grow"><span class="t">${esc(u.name)}</span><span class="s" style="user-select:all">${esc(u.email)} · senha ${esc(u.password)}</span></span></div>`).join("")}</div>
+      <button class="btn primary block mt" id="cp">${icon("copy")} Copiar logins</button>`);
+    sh.el.querySelector("#cp").onclick = async () => { try { await navigator.clipboard.writeText(text); toast("Logins copiados"); } catch { toast("Não foi possível copiar", "err"); } };
+    demoSection(box);
+  };
+  box.querySelector("#ddel")?.addEventListener("click", async () => {
+    if (!(await confirmDialog("Apagar agora todos os integrantes de teste e tudo o que eles fizeram?", "Apagar", true))) return;
+    const r = await sb.functions.invoke("drive-sync", { action: "demo-delete", org_id: state.org.id });
+    if (r.error) return toast(r.data?.error || errMsg(r.error), "err");
+    invalidatePeople(); toast(`${r.data.deleted} conta(s) de teste apagada(s)`); demoSection(box);
   });
 }

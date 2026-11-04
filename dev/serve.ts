@@ -25,7 +25,7 @@ const drive = new FsDrive(DRIVE_ROOT);
 // "R2" local: mesmo formato de caminho do Cloudflare (endpoint/bucket/chave), com pedidos por intervalo de bytes
 const R2DIR = join(STORE, "r2");
 const r2 = { endpoint: `http://127.0.0.1:${PORT}/r2`, bucket: "somos-dev", accessKeyId: "dev", secretAccessKey: "dev", region: "auto" };
-const env = { rest: REST, serviceKey: SERVICE, anonKey: ANON, cronSecret: "dev-cron", drive: () => drive, storage: `http://127.0.0.1:${PORT}/storage/v1`, r2: process.env.NO_R2 ? null : r2 };
+const env = { rest: REST, serviceKey: SERVICE, anonKey: ANON, cronSecret: "dev-cron", drive: () => drive, storage: `http://127.0.0.1:${PORT}/storage/v1`, r2: process.env.NO_R2 ? null : r2, auth: AUTH };
 const isService = (req: Request) => req.headers.get("authorization") === `Bearer ${SERVICE}`;
 const MIME: Record<string, string> = { ".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".css": "text/css", ".json": "application/json",
   ".svg": "image/svg+xml", ".woff": "font/woff", ".png": "image/png", ".jpg": "image/jpeg", ".webmanifest": "application/manifest+json" };
