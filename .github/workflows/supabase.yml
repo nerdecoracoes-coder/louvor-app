@@ -3,7 +3,7 @@
 # Secrets do repositório necessários (Settings → Secrets and variables → Actions):
 #   SUPABASE_ACCESS_TOKEN  token pessoal (supabase.com → Account → Access Tokens)
 #   SUPABASE_PROJECT_REF   identificador do projeto (ex.: abcdefghijklmno)
-#   SUPABASE_DB_PASSWORD   senha do banco definida ao criar o projeto
+#   SUPABASE_DB_PASSWORD   (só se for aplicar migrações) senha do banco
 #   GOOGLE_SERVICE_ACCOUNT conteúdo completo do arquivo JSON da conta de serviço do Google
 #   CRON_SECRET            uma senha longa qualquer (a mesma usada em supabase/setup/agendamento.sql)
 name: Publicar no Supabase
@@ -24,17 +24,23 @@ jobs:
       - uses: actions/checkout@v4
       - uses: supabase/setup-cli@v1
         with: { version: latest }
-      - name: Vincular projeto
-        run: supabase link --project-ref "$PROJECT_REF" --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
       - name: Aplicar migrações
         if: ${{ inputs.migrations }}
-        run: supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
-      - name: Secrets das funções
+        env:
+          DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          printf '%s' '${{ secrets.GOOGLE_SERVICE_ACCOUNT }}' > /tmp/sa.json
-          supabase secrets set --project-ref "$PROJECT_REF" GOOGLE_SERVICE_ACCOUNT="$(cat /tmp/sa.json)" CRON_SECRET='${{ secrets.CRON_SECRET }}'
-          rm -f /tmp/sa.json
+          supabase link --project-ref "$PROJECT_REF" --password "$DB_PASSWORD"
+          supabase db push --password "$DB_PASSWORD"
+      - name: Secrets das funções
+        env:
+          GOOGLE_SERVICE_ACCOUNT: ${{ secrets.GOOGLE_SERVICE_ACCOUNT }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          test -n "$GOOGLE_SERVICE_ACCOUNT" || { echo "Falta o secret GOOGLE_SERVICE_ACCOUNT"; exit 1; }
+          test -n "$CRON_SECRET" || { echo "Falta o secret CRON_SECRET"; exit 1; }
+          printf '%s' "$GOOGLE_SERVICE_ACCOUNT" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d.get('type')=='service_account' and d.get('private_key') and d.get('client_email'); print('Conta de serviço:', d['client_email'])"
+          supabase secrets set --project-ref "$PROJECT_REF" GOOGLE_SERVICE_ACCOUNT="$GOOGLE_SERVICE_ACCOUNT" CRON_SECRET="$CRON_SECRET"
       - name: Publicar funções
         run: |
-          supabase functions deploy drive-sync --project-ref "$PROJECT_REF" --no-verify-jwt
-          supabase functions deploy drive-media --project-ref "$PROJECT_REF" --no-verify-jwt
+          supabase functions deploy drive-sync --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
+          supabase functions deploy drive-media --project-ref "$PROJECT_REF" --no-verify-jwt --use-api
