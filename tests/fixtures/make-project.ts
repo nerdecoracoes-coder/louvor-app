@@ -35,9 +35,12 @@ export async function makeProject(o: FixtureOpts) {
   await $`ffmpeg -loglevel error -y -f lavfi -i "sine=f=196:sample_rate=${sr}:d=${secs}" -ac 2 -c:a pcm_s16le ${t("Pad.wav")}`;
 
   const v2 = o.variant === "v2";
+  // cores personalizadas como o REAPER grava (0x1000000 | 0xBBGGRR); a primeira é a cor padrão (sem cor)
+  const rgb = (r: number, g: number, b: number) => 0x1000000 | (b << 16) | (g << 8) | r;
+  const PALETTE = [16576, rgb(230, 80, 80), rgb(240, 170, 60), rgb(90, 190, 110), rgb(70, 150, 240), rgb(170, 110, 230), rgb(60, 200, 200)];
   const track = (n: number, name: string, body: string, extra = "") => `  <TRACK ${guid(n)}
     NAME "${name}"
-    PEAKCOL ${16576 + n}
+    PEAKCOL ${PALETTE[n % PALETTE.length]}
     BEAT -1
     AUTOMODE 0
 ${extra}    IPHASE 0
@@ -82,9 +85,9 @@ ${body}  >
   MASTER_VOLUME ${v2 ? 0.8 : 1} 0 -1 -1 1
   MASTERMUTESOLO 0
   MARKER 1 0 "Intro" 0 0 1 B ${guid(901)} 0
-  MARKER 2 3.428571 "Verso 1" 1 16711935 1 R ${guid(902)} 0
+  MARKER 2 3.428571 "Verso 1" 1 ${rgb(90, 190, 110)} 1 R ${guid(902)} 0
   MARKER 2 6.857143 "" 1
-  MARKER 3 6.857143 "Refrão" 0 33488896 1 B ${guid(903)} 0
+  MARKER 3 6.857143 "Refrão" 0 ${rgb(240, 170, 60)} 1 B ${guid(903)} 0
   MARKER 4 10.285714 "Final" 0 0 1 B ${guid(904)} 0
   <TEMPOENVEX
     EGUID ${guid(905)}

@@ -241,7 +241,7 @@ export class Engine extends EventTarget {
     let done = 0;
     const q = [...need];
     const worker = async () => { while (q.length) { const [f, c] = q.shift(); await this.loadChunk(f, c); done++; onProgress?.(done / need.length); } };
-    await Promise.all(Array.from({ length: Math.min(6, q.length) }, worker));
+    await Promise.all(Array.from({ length: Math.min(12, q.length) }, worker));
   }
 
   // baixa a música toda em segundo plano (vai para o cache do navegador e completa as formas de onda)
@@ -268,7 +268,8 @@ export class Engine extends EventTarget {
     if (this.ctx.state === "suspended") await this.ctx.resume();
     if (this.pos >= this.length - 0.05) this.pos = this.loop ? this.loop[0] : 0;
     this.buffering = true; this.dispatch("state");
-    try { await this.preload(this.pos, this.pos + Math.min(6, AHEAD), (p) => this.dispatch("loading", { progress: p })); }
+    // começa assim que o primeiro trecho de cada faixa chega; o resto vem enquanto toca
+    try { await this.preload(this.pos, this.pos + 1, (p) => this.dispatch("loading", { progress: p })); }
     catch (e) { this.buffering = false; this.dispatch("state"); this.dispatch("error", { message: e.message }); return; }
     if (this.destroyed) return;
     this.buffering = false;
@@ -376,7 +377,7 @@ export class Engine extends EventTarget {
     if (missing && missing.at - pos < 0.25) { this.stall(); return; }
     // carregamento antecipado e limpeza de memória
     const ahead = this.needed(pos, Math.min(this.length, pos + AHEAD)).filter(([f, c]) => !this.isLoaded(f, c) && !this.media.get(f).loading.has(c));
-    for (const [f, c] of ahead.slice(0, 4)) this.loadChunk(f, c).catch((e) => this.dispatch("error", { message: e.message }));
+    for (const [f, c] of ahead.slice(0, 10)) this.loadChunk(f, c).catch((e) => this.dispatch("error", { message: e.message }));
     if (Math.random() < 0.05) this.evict();
   }
 

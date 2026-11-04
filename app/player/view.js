@@ -2,6 +2,11 @@
 import { sb, state, must, esc, attr, icon, toast, errMsg, isRepertoireStaff as isStaff, fDur } from "../core.js";
 import { Engine, gainToDb } from "./engine.js";
 
+// Cores salvas no REAPER (PEAKCOL das faixas e cor de marcadores/regiões): só valem com o bit 0x1000000 ligado;
+// o valor vem no formato do Windows (0x00BBGGRR).
+const rcol = (n) => { n = Number(n); if (!n || !(n & 0x1000000)) return null; const c = n & 0xffffff; return [c & 255, (c >> 8) & 255, (c >> 16) & 255]; };
+const css = (c, a = 1) => (c ? (a === 1 ? `rgb(${c.join(",")})` : `rgba(${c.join(",")},${a})`) : null);
+
 let current = null;
 
 export function closePlayer() {
@@ -60,6 +65,11 @@ export async function openPlayer(songId) {
     const marks = engine.markers.filter((m) => !m.is_region);
     const L = engine.length || 1;
     const audioTracks = engine.tracks.filter((t) => t.kind === "audio" || t.kind === "folder");
+    // cor da faixa: a dela, senão a da pasta (como o REAPER mostra)
+    const tcol = (t) => rcol(t.color) || (t.parent_idx != null ? tcol(engine.tracks.find((x) => x.idx === t.parent_idx) || {}) : null);
+    // partes da música: regiões; sem regiões, os marcadores (cada um até o próximo)
+    const parts = regions.length ? regions.map((r) => ({ id: r.id, name: r.name || "Região", start: r.position, end: r.end_position, color: rcol(r.color), region: r }))
+      : marks.map((m, i) => ({ id: m.id, name: m.name || `Marcador ${i + 1}`, start: m.position, end: marks[i + 1]?.position ?? L, color: rcol(m.color) }));
     const other = engine.tracks.filter((t) => !["audio", "folder"].includes(t.kind));
     const warnings = [...(project.warnings || []), ...engine.tracks.flatMap((t) => (t.warnings || []).map((w) => `${t.name}: ${w}`))];
     root.innerHTML = `<div class="backdrop"></div>
@@ -74,10 +84,11 @@ export async function openPlayer(songId) {
       <div class="pbody" id="pbody"></div>
       <div class="loadbar"><i id="lb" style="width:0"></i></div>
       <div class="timeline" id="tl">
-        ${regions.map((r) => `<div class="rg" data-rg="${r.id}" style="left:${(r.position / L) * 100}%;width:${((r.end_position - r.position) / L) * 100}%">${esc(r.name)}</div>`).join("")}
-        ${marks.map((m) => `<div class="mk" style="left:${(m.position / L) * 100}%;top:${regions.length ? 0 : 0}px" title="${attr(m.name)}">${esc(m.name)}</div>`).join("")}
+        ${regions.map((r) => { const c = rcol(r.color); return `<div class="rg" data-rg="${r.id}" style="left:${(r.position / L) * 100}%;width:${((r.end_position - r.position) / L) * 100}%${c ? `;--rc:${c.join(",")}` : ""}">${esc(r.name)}</div>`; }).join("")}
+        ${marks.map((m) => { const c = rcol(m.color); return `<div class="mk" style="left:${(m.position / L) * 100}%${c ? `;border-color:${css(c)};color:${css(c)}` : ""}" title="${attr(m.name)}">${esc(m.name)}</div>`; }).join("")}
         <div class="rail"></div><div class="prog" id="prog"></div><div class="head" id="head"></div></div>
       <div class="times"><span id="tcur">0:00.0</span><span id="tmark"></span><span>${fmt(L)}</span></div>
+      ${parts.length ? `<div class="parts" id="parts">${parts.map((x) => `<button class="part" data-part="${x.id}" style="${x.color ? `--pc:${x.color.join(",")}` : ""}"><b class="ellipsis">${esc(x.name)}</b><span>${fmt(x.start).replace(/\.\d$/, "")}</span></button>`).join("")}</div>` : ""}
       <div class="transport">
         <button data-t="prev" aria-label="Marcador anterior">${icon("prev")}</button>
         <button data-t="rew" aria-label="Retroceder 5 segundos">${icon("rew")}</button>
@@ -95,7 +106,7 @@ export async function openPlayer(songId) {
     const drawTab = () => {
       root.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
       if (tab === "faixas") {
-        body.innerHTML = audioTracks.map((t) => `<div class="trk${t.parent_idx != null ? " child" : ""}${t.kind === "folder" ? " folder" : ""}" data-ti="${t.idx}">
+        body.innerHTML = audioTracks.map((t) => `<div class="trk${t.parent_idx != null ? " child" : ""}${t.kind === "folder" ? " folder" : ""}" data-ti="${t.idx}"${tcol(t) ? ` style="--tc:${tcol(t).join(",")}"` : ""}>
           <div><div class="nm">${t.kind === "folder" ? icon("layers") : ""}<span class="ellipsis" title="${attr(t.name)}">${esc(t.name)}</span></div>
             <div class="ctl"><button class="ms m" data-m="${t.idx}">M</button><button class="ms s" data-s="${t.idx}">S</button>
               <input type="range" class="fader" data-v="${t.idx}" min="0" max="1.6" step="0.01" aria-label="Volume ${attr(t.name)}" style="width:60px"></div>
@@ -105,7 +116,7 @@ export async function openPlayer(songId) {
           + (warnings.length ? `<details class="card mt small"><summary class="warn" style="cursor:pointer">${warnings.length} recurso(s) do projeto não reproduzido(s) pelo player</summary><ul style="padding-left:18px;margin:8px 0 0">${[...new Set(warnings)].map((w) => `<li class="muted" style="margin:4px 0">${esc(w)}</li>`).join("")}</ul></details>` : "");
         syncControls(); drawAllWaves();
       } else if (tab === "mix") {
-        body.innerHTML = `<div class="mixer">${audioTracks.map((t) => `<div class="strip" data-ti="${t.idx}"><div class="nm" title="${attr(t.name)}">${esc(t.name)}</div>
+        body.innerHTML = `<div class="mixer">${audioTracks.map((t) => `<div class="strip" data-ti="${t.idx}"${tcol(t) ? ` style="--tc:${tcol(t).join(",")}"` : ""}><div class="nm" title="${attr(t.name)}">${esc(t.name)}</div>
           <input type="range" class="fader" data-p="${t.idx}" min="-1" max="1" step="0.01" style="width:66px" aria-label="Pan"><span class="tiny muted" data-pl="${t.idx}"></span>
           <div class="fz"><input type="range" class="vfader" data-v="${t.idx}" min="0" max="1.6" step="0.01" orient="vertical" aria-label="Volume ${attr(t.name)}"><div class="meter"><i data-lv="${t.idx}"></i></div></div>
           <span class="db" data-db="${t.idx}"></span><div class="row gap-s"><button class="ms m" data-m="${t.idx}">M</button><button class="ms s" data-s="${t.idx}">S</button></div></div>`).join("")}
@@ -180,7 +191,7 @@ export async function openPlayer(songId) {
         const x0 = (it.position / L) * w, x1 = ((it.position + it.length) / L) * w;
         g.fillStyle = "rgba(255,255,255,.05)"; g.fillRect(x0, 0, x1 - x0, h);
         if (!pk) continue;
-        g.fillStyle = `rgba(${accent},.85)`;
+        g.fillStyle = `rgba(${tcol(t)?.join(",") || accent},.9)`;
         for (let x = Math.floor(x0); x < x1; x++) {
           const ts = (x / w) * L - it.position + it.offset, te = ((x + 1) / w) * L - it.position + it.offset;
           let mn = 1, mx = -1, any = false;
@@ -260,6 +271,15 @@ export async function openPlayer(songId) {
       const r = await sb.from("songs").update({ lyrics: { ...(song.lyrics || {}), blocks: lyr, synced: lyr.some((b) => b.start != null) } }).eq("id", song.id);
       if (r.error) toast(errMsg(r.error), "err"); else toast("Tempos da letra salvos");
     }
+    // cartões das partes: toque leva o cursor para o início da parte e toca a partir dali
+    root.querySelector("#parts")?.addEventListener("click", (e) => {
+      const b = e.target.closest("[data-part]"); if (!b) return;
+      const x = parts.find((y) => String(y.id) === b.dataset.part); if (!x) return;
+      if (engine.loop && !(engine.loop[0] === x.start)) engine.setLoop(null);
+      engine.seek(x.start);
+      if (!engine.playing) engine.play();
+    });
+    let lastPart = null;
     let lastBlock = -1;
     const lyricsAt = (p) => { let k = -1; lyr.forEach((b, i) => { if (b.start != null && b.start <= p + 0.05) k = i; }); return k; };
 
@@ -273,6 +293,13 @@ export async function openPlayer(songId) {
       const cur = [...engine.markers].reverse().find((m) => m.position <= p + 0.01);
       root.querySelector("#tmark").textContent = cur ? cur.name : "";
       root.querySelectorAll(".ph-line").forEach((l) => (l.style.left = pct + "%"));
+      const pc = parts.find((x) => p >= x.start - 0.01 && p < x.end - 0.01);
+      if ((pc?.id ?? null) !== lastPart) {
+        lastPart = pc?.id ?? null;
+        root.querySelectorAll("[data-part]").forEach((b) => b.classList.toggle("on", b.dataset.part === String(lastPart)));
+        const el = lastPart != null && root.querySelector(`[data-part="${lastPart}"]`);
+        if (el && engine.playing) el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      }
       if (tab === "mix" && engine.playing) {
         const lv = engine.levels();
         engine.tracks.forEach((t, i) => { const el = root.querySelector(`[data-lv="${t.idx}"]`); if (el) el.style.height = Math.min(100, lv.tracks[i] * 100) + "%"; });
@@ -290,6 +317,6 @@ export async function openPlayer(songId) {
     };
     drawTab(); updateState(); loop();
     // carregamento inicial (primeiros segundos) e o restante em segundo plano
-    engine.preload(0, 6, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; }).then(() => engine.background()).catch((e) => toast(errMsg(e), "err"));
+    engine.preload(0, 1, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; }).then(() => engine.background()).catch((e) => toast(errMsg(e), "err"));
   }
 }
