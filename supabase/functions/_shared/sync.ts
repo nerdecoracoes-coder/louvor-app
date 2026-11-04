@@ -25,6 +25,7 @@ export interface SyncDeps {
   maxProjectsPerRun?: number;   // limite de projetos reprocessados por execução (tempo da função)
   settleMinutes?: number;       // tempo de espera por arquivos ainda sendo enviados
   concurrency?: number;
+  timeBudgetMs?: number;        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
 }
 export interface SyncStats { folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
@@ -77,6 +78,10 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
   const stats: SyncStats = { folders: 0, created: 0, updated: 0, unchanged: 0, removed: 0, waiting: 0, errors: 0, deferred: 0 };
   const integ = await db.one("drive_integrations", `org_id=eq.${orgId}`);
   if (!integ) throw new Error("Organização sem integração com o Google Drive.");
+  // rodadas que ficaram "em andamento" porque o servidor encerrou a função antes do fim
+  const stale = new Date(runStart.getTime() - 10 * 60_000).toISOString();
+  await db.update("sync_runs", `org_id=eq.${orgId}&status=eq.running&started_at=lt.${q(stale)}`,
+    { status: "error", finished_at: runStart.toISOString(), error: "Interrompida pelo servidor (tempo limite). As músicas que faltaram continuam na próxima rodada." }).catch(() => {});
   const [run] = await db.insert("sync_runs", { org_id: orgId, trigger });
   const event = (level: "info" | "warn" | "error", message: string, extra: Record<string, unknown> = {}) =>
     db.insert("sync_events", { org_id: orgId, run_id: run.id, level, message, ...extra }).catch(() => {});
@@ -137,7 +142,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
           status_message: "Na fila para processamento", drive_folder_id: folder.id, drive_folder_name: folder.name });
         byFolder.set(folder.id, song);
       }
-      if (budget <= 0) { stats.deferred++; continue; }
+      if (budget <= 0 || now().getTime() - runStart.getTime() > (deps.timeBudgetMs ?? 90_000)) { stats.deferred++; continue; }
       budget--;
       const res = await processFolder(deps, orgId, run.id, folder, files, song, signature, latest, event);
       stats[res]++;

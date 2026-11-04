@@ -206,4 +206,11 @@ describe("importação do Drive", () => {
     const st2 = await syncOrg(deps(), org, "cron");
     expect(st2.created + st2.updated).toBe(0);
   });
+  test("rodada interrompida pelo servidor não fica 'em andamento' para sempre", async () => {
+    const [r] = await db.insert("sync_runs", { org_id: org, trigger: "connect", started_at: new Date(Date.now() - 3600e3).toISOString() });
+    await syncOrg(deps(), org, "manual");
+    const after = (await db.select("sync_runs", `id=eq.${r.id}`))[0];
+    expect(after.status).toBe("error");
+    expect(after.error).toContain("Interrompida");
+  });
 });
