@@ -2,7 +2,7 @@
 
 Aplicativo instalável (PWA) para organizações, times, escalas, repertório, chat e **player multitrack** dos projetos preparados no REAPER com Automate Pro.
 
-Segue a mesma estrutura do Evolute Training: **site estático no GitHub Pages + Supabase** (login, banco PostgreSQL com RLS, arquivos e funções). É um projeto **separado**: repositório próprio e projeto Supabase próprio, sem nenhum dado em comum com o Evolute.
+Site estático publicado no **Cloudflare Pages** (endereço próprio, sem dividir espaço com outros apps) + **Supabase** (login, banco PostgreSQL com RLS, arquivos e funções). É um projeto **separado**: repositório próprio e projeto Supabase próprio, sem nenhum dado em comum com o Evolute.
 
 ```
 index.html, sw.js, manifest.json, config.js   app instalável (sem etapa de build)
