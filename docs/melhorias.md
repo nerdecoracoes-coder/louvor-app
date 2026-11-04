@@ -22,7 +22,9 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - **Recursos por tipo de time**:
   - Louvor: repertório/biblioteca, player multitrack, integração com o Google Drive, funções musicais, músicas na escala.
   - Multimídia, Ministério Diaconal e outros: recursos próprios a criar.
-- Pontos a decidir:
-  - O repertório hoje é um só por igreja, compartilhado por todos os times. Ele continua assim, aparecendo só para os times de Louvor?
-  - Quais recursos novos cada tipo de time terá.
-  - Os itens do menu (Músicas, por exemplo) aparecem só para quem participa de um time que usa aquele recurso.
+- Decidido em 04/11/2026:
+  - **Repertório e o menu Músicas ficam exclusivos de alguns tipos de time** (a princípio, Louvor). Quem não participa
+    de um time desses não vê o menu nem o repertório. O repertório continua um só por igreja, compartilhado entre esses times.
+  - Abrir o repertório para a igreja toda fica para o futuro, quando houver um jeito que faça sentido para todos.
+  - Os recursos dos outros tipos de time serão definidos depois de uma pesquisa com os líderes de cada time.
+- A definir: quais tipos de time, além de Louvor, terão acesso ao repertório.
