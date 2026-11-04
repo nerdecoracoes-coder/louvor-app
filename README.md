@@ -50,10 +50,9 @@ dev/                                          ambiente local de testes
    |---|---|
    | `SUPABASE_ACCESS_TOKEN` | supabase.com → Account → Access Tokens → Generate |
    | `SUPABASE_PROJECT_REF` | o identificador do projeto (o trecho `abcdefgh` de `https://abcdefgh.supabase.co`) |
-   | `SUPABASE_DB_PASSWORD` | (só se for aplicar as migrações por aqui) a senha do banco |
    | `GOOGLE_SERVICE_ACCOUNT` | o conteúdo inteiro do arquivo JSON da conta de serviço |
    | `CRON_SECRET` | uma senha longa qualquer |
-2. **Actions → Publicar no Supabase → Run workflow**. Se o banco já foi criado pelo SQL Editor (passo 1), desmarque "Aplicar as migrações".
+2. **Actions → Publicar no Supabase → Run workflow**.
 
 ### 5. Verificação automática a cada 5 minutos
 No **SQL Editor**, abra [`supabase/setup/agendamento.sql`](supabase/setup/agendamento.sql), troque `SEU-PROJETO` e `SEU-SEGREDO` (o mesmo `CRON_SECRET`) e rode.
