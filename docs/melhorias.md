@@ -38,6 +38,34 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - [x] **Membros da igreja**: convite da igreja (sem time). A entrada nos times é só por convite/inclusão do líder ou do administrador; ninguém solicita entrada.
 - [x] **Funções por tipo de time**: as funções atuais ficaram como funções do Louvor; novas funções podem ser criadas para cada tipo (ou para todos).
 
+## 4. Categoria do time: Ministério da igreja × Ocasião especial (definido em 04/11/2026)
+- Ao criar um time, o administrador escolhe a **categoria**:
+  - **Ministério da igreja**: só podem entrar **membros cadastrados** da igreja. O link de convite do time
+    não serve para quem não é membro (a pessoa precisa antes receber o convite de membro da igreja).
+  - **Ocasião especial**: podem ser convidadas pessoas que **não são membros** (ex.: músicos das filiais).
+    Elas entram como **convidados**: participam só daquele time (escalas, chat, repertório e player),
+    não viram membros da igreja e não aparecem nas listas da igreja.
+- Quem convida: o **líder do time** (e o administrador).
+- Convidado aparece no time como "Convidado · Igreja de origem". Acesso permanente por padrão, com data de término opcional.
+- A confirmar: o time Chega Mais (culto jovem, usado sempre, com membros de filiais) entra como "Ocasião especial"?
+- Status: **a implementar** no próximo pacote.
+
+## 5. Foto de perfil dos membros (anotado em 04/11/2026)
+- Todo membro deve conseguir colocar foto no perfil. Hoje existe o botão "Trocar foto" em Meu perfil (tocar no avatar
+  no canto superior direito), mas ele não ficou visível/fácil para o usuário.
+- Fazer: deixar a opção de foto evidente (tocar na própria foto no perfil e na tela inicial), oferecer no primeiro acesso
+  e conferir o envio no Supabase real (Storage).
+- Status: **a implementar** no próximo pacote.
+
+## Implementado em 04/11/2026
+- [x] Textos do app: "organização" → "igreja" (nome da igreja, cadastrar igreja, configurações da igreja…).
+- [x] Campo **Tipo de time** (Louvor, Multimídia, Ministério Diaconal, Recepção, Ministério Infantil, Intercessão, Outro) no lugar da descrição.
+- [x] Repertório, menu Músicas, player, músicas na escala e música no chat exclusivos de times de Louvor (regra também no banco).
+- [x] O administrador cadastra os times da igreja sem precisar participar deles; no cadastro escolhe o **líder** (ou define depois).
+- [x] Só o administrador geral define ou remove líderes (regra também no banco).
+- [x] **Membros da igreja**: convite da igreja (sem time). A entrada nos times é só por convite/inclusão do líder ou do administrador; ninguém solicita entrada.
+- [x] **Funções por tipo de time**: as funções atuais ficaram como funções do Louvor; novas funções podem ser criadas para cada tipo (ou para todos).
+
 ## 4. Entrada nos times e convidados de outras igrejas (definido, 04/11/2026)
 - Regra geral: só **membros da igreja** podem ser adicionados a um time.
 - Escolhida a opção **Convidado do time**: a pessoa de outra igreja (ex.: filiais) entra só naquele time
