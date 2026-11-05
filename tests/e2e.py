@@ -2,7 +2,7 @@
 #   dev/stack.sh start && bun dev/serve.ts && python3 tests/e2e.py
 # Executa o fluxo real de várias pessoas: cadastro, organização, times, convites, funções, Drive, repertório,
 # escala, confirmação, chat, enquete, player multitrack, letra, várias organizações e telas de computador.
-import json, re, sys, time, urllib.request
+import json, os, re, subprocess, sys, time, urllib.request
 from playwright.sync_api import sync_playwright, expect
 
 BASE = "http://127.0.0.1:8080"
@@ -90,7 +90,7 @@ with sync_playwright() as pw:
         expect(p.locator(".hero")).to_be_visible(timeout=15000)
         p.goto(link)
         p.get_by_role("button", name="Aceitar convite").click(timeout=15000)
-        expect(p.locator(".pagehead h1", has_text="Louvor Domingo")).to_be_visible(timeout=15000)
+        expect(p.locator(".teamcover h2", has_text="Louvor Domingo")).to_be_visible(timeout=15000)
         people[who] = (c, p)
     ok("convite de membro da igreja e depois convite do time")
     bc, bruno = people["Bruno Costa"]; cc, carla = people["Carla Dias"]
@@ -143,9 +143,14 @@ with sync_playwright() as pw:
     ana.goto(BASE + "/#/musicas")
     row = ana.locator(".song", has_text="Bondade de Deus")
     expect(row).to_contain_text("YouTube"); assert row.locator(".tag", has_text="VS").count() == 0
-    ana.get_by_role("button", name="Somente com VS").click()
+    ana.locator("[data-tab=vs]").click()
     expect(ana.locator(".song", has_text="Bondade de Deus")).to_have_count(0)
-    ok("música manual identificada sem VS; filtro 'somente VS'")
+    ana.locator("[data-tab=artistas]").click()
+    expect(ana.locator("[data-art]", has_text="Isaias Saad")).to_be_visible()
+    ana.locator("[data-art]", has_text="Isaias Saad").click(); expect(ana.locator(".song", has_text="Bondade de Deus")).to_be_visible()
+    ana.locator("[data-tab=musicas]").click()
+    ana.locator("#lupa").click(); ana.fill("#q", "Bondade"); expect(ana.locator(".song")).to_have_count(1); ana.locator("#lupa").click()
+    ok("música manual identificada sem VS; abas Artistas e Com VS; lupa de pesquisa")
 
     # letra
     emaus_href = ana.locator(".song", has_text="Emaús").locator("a.cover").get_attribute("href")
@@ -175,11 +180,11 @@ with sync_playwright() as pw:
 
     # ------------------------------------------------------------------ Carla vê, confirma; calendário
     carla.goto(BASE + "/#/"); carla.reload()
-    expect(carla.locator("#ups .sched", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
-    expect(carla.locator("#ups .sched")).to_contain_text("Vocal feminino")
+    expect(carla.locator("#ups .scard", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
+    expect(carla.locator("#ups .scard")).to_contain_text("Vocal feminino")
     expect(carla.locator('a[href="#/notificacoes"] .dot')).to_be_visible()
     shot(carla, "09-inicio-integrante"); ok("integrante vê a escala no início e recebe notificação")
-    carla.locator("#ups .sched").first.click()
+    carla.locator("#ups .scard").first.click()
     carla.get_by_role("button", name="Tomei conhecimento da escala").click()
     expect(carla.get_by_text("Você confirmou que viu esta escala")).to_be_visible(timeout=10000)
     ok("confirmação de visualização")
@@ -367,7 +372,7 @@ with sync_playwright() as pw:
     shot(carla, "16-organizacoes")
     carla.locator(".sheet [data-org]", has_text="INVT Tijuca").click()
     expect(carla.locator(".brand")).to_contain_text("INVT Tijuca", timeout=10000)
-    expect(carla.locator("#ups .sched")).to_have_count(1, timeout=10000)
+    expect(carla.locator("#ups .scard")).to_have_count(1, timeout=10000)
     carla.locator("[data-act=space]").click(); carla.locator(".sheet [data-org]", has_text="Igreja do Bairro").click()
     expect(carla.locator(".brand")).to_contain_text("Igreja do Bairro", timeout=10000)
     carla.goto(BASE + "/#/musicas"); expect(carla.locator(".song")).to_have_count(0, timeout=10000)
@@ -390,11 +395,72 @@ with sync_playwright() as pw:
     desk.locator('[data-tab="mix"]').click(); desk.wait_for_timeout(400); shot(desk, "20-desktop-mix")
     ok("layout de computador")
 
+    # ------------------------------------------------------------------ cabeçalho, menu lateral e páginas do time
+    carla.goto(BASE + "/#/"); carla.reload()
+    if "INVT Tijuca" not in carla.locator(".brand").inner_text():
+        carla.locator("[data-act=space]").click(); carla.locator(".sheet [data-org]", has_text="INVT Tijuca").click()
+        expect(carla.locator(".brand")).to_contain_text("INVT Tijuca", timeout=10000)
+    carla.goto(f"{BASE}/#/times/{louvor_id}"); carla.goto(BASE + "/#/")
+    expect(carla.locator(".topbar .menubtn")).to_be_visible(timeout=10000)
+    assert carla.locator('.topbar a[href="#/perfil"]').count() == 0          # sem foto no cabeçalho
+    expect(carla.locator(".hero")).to_be_visible()
+    assert carla.locator(".sec h2", has_text="Disponibilidade").count() == 0  # disponibilidade saiu do início
+    carla.locator(".menubtn").click(); 
+    expect(carla.locator(".drawer .dprofile")).to_contain_text("Carla Dias")
+    for t in ["Visão geral", "Indisponibilidades", "Panorama de escalas", "Configurações"]:
+        expect(carla.locator(".drawer").get_by_text(t, exact=True)).to_be_visible()
+    assert carla.locator(".drawer").get_by_text("Avisos", exact=True).count() == 0
+    shot(carla, "21-menu-lateral")
+    carla.locator(".drawer a", has_text="Panorama de escalas").click()
+    expect(carla.locator(".pagehead h1")).to_have_text("Panorama de escalas", timeout=10000)
+    expect(carla.locator(".pano")).to_contain_text("Carla Dias", timeout=10000)
+    shot(carla, "22-panorama")
+    carla.goto(f"{BASE}/#/times/{louvor_id}/escalas")
+    expect(carla.locator(".pagehead h1")).to_have_text("Escalas", timeout=10000)
+    expect(carla.locator(".cal")).to_be_visible(); expect(carla.locator(".menulist", has_text="Panorama de escalas")).to_be_visible()
+    shot(carla, "23-escalas")
+    carla.goto(f"{BASE}/#/chat/{louvor_id}")
+    expect(carla.locator(".pagehead h1")).to_have_text("Chat", timeout=10000)
+    expect(carla.locator(".bottomnav")).to_be_visible(); expect(carla.locator(".composer")).to_be_visible()
+    assert "Louvor Domingo" not in carla.locator(".chatwrap .pagehead").inner_text()
+    shot(carla, "24-chat")
+    ok("cabeçalho com menu e sem foto; início sem disponibilidade; panorama; escalas em calendário; chat com a barra de navegação")
+
+    bruno.goto(f"{BASE}/#/times/{louvor_id}")
+    expect(bruno.locator(".pagehead h1")).to_have_text("Time", timeout=10000)
+    expect(bruno.locator(".menulist")).to_contain_text("Convidar membros")
+    shot(bruno, "25-time")
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/funcoes")
+    expect(bruno.locator(".pagehead h1")).to_have_text("Funções", timeout=10000); expect(bruno.locator(".list")).to_contain_text("Vocal feminino")
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/equipes")
+    bruno.locator("#new").click(); bruno.fill(".sheet input[name=name]", "Banda A")
+    bruno.locator(".sheet [data-u]").first.click(); bruno.locator(".sheet #save").click()
+    expect(bruno.locator(".list .li", has_text="Banda A")).to_be_visible(timeout=10000)
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/classificacoes")
+    bruno.locator("#sug").click(); expect(bruno.locator(".list")).to_contain_text("Adoração", timeout=10000)
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/lideranca"); expect(bruno.locator(".pagehead h1")).to_have_text("Liderança", timeout=10000)
+    ok("página Time: funções, equipes, classificações e liderança")
+
+    # parabéns do dia: quem faz aniversário hoje aparece em uma janela na primeira abertura do dia
+    today = time.strftime("%Y-%m-%d")
+    env = dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres")
+    subprocess.run(["psql", "-q", "-c", f"update org_members set birth_date = '1990-{today[5:]}' where user_id in (select id from profiles where full_name = 'Bruno Costa')"], env=env, check=True)
+    carla.goto(BASE + "/#/"); carla.evaluate("Object.keys(localStorage).filter(k => k.startsWith('somos.bday')).forEach(k => localStorage.removeItem(k))"); carla.reload()
+    expect(carla.locator(".bdaypop")).to_contain_text("Bruno", timeout=12000)
+    shot(carla, "26-parabens")
+    carla.locator(".bdaypop [data-close]").click()
+    expect(carla.locator(".bdays.bdaymonth")).to_contain_text("Bruno")
+    carla.reload(); carla.wait_for_timeout(2500); assert carla.locator(".bdaypop").count() == 0   # só na primeira abertura do dia
+    ok("janela de parabéns na primeira abertura do dia; aniversariantes do mês no início")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
         for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}"]:
             p_.goto(BASE + route); p_.wait_for_timeout(700)
             ow = p_.evaluate("document.documentElement.scrollWidth - window.innerWidth")
+            if ow > 1:
+                bad = p_.evaluate("[...document.querySelectorAll('body *')].filter(e => e.getBoundingClientRect().right > window.innerWidth + 1 && !e.closest('.scards,.carousel,.bdays,.tabs,.chips')).slice(0,6).map(e => e.tagName + '.' + e.className + ' ' + Math.round(e.getBoundingClientRect().right))")
+                print("overflow", n, route, ow, bad)
             assert ow <= 1, (n, route, ow)
     ok("sem rolagem horizontal nas telas principais (390 px)")
     br.close()

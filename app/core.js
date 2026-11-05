@@ -143,6 +143,11 @@ const P = {
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>', lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>',
   sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
   inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/>',
+  badge: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 16c.6-1.8 1.9-2.6 3.5-2.6s2.9.8 3.5 2.6M15 9.5h3.5M15 13h3.5"/>',
+  tag: '<path d="M3 12V4h8l9.5 9.5a1.7 1.7 0 0 1 0 2.4l-5.1 5.1a1.7 1.7 0 0 1-2.4 0z"/><circle cx="7.5" cy="8.5" r="1.2" fill="currentColor"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h10"/>',
+  userOff: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c.5-3.4 3.2-5.5 7-5.5 1.3 0 2.5.3 3.5.8"/><path d="m3 3 18 18"/>',
+  bars: '<path d="M5 20V11M12 20V4M19 20v-6"/>',
   list: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
   checkbox: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/>',
   org: '<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6M9 10h.01M15 10h.01"/>', swap: '<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
@@ -164,6 +169,8 @@ export function teamBadge(t, size = 44) {
 export function empty(iconName, title, text = "", action = "") {
   return `<div class="empty">${icon(iconName)}<b>${esc(title)}</b>${text ? `<p>${text}</p>` : ""}${action}</div>`;
 }
+// botões extras do cabeçalho de cada página (ex.: a lupa em Músicas), colocados antes do "+"
+export function headerActions(html) { const el = document.getElementById("hdr-actions"); if (el) el.innerHTML = html; return el; }
 export const spinner = () => `<div class="spin" role="status" aria-label="Carregando"></div>`;
 
 export function toast(msg, kind = "") {

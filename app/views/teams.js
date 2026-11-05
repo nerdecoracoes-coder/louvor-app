@@ -4,12 +4,14 @@ import { teamHas, TEAM_TYPES, REPERTOIRE_TYPES, FEATURES, featurePreset, teamHas
 import { schedRow } from "./home.js";
 import { checklistEditor } from "./multimidia.js";
 import { noticeForm } from "./home.js";
+import * as timepage from "./timepage.js";
 
 export function register(route) {
   route("/times", teamsList);
   route("/times/novo", newTeam);
   route("/convidar", inviteChooser);
-  route("/times/:id", (p, el, a) => teamView(p.id, "escalas", el, a));
+  timepage.register(route);
+  route("/times/:id", (p, el, a) => (state.space?.id === p.id ? timepage.timePage(p.id, el, a) : teamView(p.id, "escalas", el, a)));
   route("/times/:id/config", (p, el) => teamSettings(p.id, el));
   route("/times/:id/aviso", (p, el) => noticeForm(el, p.id));
   route("/times/:id/:tab", (p, el, a) => teamView(p.id, p.tab, el, a));
@@ -163,9 +165,12 @@ async function teamView(id, tab, el, alive) {
   const tabs = [["escalas", "Escalas", "calendar"], ["integrantes", "Integrantes", "users"], ["arquivos", "Arquivos", "file"], ["avisos", "Avisos", "megaphone"]];
   if (!tabs.some((t) => t[0] === tab)) tab = "escalas";
   const here = state.space?.id === id; // dentro do próprio time: o menu de baixo já leva ao chat e às escalas
-  el.innerHTML = `<div class="pagehead">${here ? "" : `<a class="back" href="#/times">${icon("chevronLeft")}</a>`}${teamBadge(team, 52)}
+  const titles = { integrantes: "Integrantes", arquivos: "Arquivos", avisos: "Avisos do time", escalas: "Escalas" };
+  el.innerHTML = here
+    ? `<div class="pagehead"><a class="back" href="#/times/${id}" aria-label="Voltar para Time">${icon("chevronLeft")}</a><h1>${titles[tab]}</h1></div><div id="tab"></div>`
+    : `<div class="pagehead"><a class="back" href="#/times">${icon("chevronLeft")}</a>${teamBadge(team, 52)}
       <div class="grow" style="min-width:0"><h1 class="ellipsis" style="font-size:22px">${esc(team.name)}</h1><span class="small muted">${esc(teamTypeLabel(team))} · ${members.length} integrante${members.length === 1 ? "" : "s"}</span></div>
-      ${isMember && !here ? `<a class="iconbtn" href="#/chat/${id}" aria-label="Chat">${icon("chat")}</a>` : ""}${manage ? `<a class="iconbtn" href="#/times/${id}/config" aria-label="Configurações">${icon("settings")}</a>` : ""}</div>
+      ${isMember ? `<a class="iconbtn" href="#/chat/${id}" aria-label="Chat">${icon("chat")}</a>` : ""}${manage ? `<a class="iconbtn" href="#/times/${id}/config" aria-label="Configurações">${icon("settings")}</a>` : ""}</div>
     <div class="tabs">${tabs.map(([k, l, ic]) => `<a href="#/times/${id}/${k}" class="${tab === k ? "on" : ""}">${icon(ic)}${l}</a>`).join("")}</div>
     <div id="tab"></div>`;
   const box = el.querySelector("#tab");
@@ -397,7 +402,7 @@ async function noticesTab(team, box, manage) {
 async function teamSettings(id, el) {
   const team = await must(sb.from("teams").select("*").eq("id", id).maybeSingle());
   if (!team || !canManageTeam(id)) { el.innerHTML = empty("lock", "Você não pode alterar este time."); return; }
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${id}">${icon("chevronLeft")}</a><h1>Configurações do time</h1></div>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${id}">${icon("chevronLeft")}</a><h1>Configurações</h1></div>
   <form class="card" id="f">
     <div class="row gap mb"><span id="logo">${teamBadge(team, 72)}</span><div class="col gap-s"><button type="button" class="btn ghost sm" id="up">${icon("image")} Trocar logotipo</button>${team.logo_url ? `<button type="button" class="link small" id="rm" style="text-align:left">Remover</button>` : ""}</div></div>
     <label class="field"><span>Nome</span><input name="name" value="${attr(team.name)}" required maxlength="120"></label>

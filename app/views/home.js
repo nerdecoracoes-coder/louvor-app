@@ -46,14 +46,54 @@ export function schedRow(s, { showTeam = true, feature = false } = {}) {
     ${icon("chevronRight", "chev")}</a>`;
 }
 
-function nextBirthday(dateStr) {
-  if (!dateStr) return null;
-  const [y, m, d] = dateStr.split("-").map(Number);
-  const today = new Date(ymd(new Date()) + "T00:00:00");
-  let next = new Date(today.getFullYear(), m - 1, d);
-  if (next < today) next = new Date(today.getFullYear() + 1, m - 1, d);
-  const days = Math.round((next - today) / 864e5);
-  return { days, age: y > 1900 ? next.getFullYear() - y : null, date: next };
+// Cartão de escala para o carrossel do Início (arraste para o lado: em ordem de data)
+const relDay = (iso) => {
+  const d = ymd(iso), today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
+  return d === today ? "Hoje" : d === tomorrow ? "Amanhã" : cap(fDow(iso)).replace(/\.$/, "");
+};
+export function schedCard(s, { showTeam = true } = {}) {
+  const roles = s.roles || [];
+  const where = [s.location, showTeam && s.teams ? s.teams.name : null].filter(Boolean).join(" · ");
+  const status = s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="tag soft">${icon("check")} Visto</span>` : "";
+  return `<a class="scard" href="#/escala/${s.id}"><div class="when"><b>${fDay(s.starts_at)}</b><span>${esc(fMon(s.starts_at))}</span>${status}</div>
+    <h3>${esc(s.title)}</h3><div class="meta">${esc(relDay(s.starts_at))} · ${fTime(s.starts_at)}${where ? ` · ${esc(where)}` : ""}</div>
+    ${roles.length ? `<div class="side">${roles.map((r) => `<span class="pill">${esc(r)}</span>`).join("")}</div>` : ""}</a>`;
+}
+
+// Aniversariantes do mês (todos os dias do mês corrente, em ordem)
+export function monthBirthdays(list) {
+  const m = Number(ymd(new Date()).slice(5, 7));
+  return list.filter((p) => p.birth_date && Number(p.birth_date.slice(5, 7)) === m)
+    .map((p) => ({ p, day: Number(p.birth_date.slice(8, 10)) })).sort((a, b) => a.day - b.day || a.p.display_name.localeCompare(b.p.display_name));
+}
+function birthdaySection(list, who) {
+  const items = monthBirthdays(list), today = Number(ymd(new Date()).slice(8, 10));
+  if (!items.length) return "";
+  const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" }).format(new Date());
+  return `<div class="sec"><h2>Aniversariantes de ${esc(month)}</h2></div>
+  <div class="bdays bdaymonth">${items.map(({ p, day }) => `<div class="bday">${avatar(p, 56, day === today)}
+    <b>${esc(p.display_name.split(" ")[0])}</b><span class="when">${day === today ? "Hoje" : `${String(day).padStart(2, "0")}/${ymd(new Date()).slice(5, 7)}`}</span></div>`).join("")}</div>`;
+}
+
+// Parabéns do dia: na primeira abertura do dia, uma janela avisa quem faz aniversário hoje
+export async function birthdayPopup() {
+  if (!state.user || !state.org) return;
+  const key = `somos.bday:${state.user.id}:${ymd(new Date())}`;
+  try { if (localStorage.getItem(key)) return; localStorage.setItem(key, "1"); } catch { /* sem armazenamento: mostra */ }
+  const md = ymd(new Date()).slice(5);
+  const list = [...(await people()).values()].filter((p) => p.birth_date && p.birth_date.slice(5) === md);
+  if (!list.length) return;
+  const me = list.find((p) => p.id === state.user.id), others = list.filter((p) => p.id !== state.user.id);
+  const first = (p) => p.display_name.split(" ")[0];
+  const title = me && !others.length ? `Feliz aniversário, ${esc(first(me))}!` : list.length === 1 ? `Hoje é aniversário de ${esc(first(list[0]))}!` : "Hoje tem aniversariantes!";
+  const text = me && !others.length ? "Que Deus abençoe o seu novo ano de vida. A equipe toda deseja um dia especial para você." : "Aproveite para mandar uma mensagem de parabéns.";
+  const chatTeam = state.space?.id || state.myTeams[0]?.id;
+  const s = sheet(`<div class="bdaypop"><div class="faces">${list.slice(0, 4).map((p) => avatar(p, list.length === 1 ? 96 : 68, true)).join("")}</div>
+    <h3>${title}</h3><p class="muted">${text}</p>
+    ${list.length > 1 || (!me && list.length) ? `<p class="names">${list.map((p) => esc(p.display_name)).join(", ")}</p>` : ""}
+    ${chatTeam && others.length ? `<button class="btn primary block" id="bchat">${icon("chat")} Dar os parabéns no chat</button>` : ""}
+    <button class="btn ghost block mt-s" data-close>Fechar</button></div>`);
+  s.el.querySelector("#bchat")?.addEventListener("click", () => { s.close(); go(`/chat/${chatTeam}`); });
 }
 
 async function homeView(_, el, alive) {
@@ -66,7 +106,6 @@ async function homeView(_, el, alive) {
   ]);
   if (!alive()) return;
   const name = myName().split(" ")[0] || "você";
-  const bdays = [...ppl.values()].map((p) => ({ p, b: nextBirthday(p.birth_date) })).filter((x) => x.b && x.b.days <= 30).sort((a, b) => a.b.days - b.b.days).slice(0, 6);
 
   const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date()));
   const hello = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
@@ -76,24 +115,19 @@ async function homeView(_, el, alive) {
   <section class="hero">
     <div class="grow"><p class="hello">${hello},</p><h1>${esc(name)}</h1>
       <p class="roles">${[roles.length > 3 ? `${roles.slice(0, 3).join(", ")} +${roles.length - 3}` : roles.join(", "), teamsLine].filter(Boolean).map(esc).join(" — ") || esc(state.org.name)}</p></div>
-    <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 76)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
+    <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 56)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
   </section>
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/calendario/meu">Agenda ${icon("chevronRight")}</a></div>
-  <div id="ups">${ups.length ? ups.map((s, i) => schedRow(s, { feature: i === 0 })).join("") : empty("calendar", "Nenhuma escala por enquanto", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>
+  <div id="ups">${ups.length ? `<div class="scards">${ups.map((s) => schedCard(s)).join("")}</div>` : empty("calendar", "Nenhuma escala por enquanto", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>
 
   <div class="sec"><h2>Avisos</h2><a href="#/avisos">Todos ${icon("chevronRight")}</a></div>
   ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>
     ${notices.length > 1 ? `<div class="dots" id="ndots">${notices.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}`
     : empty("megaphone", "Nenhum aviso publicado", isStaff() ? `<a class="link" href="#/avisos/novo">Publicar o primeiro aviso</a>` : "Os comunicados da igreja aparecem aqui.")}
 
-  ${bdays.length ? `<div class="sec"><h2>Aniversariantes</h2></div>
-  <div class="bdays">${bdays.map(({ p, b }) => `<div class="bday">${avatar(p, 56, b.days === 0)}
-      <b>${esc(p.display_name.split(" ")[0])}</b><span class="when">${b.days === 0 ? "Hoje" : b.days === 1 ? "Amanhã" : fDate(b.date)}${b.age ? `, ${b.age} anos` : ""}</span></div>`).join("")}</div>` : ""}
-
-  <div class="sec"><h2>Disponibilidade</h2><a href="#/bloqueios">Abrir ${icon("chevronRight")}</a></div>
-  <div class="card" id="blocks"></div>`;
+  ${birthdaySection([...ppl.values()])}`;
   const pickPhoto = async () => {
     const f = await pickFile("image/*"); if (!f) return;
     try {
@@ -111,7 +145,6 @@ async function homeView(_, el, alive) {
     el.querySelectorAll("#ndots i").forEach((d, k) => d.classList.toggle("on", k === i));
   }, { passive: true });
   on(el, "click", "[data-notice]", (e, b) => openNotice(notices.find((n) => n.id === b.dataset.notice), ppl));
-  await blocksWidget(el.querySelector("#blocks"), { compact: true });
 }
 
 // ---------------------------------------------------------------- início do time
@@ -127,12 +160,11 @@ async function teamHome(team, el, alive) {
     people(),
   ]);
   if (!alive()) return;
-  const myUps = mine.filter((s) => s.team_id === team.id).slice(0, 4);
+  const myUps = mine.filter((s) => s.team_id === team.id).slice(0, 12);
   const mineIds = new Set(myUps.map((s) => s.id));
   const others = next.filter((s) => !mineIds.has(s.id)).slice(0, 3);
   const roleNames = roles.map((r) => r.music_roles).filter(Boolean).sort((a, b) => a.sort - b.sort).map((r) => r.name);
   const memberIds = new Set(members.map((m) => m.user_id));
-  const bdays = [...ppl.values()].filter((p) => memberIds.has(p.id)).map((p) => ({ p, b: nextBirthday(p.birth_date) })).filter((x) => x.b && x.b.days <= 30).sort((a, b) => a.b.days - b.b.days).slice(0, 6);
   const name = myName().split(" ")[0] || "você";
   const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date()));
   const hello = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
@@ -142,12 +174,12 @@ async function teamHome(team, el, alive) {
   <section class="hero">
     <div class="grow"><p class="hello">${hello},</p><h1>${esc(name)}</h1>
       <p class="roles">${esc([roleNames.length > 3 ? `${roleNames.slice(0, 3).join(", ")} +${roleNames.length - 3}` : roleNames.join(", "), team.is_leader ? "Líder" : ""].filter(Boolean).join(" · ") || teamTypeLabel(team))}</p></div>
-    <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 76)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
+    <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 56)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
   </section>
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
-  <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/times/${team.id}/escalas">Todas ${icon("chevronRight")}</a></div>
-  <div id="ups">${myUps.length ? myUps.map((s, i) => schedRow(s, { feature: i === 0, showTeam: false })).join("") : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
+  <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/times/${team.id}/escalas">Ver todas ${icon("chevronRight")}</a></div>
+  <div id="ups">${myUps.length ? `<div class="scards">${myUps.map((s) => schedCard(s, { showTeam: false })).join("")}</div>` : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
   ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div>${others.map((s) => schedRow(s, { showTeam: false })).join("")}` : ""}
 
   <div id="reqs"></div>
@@ -156,12 +188,7 @@ async function teamHome(team, el, alive) {
     ${notices.length > 1 ? `<div class="dots" id="ndots">${notices.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}`
     : `<div class="card small muted">Nenhum aviso do time. Os comunicados gerais ficam na <a class="link" href="#/igreja" data-church>área da igreja</a>.</div>`}
 
-  ${bdays.length ? `<div class="sec"><h2>Aniversariantes do time</h2></div>
-  <div class="bdays">${bdays.map(({ p, b }) => `<div class="bday">${avatar(p, 56, b.days === 0)}
-      <b>${esc(p.display_name.split(" ")[0])}</b><span class="when">${b.days === 0 ? "Hoje" : b.days === 1 ? "Amanhã" : fDate(b.date)}${b.age ? `, ${b.age} anos` : ""}</span></div>`).join("")}</div>` : ""}
-
-  <div class="sec"><h2>Disponibilidade</h2><a href="#/bloqueios">Abrir ${icon("chevronRight")}</a></div>
-  <div class="card" id="blocks"></div>`;
+  ${birthdaySection([...ppl.values()].filter((p) => memberIds.has(p.id)))}`;
   const pickPhoto = async () => {
     const f = await pickFile("image/*"); if (!f) return;
     try {
@@ -180,7 +207,6 @@ async function teamHome(team, el, alive) {
   }, { passive: true });
   on(el, "click", "[data-notice]", (e, b) => openNotice(notices.find((n) => n.id === b.dataset.notice), ppl));
   if (teamHas(team, "pedidos")) openRequestsCard(team).then((h) => { const b = el.querySelector("#reqs"); if (b) b.innerHTML = h; }).catch(() => {});
-  await blocksWidget(el.querySelector("#blocks"), { compact: true });
 }
 
 function noticeCard(n) {

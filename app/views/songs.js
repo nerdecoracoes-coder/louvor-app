@@ -1,5 +1,5 @@
 // Biblioteca geral (uma por organização): lista, filtros, cadastro manual, detalhe, anexos e letra.
-import { sb, state, must, esc, attr, icon, isRepertoireStaff as isStaff, hasRepertoire, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fDur, safeUrl, confirmDialog, uploadPublic, pickFile } from "../core.js";
+import { sb, state, must, esc, attr, icon, headerActions, isRepertoireStaff as isStaff, hasRepertoire, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fDur, safeUrl, confirmDialog, uploadPublic, pickFile } from "../core.js";
 
 const onlyRep = (fn) => (p, el, a) => hasRepertoire() ? fn(p, el, a)
   : (el.innerHTML = empty("music", "Repertório disponível para times de Louvor", "Você não participa de nenhum time que usa o repertório."));
@@ -42,38 +42,57 @@ async function library(_, el, alive) {
   if (!alive()) return;
   const fc = new Map(); for (const f of files) fc.set(f.song_id, (fc.get(f.song_id) || 0) + 1);
   rows.forEach((r) => (r.files_count = fc.get(r.id) || 0));
-  const artists = [...new Set(rows.filter((r) => r.status !== "removed").map((r) => r.artist).filter(Boolean))].sort((a, b) => a.localeCompare(b));
-  let q = "", artist = "", onlyVs = false, showRemoved = false, selecting = false;
+  const NOART = "Sem artista";
+  let q = "", tab = "musicas", artist = null, showRemoved = false, selecting = false, searching = false;
   const sel = new Set();
+  headerActions(`<button class="iconbtn" id="lupa" aria-label="Pesquisar">${icon("search")}</button>`);
   const draw = () => {
     const ql = q.toLowerCase();
-    const list = rows.filter((r) => (showRemoved ? r.status === "removed" : r.status !== "removed"))
-      .filter((r) => !ql || r.title.toLowerCase().includes(ql) || (r.artist || "").toLowerCase().includes(ql))
-      .filter((r) => !artist || r.artist === artist).filter((r) => !onlyVs || r.current_project_id);
-    el.querySelector("#list").innerHTML = list.length ? list.map((r) => songRow(r, { selectable: selecting, selected: sel.has(r.id) })).join("")
-      : `<div style="padding:10px">${empty("music", rows.length ? "Nenhuma música encontrada" : "Repertório vazio", rows.length ? "" : isStaff() ? `Cadastre músicas manualmente ou <a class="link" href="#/org/drive">conecte a pasta do Google Drive</a>.` : "")}</div>`;
-    el.querySelector("#count").textContent = `${list.length} música${list.length === 1 ? "" : "s"}`;
+    let list = rows.filter((r) => (showRemoved ? r.status === "removed" : r.status !== "removed"))
+      .filter((r) => !ql || r.title.toLowerCase().includes(ql) || (r.artist || "").toLowerCase().includes(ql));
+    if (tab === "vs") list = list.filter((r) => r.current_project_id);
+    const box = el.querySelector("#list");
+    let count;
+    if (tab === "artistas" && artist === null) {
+      const g = new Map();
+      for (const r of list) { const k = r.artist || NOART; if (!g.has(k)) g.set(k, { n: 0, cover: null }); const x = g.get(k); x.n++; x.cover ||= r.cover_url; }
+      const names = [...g.keys()].sort((a, b) => (a === NOART) - (b === NOART) || a.localeCompare(b));
+      box.innerHTML = names.length ? names.map((n) => `<button class="li" data-art="${attr(n)}"><span class="cover" style="width:48px;height:48px">${g.get(n).cover ? `<img src="${attr(g.get(n).cover)}" alt="" loading="lazy">` : icon("mic")}</span>
+        <span class="grow" style="min-width:0"><span class="t ellipsis" style="display:block">${esc(n)}</span><span class="s">${g.get(n).n} música${g.get(n).n === 1 ? "" : "s"}</span></span>${icon("chevronRight", "chev")}</button>`).join("")
+        : `<div style="padding:10px">${empty("mic", "Nenhum artista encontrado")}</div>`;
+      count = `${names.length} artista${names.length === 1 ? "" : "s"}`;
+    } else {
+      if (tab === "artistas") list = list.filter((r) => (r.artist || NOART) === artist);
+      box.innerHTML = (tab === "artistas" ? `<div class="row gap" style="padding:4px 0 10px"><button class="chip" id="allart">${icon("chevronLeft")} Artistas</button><b class="ellipsis">${esc(artist)}</b></div>` : "")
+        + (list.length ? list.map((r) => songRow(r, { selectable: selecting, selected: sel.has(r.id) })).join("")
+          : `<div style="padding:10px">${empty("music", rows.length ? "Nenhuma música encontrada" : "Repertório vazio", rows.length ? "" : isStaff() ? `Cadastre músicas manualmente ou <a class="link" href="#/org/drive">conecte a pasta do Google Drive</a>.` : "")}</div>`);
+      count = `${list.length} música${list.length === 1 ? "" : "s"}`;
+    }
+    el.querySelector("#count").textContent = count;
     el.querySelector("#selbar").classList.toggle("hidden", !selecting);
     el.querySelector("#selcount").textContent = `${sel.size} selecionada(s)`;
+    el.querySelector("#sel").textContent = selecting ? "Cancelar seleção" : "Selecionar";
   };
   const processing = rows.filter((r) => ["processing", "waiting_files"].includes(r.status)).length;
-  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1><span class="row gap">${isStaff() ? `<a class="btn ghost sm" href="#/org/drive" title="Google Drive">${icon("cloud")} Drive</a>` : ""}${isStaff() ? `<a class="btn primary sm" href="#/musicas/nova">${icon("plus")} Adicionar</a>` : ""}</span></div>
-    <p class="muted small">Repertório${state.space ? ` do ${esc(state.space.name)}` : ` de ${esc(state.org.name)}`}.</p>
-    ${processing ? `<div class="card mt-s row gap small">${icon("refresh", "accent")}<span>${processing} música(s) ainda sendo processada(s) a partir do Google Drive.</span></div>` : ""}
-    <label class="search mt" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar por título ou artista"></label>
-    <div class="row gap mt-s" style="flex-wrap:wrap">
-      <select class="input" id="artist" style="width:auto;max-width:220px;height:38px"><option value="">Todos os artistas</option>${artists.map((a) => `<option>${esc(a)}</option>`).join("")}</select>
-      <button class="chip" id="vs">${icon("layers")} Somente com VS</button>
-      <button class="chip" id="sel">${icon("check")} Selecionar</button>
-      ${rows.some((r) => r.status === "removed") ? `<button class="chip" id="rem">Fora do repertório</button>` : ""}
-      <span class="grow"></span><span class="small muted" id="count"></span></div>
+  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1>${isStaff() ? `<a class="iconbtn" href="#/org/drive" aria-label="Google Drive">${icon("cloud")}</a>` : ""}</div>
+    ${processing ? `<div class="card mb row gap small">${icon("refresh", "accent")}<span>${processing} música(s) ainda sendo processada(s) a partir do Google Drive.</span></div>` : ""}
+    <div class="tabsbar" role="tablist"><button class="on" data-tab="musicas">Músicas</button><button data-tab="artistas">Artistas</button><button data-tab="vs">Com VS</button></div>
+    <label class="search srch hidden" id="sbox" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar por título ou artista"></label>
+    <div class="row between"><span class="small muted" id="count"></span>
+      <span class="row gap"><button class="link small" id="sel">Selecionar</button>${rows.some((r) => r.status === "removed") ? `<button class="link small" id="rem">Fora do repertório</button>` : ""}</span></div>
     <div class="card row gap mt-s hidden" id="selbar"><span class="grow small" id="selcount"></span><button class="btn ghost sm" id="share">${icon("chat")} Enviar no chat</button></div>
-    <div class="list mt" id="list"></div>`;
+    <div class="list mt-s" id="list"></div>`;
   draw();
+  const sbox = el.querySelector("#sbox");
+  document.getElementById("lupa")?.addEventListener("click", () => {
+    searching = !searching; sbox.classList.toggle("hidden", !searching);
+    if (searching) el.querySelector("#q").focus(); else { q = ""; el.querySelector("#q").value = ""; draw(); }
+  });
   el.querySelector("#q").oninput = (e) => { q = e.target.value.trim(); draw(); };
-  el.querySelector("#artist").onchange = (e) => { artist = e.target.value; draw(); };
-  el.querySelector("#vs").onclick = (e) => { onlyVs = !onlyVs; e.currentTarget.classList.toggle("on", onlyVs); draw(); };
-  el.querySelector("#sel").onclick = (e) => { selecting = !selecting; sel.clear(); e.currentTarget.classList.toggle("on", selecting); draw(); };
+  on(el, "click", "[data-tab]", (e, b) => { tab = b.dataset.tab; artist = null; el.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("on", x === b)); draw(); });
+  on(el, "click", "[data-art]", (e, b) => { artist = b.dataset.art; draw(); });
+  on(el, "click", "#allart", () => { artist = null; draw(); });
+  el.querySelector("#sel").onclick = () => { selecting = !selecting; sel.clear(); draw(); };
   el.querySelector("#rem")?.addEventListener("click", (e) => { showRemoved = !showRemoved; e.currentTarget.classList.toggle("on", showRemoved); draw(); });
   on(el, "click", "[data-sel]", (e, b) => { e.preventDefault(); const id = b.dataset.sel; sel.has(id) ? sel.delete(id) : sel.add(id); draw(); });
   el.querySelector("#share").onclick = async () => {

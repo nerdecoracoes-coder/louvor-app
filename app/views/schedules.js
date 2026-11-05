@@ -9,6 +9,8 @@ export function register(route) {
   route("/escala/nova/:team", (p, el) => editor(el, null, p.team));
   route("/escala/:id", (p, el) => detail(el, p.id));
   route("/escala/:id/editar", (p, el) => editor(el, p.id, null));
+  route("/times/:id/escalas", (p, el) => calendar(el, "time:" + p.id));
+  route("/panorama", (p, el, a) => panorama(p, el, a));
   route("/calendario", (p, el) => calendar(el, "geral"));
   route("/calendario/:scope", (p, el) => calendar(el, p.scope));
 }
@@ -305,6 +307,7 @@ async function detail(el, id) {
 
 // ---------------------------------------------------------------- calendários
 async function calendar(el, scope) {
+  const inTeam = scope.startsWith("time:") && state.space?.id === scope.slice(5);
   let month = new Date(ymd(new Date()) + "T12:00:00"); month.setDate(1);
   let selDay = ymd(new Date());
   const allTeams = await must(sb.from("teams").select("id,name,accent_color,logo_url").eq("org_id", state.org.id).order("name"));
@@ -337,11 +340,12 @@ async function calendar(el, scope) {
     const dayEvs = evs.filter((e) => ymd(e.starts_at) === selDay);
     const myTeamIds = new Set(state.myTeams.map((t) => t.id));
     const teamChips = (isAdmin() ? allTeams : allTeams.filter((t) => myTeamIds.has(t.id)));
-    el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Calendário</h1></div>
-      <div class="chips mb"><a class="chip ${scope === "geral" ? "on" : ""}" href="#/calendario/geral">${icon("org")} Geral</a><a class="chip ${scope === "meu" ? "on" : ""}" href="#/calendario/meu">${icon("calendar")} Minhas escalas</a>
-        ${teamChips.map((t) => `<a class="chip ${scope === "time:" + t.id ? "on" : ""}" href="#/calendario/time:${t.id}"><i style="width:8px;height:8px;border-radius:8px;background:${attr(t.accent_color || "var(--accent)")}"></i>${esc(t.name)}</a>`).join("")}</div>
+    el.innerHTML = `<div class="pagehead">${inTeam ? "" : `<a class="back" href="#/">${icon("chevronLeft")}</a>`}<h1>${inTeam ? "Escalas" : "Calendário"}</h1></div>
+      ${inTeam ? "" : `<div class="chips mb"><a class="chip ${scope === "geral" ? "on" : ""}" href="#/calendario/geral">${icon("org")} Geral</a><a class="chip ${scope === "meu" ? "on" : ""}" href="#/calendario/meu">${icon("calendar")} Minhas escalas</a>
+        ${teamChips.map((t) => `<a class="chip ${scope === "time:" + t.id ? "on" : ""}" href="#/calendario/time:${t.id}"><i style="width:8px;height:8px;border-radius:8px;background:${attr(t.accent_color || "var(--accent)")}"></i>${esc(t.name)}</a>`).join("")}</div>`}
       <div class="card"><div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div>
         <div class="cal">${["D", "S", "T", "Q", "Q", "S", "S"].map((x) => `<div class="dow">${x}</div>`).join("")}${cells.join("")}</div></div>
+      ${inTeam ? `<div class="menulist"><a href="#/panorama">${icon("bars")}<span class="grow">Panorama de escalas<small>Quantas vezes cada pessoa serve no mês</small></span>${icon("chevronRight", "chev")}</a></div>` : ""}
       <div class="sec"><h2>${esc(cap(fDateLong(selDay + "T15:00:00Z")))}</h2></div>
       ${dayEvs.length ? dayEvs.map((s) => schedRow(s)).join("") : `<p class="muted small">Nada neste dia.</p>`}
       <div class="sec"><h2>Todos do mês</h2><span class="muted small">${evs.length}</span></div>
@@ -351,5 +355,41 @@ async function calendar(el, scope) {
     const m = e.target.closest("[data-m]"); if (m) { month.setMonth(month.getMonth() + Number(m.dataset.m)); selDay = ymd(month); return draw(); }
     const d = e.target.closest("[data-day]"); if (d) { selDay = d.dataset.day; draw(); }
   });
+  await draw();
+}
+
+// ---------------------------------------------------------------- panorama de escalas
+// Quantas vezes cada pessoa foi escalada no mês, e em quais funções. Ajuda a dividir de forma justa.
+async function panorama(_, el, alive) {
+  let month = new Date(ymd(new Date()) + "T12:00:00"); month.setDate(1);
+  const teamIds = state.space ? [state.space.id] : (isAdmin() ? null : state.myTeams.map((t) => t.id));
+  const ppl = await people();
+  async function draw() {
+    el.innerHTML = spinner();
+    const from = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
+    const to = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
+    let q = sb.from("schedule_assignments").select("user_id,role_name,schedules!inner(id,team_id,status,starts_at)").eq("org_id", state.org.id)
+      .eq("schedules.status", "published").gte("schedules.starts_at", from).lt("schedules.starts_at", to);
+    if (teamIds) q = q.in("schedules.team_id", teamIds.length ? teamIds : ["00000000-0000-0000-0000-000000000000"]);
+    const rows = await must(q);
+    if (alive && !alive()) return;
+    const by = new Map();
+    for (const r of rows) {
+      if (!by.has(r.user_id)) by.set(r.user_id, { scheds: new Set(), roles: new Map() });
+      const x = by.get(r.user_id); x.scheds.add(r.schedules.id);
+      if (r.role_name) x.roles.set(r.role_name, (x.roles.get(r.role_name) || 0) + 1);
+    }
+    const list = [...by.entries()].map(([u, x]) => ({ u, n: x.scheds.size, roles: [...x.roles.entries()].sort((a, b) => b[1] - a[1]) })).sort((a, b) => b.n - a.n || personName(ppl, a.u).localeCompare(personName(ppl, b.u)));
+    const max = Math.max(1, ...list.map((x) => x.n));
+    const total = new Set(rows.map((r) => r.schedules.id)).size;
+    el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><h1>Panorama de escalas</h1></div>
+      <div class="calhead"><button class="iconbtn" data-m="-1" aria-label="Mês anterior">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1" aria-label="Próximo mês">${icon("chevronRight")}</button></div>
+      <p class="subhead">${total} escala${total === 1 ? "" : "s"} publicada${total === 1 ? "" : "s"} no mês${state.space ? ` · ${esc(state.space.name)}` : ""}.</p>
+      ${list.length ? `<div class="pano">${list.map((x) => `<div><div class="row1">${avatar(ppl.get(x.u), 40, false)}<div class="who"><b class="ellipsis">${esc(personName(ppl, x.u))}</b>
+        <small>${x.roles.map(([r, n]) => `${esc(r)}${n > 1 ? ` ×${n}` : ""}`).join(" · ") || "Sem função"}</small></div><span class="n">${x.n}</span></div>
+        <div class="bar" style="margin-top:8px"><i style="width:${Math.round((x.n / max) * 100)}%"></i></div></div>`).join("")}</div>`
+        : `<div class="card">${empty("bars", "Nenhuma escala publicada neste mês", "Quando houver escalas publicadas, você vê aqui quem serviu e quantas vezes.")}</div>`}`;
+  }
+  el.addEventListener("click", (e) => { const m = e.target.closest("[data-m]"); if (m) { month.setMonth(month.getMonth() + Number(m.dataset.m)); draw(); } });
   await draw();
 }

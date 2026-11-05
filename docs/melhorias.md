@@ -90,3 +90,19 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
   quem aceita entra no time e passa a ser membro da igreja automaticamente.
 - Times abertos a convidados seguem iguais (pessoas de outras igrejas entram como convidadas).
 - Rever quando a área da igreja estiver em uso: voltar a exigir o convite de membro, se fizer sentido.
+
+## 10. Páginas principais do time (05/11/2026)
+
+Referência: LouveApp. Cada time funciona como um aplicativo próprio.
+
+- **Cabeçalho único** em todas as páginas: menu (☰), logo e nome do time, `+` e notificações. Sem foto de perfil (ela fica na saudação e no menu).
+- **Menu lateral**: perfil, Visão geral (igreja), Indisponibilidades, Panorama de escalas e Configurações.
+- **Título da página** em destaque (Escalas, Músicas, Chat, Time); o nome do time aparece só no cabeçalho.
+- **Início**: saudação menor, escalas em cartões que se arrastam, avisos do time, aniversariantes do mês e janela de parabéns na primeira abertura do dia. A disponibilidade saiu do início.
+- **Escalas**: calendário do mês com a lista do dia e o Panorama de escalas (quantas vezes cada pessoa serve no mês).
+- **Músicas**: lupa no cabeçalho (antes do `+`) e abas Músicas, Artistas e Com VS.
+- **Chat**: título "Chat" e barra de navegação sempre visível.
+- **Time**: Convidar membros, Integrantes, Funções, Equipes, Classificações, Liderança, Arquivos, Avisos e Recursos.
+- Banco: `20261105000001_time_equipes.sql` (equipes e classificações). Arquivo para colar no SQL Editor: `supabase/setup/atualizacao-2026-11-05-time.sql`.
+
+Ficou para depois: auxiliares nomeados pelo líder, uso das classificações no cadastro e na lista de músicas, escalar uma equipe inteira de uma vez.

@@ -34,8 +34,7 @@ async function conversation(teamId, el, alive) {
   const team = state.myTeams.find((t) => t.id === teamId);
   if (!team) { el.innerHTML = empty("lock", "Você não participa deste time", "O chat é exclusivo dos integrantes."); return; }
   const ppl = await people();
-  el.innerHTML = `<div class="chatwrap"><div class="pagehead" style="margin:0 0 4px"><a class="back" href="#/chat">${icon("chevronLeft")}</a>${teamBadge(team, 40)}
-      <a class="grow" href="#/times/${teamId}/integrantes" style="color:inherit;min-width:0"><b class="ellipsis" style="display:block">${esc(team.name)}</b><span class="tiny muted" id="live">conectando…</span></a></div>
+  el.innerHTML = `<div class="chatwrap"><div class="pagehead" style="margin:0 0 4px"><h1>Chat</h1><span class="tiny muted" id="live">conectando…</span></div>
     <div class="msgs" id="msgs">${spinner()}</div>
     <div class="composer"><button class="iconbtn" id="att" aria-label="Anexar">${icon("clip")}</button>
       <textarea id="txt" rows="1" placeholder="Mensagem" maxlength="4000"></textarea><button class="send" id="send" aria-label="Enviar">${icon("chevronRight")}</button></div></div>`;
