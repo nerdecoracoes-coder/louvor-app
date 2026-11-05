@@ -6,6 +6,8 @@ USER = "ana"; START = "louvor"
 def run(r, p, acc, expect):
     r.say("Para pedir uma arte, um vídeo ou slides, abra o menu.", lambda: r.click(p.locator("[data-act=menu]")))
     r.say("Toque em Pedir arte ou vídeo.", lambda: r.click(p.locator(".drawer a", has_text="Pedir arte ou vídeo")))
+    p.wait_for_selector("a[href='#/pedidos/novo']")
+    r.say("Toque em Novo pedido.", lambda: r.click(p.locator("a[href='#/pedidos/novo']")))
     p.wait_for_selector("input[name=title]")
     r.say("Escolha o que você precisa: arte, vídeo, slide ou foto.", lambda: r.click(p.locator(".kinds label", has_text="Vídeo")))
     r.say("Dê um nome ao pedido.", lambda: r.type(p.locator("input[name=title]"), "Vídeo de abertura do retiro"))

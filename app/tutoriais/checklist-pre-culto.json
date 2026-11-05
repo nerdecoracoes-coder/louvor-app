@@ -1,0 +1,20 @@
+{
+ "slug": "checklist-pre-culto",
+ "title": "Como usar o checklist pré-culto",
+ "about": "Conferir os itens antes do culto e ver quem já marcou.",
+ "duration": 19.2,
+ "cues": [
+  {
+   "t": 0.0,
+   "text": "Antes do culto, a equipe confere os itens do checklist. Abra a escala."
+  },
+  {
+   "t": 5.84,
+   "text": "Toque na aba Roteiro e role até o Checklist pré-culto."
+  },
+  {
+   "t": 10.35,
+   "text": "Toque em cada item quando conferir. Todo mundo da equipe vê o que já foi marcado e por quem."
+  }
+ ]
+}

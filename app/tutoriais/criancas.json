@@ -1,0 +1,44 @@
+{
+ "slug": "criancas",
+ "title": "Como cadastrar crianças e fazer entrada e saída",
+ "about": "Cadastro com alergias e responsável, entrada com código e saída segura.",
+ "duration": 50.7,
+ "cues": [
+  {
+   "t": 0.0,
+   "text": "No Ministério Infantil, toque em Crianças, na barra de baixo."
+  },
+  {
+   "t": 5.08,
+   "text": "Toque em Cadastrar para incluir uma criança."
+  },
+  {
+   "t": 8.75,
+   "text": "Preencha o nome, o responsável e o telefone dele."
+  },
+  {
+   "t": 19.56,
+   "text": "Escreva as alergias e cuidados. Eles aparecem em vermelho para toda a equipe."
+  },
+  {
+   "t": 25.97,
+   "text": "Toque em Salvar."
+  },
+  {
+   "t": 29.2,
+   "text": "No dia do culto, toque em Entrada quando a criança chegar."
+  },
+  {
+   "t": 34.04,
+   "text": "O aplicativo mostra um código. Entregue ao responsável: ele será pedido na saída."
+  },
+  {
+   "t": 40.79,
+   "text": "Na hora de entregar, toque em Saída."
+  },
+  {
+   "t": 43.79,
+   "text": "Digite o código que o responsável mostrar e toque em Confirmar saída."
+  }
+ ]
+}

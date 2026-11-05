@@ -5,13 +5,13 @@ export const TUTORIAIS = [
   { grupo: "Escalas", slug: "criar-escala", title: "Como criar uma escala", about: "Escolher data, participantes e músicas, e avisar a equipe." },
   { grupo: "Escalas", slug: "confirmar-escala", title: "Como confirmar que viu a escala", about: "Abrir a escala em que você foi escalado e confirmar." },
   { grupo: "Escalas", slug: "panorama", title: "Como ver o Panorama de escalas", about: "Ver quem serviu no mês e filtrar por dia e horário." },
-  { pronto: false, grupo: "Multimídia", slug: "letras-midia", title: "Como preparar as letras para a projeção", about: "Ajustar fonte, cores e partes e baixar em PowerPoint." },
-  { pronto: false, grupo: "Multimídia", slug: "pacote-culto", title: "Como baixar o pacote do culto", about: "Letras e slides de todas as músicas do culto, de uma vez." },
-  { pronto: false, grupo: "Multimídia", slug: "roteiro-culto", title: "Como montar o roteiro do culto", about: "Ordem do culto com horários e responsáveis." },
-  { pronto: false, grupo: "Multimídia", slug: "checklist-pre-culto", title: "Como usar o checklist pré-culto", about: "Conferir os itens antes do culto." },
+  { grupo: "Multimídia", slug: "letras-midia", title: "Como preparar as letras para a projeção", about: "Ajustar fonte, cores e partes e baixar em PowerPoint." },
+  { grupo: "Multimídia", slug: "pacote-culto", title: "Como baixar o pacote do culto", about: "Letras e slides de todas as músicas do culto, de uma vez." },
+  { grupo: "Multimídia", slug: "roteiro-culto", title: "Como montar o roteiro do culto", about: "Ordem do culto com horários e responsáveis." },
+  { grupo: "Multimídia", slug: "checklist-pre-culto", title: "Como usar o checklist pré-culto", about: "Conferir os itens antes do culto." },
   { pronto: false, grupo: "Multimídia", slug: "pedir-midia", title: "Como pedir uma arte ou um vídeo", about: "Qualquer time pode pedir material à Multimídia." },
   { pronto: false, grupo: "Multimídia", slug: "atender-pedido", title: "Como atender um pedido de mídia", about: "Acompanhar os pedidos e avisar quando estiver pronto." },
-  { pronto: false, grupo: "Ministério Infantil", slug: "criancas", title: "Cadastro, entrada e saída de crianças", about: "Alergias, responsável e código de retirada." },
+  { grupo: "Ministério Infantil", slug: "criancas", title: "Cadastro, entrada e saída de crianças", about: "Alergias, responsável e código de retirada." },
   { pronto: false, grupo: "Diáconos", slug: "visitantes", title: "Como registrar visitantes", about: "Registrar quem visita a igreja e acompanhar o contato." },
 ];
 

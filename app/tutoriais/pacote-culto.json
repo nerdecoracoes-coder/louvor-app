@@ -1,0 +1,24 @@
+{
+ "slug": "pacote-culto",
+ "title": "Como baixar o pacote do culto",
+ "about": "Baixar de uma vez as letras e os slides de todas as músicas do culto.",
+ "duration": 21.7,
+ "cues": [
+  {
+   "t": 0.0,
+   "text": "O pacote do culto reúne tudo do domingo. Primeiro, toque em Escalas."
+  },
+  {
+   "t": 5.67,
+   "text": "Abra a escala do culto."
+  },
+  {
+   "t": 8.68,
+   "text": "Toque em Pacote do culto."
+  },
+  {
+   "t": 11.68,
+   "text": "Pronto. O arquivo traz a ordem do culto, um PowerPoint com todas as músicas e um arquivo para cada música."
+  }
+ ]
+}
