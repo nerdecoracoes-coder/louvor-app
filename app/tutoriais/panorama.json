@@ -1,0 +1,36 @@
+{
+ "slug": "panorama",
+ "title": "Como ver o Panorama de escalas",
+ "about": "Ver quem foi escalado no mês e filtrar por dia e horário.",
+ "duration": 42.1,
+ "cues": [
+  {
+   "t": 0.0,
+   "text": "O Panorama mostra o mês inteiro. Abra o menu, no canto de cima."
+  },
+  {
+   "t": 5.25,
+   "text": "Toque em Panorama de escalas."
+  },
+  {
+   "t": 8.27,
+   "text": "Cada coluna é um dia com escala, e cada linha é uma função. As fotos mostram quem está escalado."
+  },
+  {
+   "t": 16.27,
+   "text": "O número mostra quantas pessoas serviram no mês. Toque nele para ver quantas vezes cada uma foi escalada."
+  },
+  {
+   "t": 25.02,
+   "text": "Toque fora para fechar. Agora vamos usar o filtro, no canto de cima."
+  },
+  {
+   "t": 30.69,
+   "text": "Escolha a faixa de horas, um membro, ou os dias da semana que você quer ver."
+  },
+  {
+   "t": 37.02,
+   "text": "Toque em Aplicar e a tabela volta já filtrada."
+  }
+ ]
+}

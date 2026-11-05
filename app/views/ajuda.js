@@ -2,7 +2,17 @@
 import { esc, icon, empty, on } from "../core.js";
 
 export const TUTORIAIS = [
-  { slug: "criar-escala", title: "Como criar uma escala", about: "Escolher data, participantes e músicas, e avisar a equipe.", time: "1 min" },
+  { grupo: "Escalas", slug: "criar-escala", title: "Como criar uma escala", about: "Escolher data, participantes e músicas, e avisar a equipe." },
+  { grupo: "Escalas", slug: "confirmar-escala", title: "Como confirmar que viu a escala", about: "Abrir a escala em que você foi escalado e confirmar." },
+  { grupo: "Escalas", slug: "panorama", title: "Como ver o Panorama de escalas", about: "Ver quem serviu no mês e filtrar por dia e horário." },
+  { pronto: false, grupo: "Multimídia", slug: "letras-midia", title: "Como preparar as letras para a projeção", about: "Ajustar fonte, cores e partes e baixar em PowerPoint." },
+  { pronto: false, grupo: "Multimídia", slug: "pacote-culto", title: "Como baixar o pacote do culto", about: "Letras e slides de todas as músicas do culto, de uma vez." },
+  { pronto: false, grupo: "Multimídia", slug: "roteiro-culto", title: "Como montar o roteiro do culto", about: "Ordem do culto com horários e responsáveis." },
+  { pronto: false, grupo: "Multimídia", slug: "checklist-pre-culto", title: "Como usar o checklist pré-culto", about: "Conferir os itens antes do culto." },
+  { pronto: false, grupo: "Multimídia", slug: "pedir-midia", title: "Como pedir uma arte ou um vídeo", about: "Qualquer time pode pedir material à Multimídia." },
+  { pronto: false, grupo: "Multimídia", slug: "atender-pedido", title: "Como atender um pedido de mídia", about: "Acompanhar os pedidos e avisar quando estiver pronto." },
+  { pronto: false, grupo: "Ministério Infantil", slug: "criancas", title: "Cadastro, entrada e saída de crianças", about: "Alergias, responsável e código de retirada." },
+  { pronto: false, grupo: "Diáconos", slug: "visitantes", title: "Como registrar visitantes", about: "Registrar quem visita a igreja e acompanhar o contato." },
 ];
 
 export function register(route) {
@@ -13,7 +23,7 @@ export function register(route) {
 function list(el) {
   el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><h1>Tutoriais</h1></div>
     <p class="muted small">Vídeos curtos mostrando o aplicativo passo a passo. A narração é lida em voz alta pelo seu aparelho.</p>
-    <div class="list mt">${TUTORIAIS.map((t) => `<a class="li" href="#/ajuda/${t.slug}"><span class="cover">${icon("play")}</span><span class="grow"><span class="t">${esc(t.title)}</span><span class="s">${esc(t.about)} · ${esc(t.time)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`;
+    ${[...new Set(TUTORIAIS.filter((t) => t.pronto !== false).map((t) => t.grupo))].map((g) => `<div class="sec"><h2>${esc(g)}</h2></div><div class="list">${TUTORIAIS.filter((t) => t.pronto !== false && t.grupo === g).map((t) => `<a class="li" href="#/ajuda/${t.slug}"><span class="cover">${icon("play")}</span><span class="grow"><span class="t">${esc(t.title)}</span><span class="s">${esc(t.about)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`).join("")}`;
 }
 
 async function watch(slug, el, alive) {
