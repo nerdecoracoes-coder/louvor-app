@@ -34,7 +34,10 @@ class Rec:
         rest = dur(text) - (self.now() - t)
         if rest > 0: time.sleep(rest)
     def click(self, loc):
-        loc.scroll_into_view_if_needed(); b = loc.bounding_box(); x, y = b["x"] + b["width"] / 2, b["y"] + b["height"] / 2
+        loc.scroll_into_view_if_needed(); b = loc.bounding_box()
+        if b["y"] + b["height"] > 844 - 120:
+            self.p.evaluate("d => window.scrollBy(0, d)", b["y"] + b["height"] - (844 - 140)); time.sleep(0.4); b = loc.bounding_box()
+        x, y = b["x"] + b["width"] / 2, b["y"] + b["height"] / 2
         self.p.mouse.move(x, y, steps=22); time.sleep(0.3); self.p.mouse.down(); time.sleep(0.12); self.p.mouse.up(); time.sleep(0.5)
     def type(self, loc, text):
         self.click(loc); self.p.keyboard.type(text, delay=70); time.sleep(0.4)

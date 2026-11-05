@@ -1,0 +1,24 @@
+{
+ "slug": "atender-pedido",
+ "title": "Como atender um pedido de mídia",
+ "about": "Acompanhar os pedidos e avisar quando estiver pronto.",
+ "duration": 18.3,
+ "cues": [
+  {
+   "t": 0.0,
+   "text": "Os pedidos da igreja chegam na aba Pedidos, aqui embaixo."
+  },
+  {
+   "t": 4.76,
+   "text": "Toque em um pedido para ver os detalhes."
+  },
+  {
+   "t": 8.1,
+   "text": "Toque em Começar quando for fazer."
+  },
+  {
+   "t": 11.1,
+   "text": "Quando terminar, toque em Marcar como pronto. Quem pediu recebe o aviso."
+  }
+ ]
+}

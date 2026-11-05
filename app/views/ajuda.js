@@ -9,10 +9,10 @@ export const TUTORIAIS = [
   { grupo: "Multimídia", slug: "pacote-culto", title: "Como baixar o pacote do culto", about: "Letras e slides de todas as músicas do culto, de uma vez." },
   { grupo: "Multimídia", slug: "roteiro-culto", title: "Como montar o roteiro do culto", about: "Ordem do culto com horários e responsáveis." },
   { grupo: "Multimídia", slug: "checklist-pre-culto", title: "Como usar o checklist pré-culto", about: "Conferir os itens antes do culto." },
-  { pronto: false, grupo: "Multimídia", slug: "pedir-midia", title: "Como pedir uma arte ou um vídeo", about: "Qualquer time pode pedir material à Multimídia." },
-  { pronto: false, grupo: "Multimídia", slug: "atender-pedido", title: "Como atender um pedido de mídia", about: "Acompanhar os pedidos e avisar quando estiver pronto." },
+  { grupo: "Multimídia", slug: "pedir-midia", title: "Como pedir uma arte ou um vídeo", about: "Qualquer time pode pedir material à Multimídia." },
+  { grupo: "Multimídia", slug: "atender-pedido", title: "Como atender um pedido de mídia", about: "Acompanhar os pedidos e avisar quando estiver pronto." },
   { grupo: "Ministério Infantil", slug: "criancas", title: "Cadastro, entrada e saída de crianças", about: "Alergias, responsável e código de retirada." },
-  { pronto: false, grupo: "Diáconos", slug: "visitantes", title: "Como registrar visitantes", about: "Registrar quem visita a igreja e acompanhar o contato." },
+  { grupo: "Diáconos", slug: "visitantes", title: "Como registrar visitantes", about: "Registrar quem visita a igreja e acompanhar o contato." },
 ];
 
 export function register(route) {

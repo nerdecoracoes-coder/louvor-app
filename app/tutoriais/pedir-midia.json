@@ -1,0 +1,36 @@
+{
+ "slug": "pedir-midia",
+ "title": "Como pedir uma arte ou um vídeo",
+ "about": "Qualquer time pode pedir material à Multimídia.",
+ "duration": 31.9,
+ "cues": [
+  {
+   "t": 0.0,
+   "text": "Para pedir uma arte, um vídeo ou slides, abra o menu."
+  },
+  {
+   "t": 4.42,
+   "text": "Toque em Pedir arte ou vídeo."
+  },
+  {
+   "t": 7.42,
+   "text": "Toque em Novo pedido."
+  },
+  {
+   "t": 10.43,
+   "text": "Escolha o que você precisa: arte, vídeo, slide ou foto."
+  },
+  {
+   "t": 15.01,
+   "text": "Dê um nome ao pedido."
+  },
+  {
+   "t": 20.45,
+   "text": "Explique o que você quer e, se tiver, escolha a data limite."
+  },
+  {
+   "t": 26.32,
+   "text": "Toque em Enviar pedido. A Multimídia recebe o aviso."
+  }
+ ]
+}
