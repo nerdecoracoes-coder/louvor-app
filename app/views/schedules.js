@@ -43,7 +43,7 @@ async function editor(el, scheduleId, teamId) {
   const f = {
     team: teamId,
     title: sched?.title || "", type: sched?.event_type || "",
-    date: sched ? ymd(sched.starts_at) : ymd(new Date(Date.now() + 864e5)),
+    date: sched ? ymd(sched.starts_at) : (/[?&]data=(\d{4}-\d{2}-\d{2})/.exec(location.hash)?.[1] || ymd(new Date(Date.now() + 864e5))),
     time: sched ? fTime(sched.starts_at) : "19:00",
     end: sched?.ends_at ? fTime(sched.ends_at) : "",
     location: sched?.location || "", notes: sched?.notes || "",
@@ -340,7 +340,7 @@ async function calendar(el, scope) {
     const dayEvs = evs.filter((e) => ymd(e.starts_at) === selDay);
     const myTeamIds = new Set(state.myTeams.map((t) => t.id));
     const teamChips = (isAdmin() ? allTeams : allTeams.filter((t) => myTeamIds.has(t.id)));
-    el.innerHTML = `<div class="pagehead">${inTeam ? "" : `<a class="back" href="#/">${icon("chevronLeft")}</a>`}<h1>${inTeam ? "Escalas" : "Calendário"}</h1></div>
+    el.innerHTML = `<div class="pagehead">${inTeam ? "" : `<a class="back" href="#/">${icon("chevronLeft")}</a>`}<h1>${inTeam ? "Escalas" : "Calendário"}</h1>${inTeam && canManageTeam(scope.slice(5)) ? `<a class="iconbtn" id="addsched" href="#/escala/nova/${scope.slice(5)}?data=${selDay}" aria-label="Nova escala em ${fDate(selDay + "T12:00:00")}">${icon("plus")}</a>` : ""}</div>
       ${inTeam ? "" : `<div class="chips mb"><a class="chip ${scope === "geral" ? "on" : ""}" href="#/calendario/geral">${icon("org")} Geral</a><a class="chip ${scope === "meu" ? "on" : ""}" href="#/calendario/meu">${icon("calendar")} Minhas escalas</a>
         ${teamChips.map((t) => `<a class="chip ${scope === "time:" + t.id ? "on" : ""}" href="#/calendario/time:${t.id}"><i style="width:8px;height:8px;border-radius:8px;background:${attr(t.accent_color || "var(--accent)")}"></i>${esc(t.name)}</a>`).join("")}</div>`}
       <div class="card"><div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div>

@@ -127,7 +127,11 @@ async function homeView(_, el, alive) {
     ${notices.length > 1 ? `<div class="dots" id="ndots">${notices.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}`
     : empty("megaphone", "Nenhum aviso publicado", isStaff() ? `<a class="link" href="#/avisos/novo">Publicar o primeiro aviso</a>` : "Os comunicados da igreja aparecem aqui.")}
 
-  ${birthdaySection([...ppl.values()])}`;
+  ${birthdaySection([...ppl.values()])}
+  ${isStaff() ? `<div class="sec"><h2>Ações da igreja</h2></div><div class="chips" style="flex-wrap:wrap">
+    <a class="chip" href="#/escala/nova">${icon("calendar")} Nova escala</a><a class="chip" href="#/avisos/novo">${icon("megaphone")} Novo aviso</a>
+    ${state.myTeams.some((x) => canManageTeam(x.id)) || isAdmin() ? `<a class="chip" href="#/convidar">${icon("link")} Convidar para um time</a>` : ""}
+    ${isAdmin() ? `<a class="chip" href="#/times/novo">${icon("users")} Novo time</a><a class="chip" href="#/convidar-membro">${icon("org")} Convidar membro da igreja</a>` : ""}</div>` : ""}`;
   const pickPhoto = async () => {
     const f = await pickFile("image/*"); if (!f) return;
     try {

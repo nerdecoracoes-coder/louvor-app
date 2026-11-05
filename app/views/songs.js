@@ -43,12 +43,11 @@ async function library(_, el, alive) {
   const fc = new Map(); for (const f of files) fc.set(f.song_id, (fc.get(f.song_id) || 0) + 1);
   rows.forEach((r) => (r.files_count = fc.get(r.id) || 0));
   const NOART = "Sem artista";
-  let q = "", tab = "musicas", artist = null, showRemoved = false, selecting = false, searching = false;
-  const sel = new Set();
+  let q = "", tab = "musicas", artist = null, searching = false;
   headerActions(`<button class="iconbtn" id="lupa" aria-label="Pesquisar">${icon("search")}</button>`);
   const draw = () => {
     const ql = q.toLowerCase();
-    let list = rows.filter((r) => (showRemoved ? r.status === "removed" : r.status !== "removed"))
+    let list = rows.filter((r) => r.status !== "removed")
       .filter((r) => !ql || r.title.toLowerCase().includes(ql) || (r.artist || "").toLowerCase().includes(ql));
     if (tab === "vs") list = list.filter((r) => r.current_project_id);
     const box = el.querySelector("#list");
@@ -64,23 +63,18 @@ async function library(_, el, alive) {
     } else {
       if (tab === "artistas") list = list.filter((r) => (r.artist || NOART) === artist);
       box.innerHTML = (tab === "artistas" ? `<div class="row gap" style="padding:4px 0 10px"><button class="chip" id="allart">${icon("chevronLeft")} Artistas</button><b class="ellipsis">${esc(artist)}</b></div>` : "")
-        + (list.length ? list.map((r) => songRow(r, { selectable: selecting, selected: sel.has(r.id) })).join("")
+        + (list.length ? list.map((r) => songRow(r)).join("")
           : `<div style="padding:10px">${empty("music", rows.length ? "Nenhuma música encontrada" : "Repertório vazio", rows.length ? "" : isStaff() ? `Cadastre músicas manualmente ou <a class="link" href="#/org/drive">conecte a pasta do Google Drive</a>.` : "")}</div>`);
       count = `${list.length} música${list.length === 1 ? "" : "s"}`;
     }
     el.querySelector("#count").textContent = count;
-    el.querySelector("#selbar").classList.toggle("hidden", !selecting);
-    el.querySelector("#selcount").textContent = `${sel.size} selecionada(s)`;
-    el.querySelector("#sel").textContent = selecting ? "Cancelar seleção" : "Selecionar";
   };
   const processing = rows.filter((r) => ["processing", "waiting_files"].includes(r.status)).length;
-  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1>${isStaff() ? `<a class="iconbtn" href="#/org/drive" aria-label="Google Drive">${icon("cloud")}</a>` : ""}</div>
+  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1>${isStaff() ? `<a class="iconbtn" href="#/org/drive" aria-label="Google Drive">${icon("cloud")}</a><a class="iconbtn" href="#/musicas/nova" aria-label="Adicionar música">${icon("plus")}</a>` : ""}</div>
     ${processing ? `<div class="card mb row gap small">${icon("refresh", "accent")}<span>${processing} música(s) ainda sendo processada(s) a partir do Google Drive.</span></div>` : ""}
     <div class="tabsbar" role="tablist"><button class="on" data-tab="musicas">Músicas</button><button data-tab="artistas">Artistas</button><button data-tab="vs">Com VS</button></div>
     <label class="search srch hidden" id="sbox" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar por título ou artista"></label>
-    <div class="row between"><span class="small muted" id="count"></span>
-      <span class="row gap"><button class="link small" id="sel">Selecionar</button>${rows.some((r) => r.status === "removed") ? `<button class="link small" id="rem">Fora do repertório</button>` : ""}</span></div>
-    <div class="card row gap mt-s hidden" id="selbar"><span class="grow small" id="selcount"></span><button class="btn ghost sm" id="share">${icon("chat")} Enviar no chat</button></div>
+    <div class="small muted" id="count"></div>
     <div class="list mt-s" id="list"></div>`;
   draw();
   const sbox = el.querySelector("#sbox");
@@ -92,14 +86,6 @@ async function library(_, el, alive) {
   on(el, "click", "[data-tab]", (e, b) => { tab = b.dataset.tab; artist = null; el.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("on", x === b)); draw(); });
   on(el, "click", "[data-art]", (e, b) => { artist = b.dataset.art; draw(); });
   on(el, "click", "#allart", () => { artist = null; draw(); });
-  el.querySelector("#sel").onclick = () => { selecting = !selecting; sel.clear(); draw(); };
-  el.querySelector("#rem")?.addEventListener("click", (e) => { showRemoved = !showRemoved; e.currentTarget.classList.toggle("on", showRemoved); draw(); });
-  on(el, "click", "[data-sel]", (e, b) => { e.preventDefault(); const id = b.dataset.sel; sel.has(id) ? sel.delete(id) : sel.add(id); draw(); });
-  el.querySelector("#share").onclick = async () => {
-    if (!sel.size) return toast("Selecione ao menos uma música.");
-    const { shareSongsToChat } = await import("./chat.js");
-    shareSongsToChat([...sel]);
-  };
 }
 
 // ---------------------------------------------------------------- busca de informações (iTunes, sem chave)

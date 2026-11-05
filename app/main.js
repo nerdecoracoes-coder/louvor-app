@@ -78,7 +78,6 @@ function renderShell() {
       <button class="iconbtn menubtn" data-act="menu" aria-label="Abrir menu">${icon("menu")}</button>
       <button class="brand${state.space ? " team" : ""}" data-act="space" aria-label="Trocar de time ou ir para a igreja">${brandHtml()}</button>
       <span class="hdr-actions" id="hdr-actions"></span>
-      <button class="iconbtn" data-act="add" aria-label="Adicionar">${icon("plus")}</button>
       <a class="iconbtn" href="#/notificacoes" aria-label="Notificações">${icon("bell")}<span class="dot hidden" id="bell-dot"></span></a>
     </header>
     <nav class="bottomnav" aria-label="Navegação principal" data-key="${attr(navKey())}" style="grid-template-columns:repeat(${items.length},1fr)">${navHtml()}</nav>
@@ -88,7 +87,6 @@ function renderShell() {
 
 on(document, "click", "[data-act=space]", () => spaceSwitcher());
 on(document, "click", "[data-act=orgs]", () => spaceSwitcher());
-on(document, "click", "[data-act=add]", () => addMenu());
 on(document, "click", "[data-act=menu]", () => openMenu());
 
 function spaceSwitcher() {
@@ -114,7 +112,9 @@ function spaceSwitcher() {
 function openMenu() {
   const t = state.space;
   const cfg = t ? (canManageTeam(t.id) ? `#/times/${t.id}/config` : "#/perfil") : (isAdmin() ? "#/org" : "#/perfil");
-  const items = [["org", "Visão geral", "#/igreja"], ["userOff", "Indisponibilidades", "#/bloqueios"], ["bars", "Panorama de escalas", "#/panorama"]];
+  const items = [["org", "Visão geral da igreja", "#/igreja"], ["userOff", "Indisponibilidades", "#/bloqueios"], ["bars", "Panorama de escalas", "#/panorama"]];
+  // quem não está no time que atende pedidos (ex.: Multimídia) ainda consegue pedir arte, vídeo ou slides
+  if (!isGuest() && state.orgTeams.some((x) => teamHas(x, "pedidos") && x.id !== t?.id)) items.splice(1, 0, ["inbox", "Pedir arte ou vídeo", "#/pedidos"]);
   const wrap = document.createElement("div");
   wrap.className = "drawer-wrap";
   wrap.innerHTML = `<aside class="drawer" role="dialog" aria-modal="true" aria-label="Menu">
@@ -129,29 +129,6 @@ function openMenu() {
   window.addEventListener("hashchange", close);
   document.addEventListener("keydown", esc2);
   wrap.querySelector("a")?.focus({ preventScroll: true });
-}
-
-function addMenu() {
-  const t = state.space;
-  const items = [];
-  if (t) {
-    if (canManageTeam(t.id)) items.push(["calendar", "Nova escala", `Escala do ${t.name}`, `#/escala/nova/${t.id}`]);
-    if (canManageTeam(t.id) && teamHasRepertoire(t) && isRepertoireStaff()) items.push(["music", "Nova música", "Cadastrar no repertório", "#/musicas/nova"]);
-    if (canManageTeam(t.id)) items.push(["megaphone", "Novo aviso do time", `Comunicado para o ${t.name}`, `#/times/${t.id}/aviso`]);
-    if (canManageTeam(t.id)) items.push(["link", "Convidar para o time", "Link exclusivo deste time", `#/times/${t.id}/integrantes?convidar=1`]);
-    if (teamHas(t, "pedidos")) items.push(["inbox", "Registrar pedido", `Pedido de arte, vídeo ou slide para o ${t.name}`, `#/pedidos/novo/${t.id}`]);
-  } else {
-    if (isStaff()) items.push(["calendar", "Nova escala", "Criar e escalar integrantes", "#/escala/nova"]);
-    if (isStaff()) items.push(["megaphone", "Novo aviso", "Comunicado para a igreja ou um time", "#/avisos/novo"]);
-    if (state.myTeams.some((x) => canManageTeam(x.id)) || isAdmin()) items.push(["link", "Convidar para um time", "Link exclusivo de um time (só líderes e administradores)", "#/convidar"]);
-    if (isAdmin()) items.push(["users", "Novo time", "Criar um time na igreja", "#/times/novo"]);
-    if (isAdmin()) items.push(["org", "Convidar membro da igreja", "Cadastrar alguém como membro, sem time", "#/convidar-membro"]);
-  }
-  const asks = state.orgTeams.filter((x) => teamHas(x, "pedidos") && x.id !== t?.id);
-  if (asks.length && !isGuest()) items.push(["image", "Pedir arte ou vídeo", `Pedido para ${asks.map((x) => x.name).join(", ")}`, asks.length === 1 ? `#/pedidos/novo/${asks[0].id}` : "#/pedidos/novo"]);
-  items.push(["lock", "Bloquear datas", "Informar minha indisponibilidade", "#/bloqueios"]);
-  const s = sheet(`<h3>Adicionar</h3><div class="list menu">${items.map(([ic, ti, d, h]) => `<a class="li" href="${h}">${icon(ic)}<span class="grow"><span class="t">${esc(ti)}</span><span class="s">${esc(d)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`);
-  s.el.addEventListener("click", (e) => { if (e.target.closest("a")) s.close(); });
 }
 
 // ---------------------------------------------------------------- notificações (contador)

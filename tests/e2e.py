@@ -407,7 +407,7 @@ with sync_playwright() as pw:
     assert carla.locator(".sec h2", has_text="Disponibilidade").count() == 0  # disponibilidade saiu do início
     carla.locator(".menubtn").click(); 
     expect(carla.locator(".drawer .dprofile")).to_contain_text("Carla Dias")
-    for t in ["Visão geral", "Indisponibilidades", "Panorama de escalas", "Configurações"]:
+    for t in ["Visão geral da igreja", "Indisponibilidades", "Panorama de escalas", "Configurações"]:
         expect(carla.locator(".drawer").get_by_text(t, exact=True)).to_be_visible()
     assert carla.locator(".drawer").get_by_text("Avisos", exact=True).count() == 0
     shot(carla, "21-menu-lateral")
@@ -425,6 +425,20 @@ with sync_playwright() as pw:
     assert "Louvor Domingo" not in carla.locator(".chatwrap .pagehead").inner_text()
     shot(carla, "24-chat")
     ok("cabeçalho com menu e sem foto; início sem disponibilidade; panorama; escalas em calendário; chat com a barra de navegação")
+
+    # botão + de Escalas leva à criação no dia escolhido; sem o + no cabeçalho; Músicas sem seleção
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")
+    assert bruno.locator("[data-act=add]").count() == 0
+    expect(bruno.locator("#addsched")).to_be_visible(timeout=10000)
+    bruno.locator(".cal [data-day]").nth(11).click()
+    day = bruno.locator(".cal .sel").inner_text().split("\n")[0].strip().zfill(2)
+    bruno.locator("#addsched").click()
+    expect(bruno.locator("input[name=date]")).to_have_value(re.compile(rf"-{day}$"), timeout=10000)
+    assert carla.locator("#addsched").count() == 0   # integrante comum não cria escala
+    bruno.goto(f"{BASE}/#/musicas")
+    expect(bruno.locator('.pagehead a[href="#/musicas/nova"]')).to_be_visible(timeout=10000)
+    assert bruno.locator("#sel").count() == 0 and bruno.locator("#rem").count() == 0
+    ok("botão + em Escalas (com o dia escolhido) e em Músicas; sem + no cabeçalho; sem Selecionar e Fora do repertório")
 
     bruno.goto(f"{BASE}/#/times/{louvor_id}")
     expect(bruno.locator(".pagehead h1")).to_have_text("Time", timeout=10000)
