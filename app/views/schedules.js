@@ -50,10 +50,10 @@ async function editor(el, scheduleId, teamId) {
     // por função: [{user_id}]
     picks: new Map(), slots: new Map(), songs: songsSel,
     tab: "detalhes", publish: sched ? sched.status === "published" : true,
-    ask: sched?.ask_confirmation !== false, color: sched?.color || "", repeat: "none", until: "",
+    ask: sched?.ask_confirmation !== false, palettes: (sched?.palettes || []).map((x) => ({ desc: x.desc || "", colors: [...(x.colors || [])] })), view: "main", repeat: "none", until: "",
   };
   // "pedir confirmação" e "paleta de cores" dependem de colunas novas; sem elas (SQL ainda não aplicado) as opções ficam escondidas
-  const hasExt = !(await sb.from("schedules").select("ask_confirmation,color").limit(1)).error;
+  const hasExt = !(await sb.from("schedules").select("ask_confirmation,palettes").limit(1)).error;
   let cueCount = 0;
   if (scheduleId) cueCount = (await sb.from("schedule_cues").select("id").eq("schedule_id", scheduleId)).data?.length || 0;
   for (const a of assigns) { const k = a.role_id || "none"; if (!f.picks.has(k)) f.picks.set(k, []); f.picks.get(k).push(a.user_id); }
@@ -94,8 +94,38 @@ async function editor(el, scheduleId, teamId) {
   };
 
   const REPEATS = [["none", "Não se repete"], ["weekly", "Toda semana"], ["biweekly", "A cada 2 semanas"], ["monthly", "Todo mês"]];
-  const COLORS = ["#e5484d", "#f76b15", "#e2a03f", "#30a46c", "#12a594", "#3e63dd", "#8e4ec6", "#d6409f"];
-  const switchRow = (name, on_, title, sub, ic) => `<label class="switchrow">${icon(ic)}<span class="grow"><b>${title}</b><small>${sub}</small></span><span class="switch"><input type="checkbox" name="${name}" ${on_ ? "checked" : ""}><i></i></span></label>`;
+    const switchRow = (name, on_, title, sub, ic) => `<label class="switchrow">${icon(ic)}<span class="grow"><b>${title}</b><small>${sub}</small></span><span class="switch"><input type="checkbox" name="${name}" ${on_ ? "checked" : ""}><i></i></span></label>`;
+
+  const sw = (c) => `<span class="pcol" style="background:${attr(c)}" title="${attr(c)}"></span>`;
+  function palettePage() {
+    return `<div class="pagehead"><button class="back" data-pback aria-label="Voltar">${icon("chevronLeft")}</button><h1>Paleta de cores</h1></div>
+      <div class="sec"><h2>Vestimentas</h2><span class="cnt2">${f.palettes.length}</span><button class="more" id="padd">${icon("plus")} Adicionar</button></div>
+      ${f.palettes.length ? f.palettes.map((p, i) => `<div class="card pal"><div class="row gap"><input class="input grow" data-pdesc="${i}" maxlength="80" placeholder="Descrição (ex.: Tons terrosos)" value="${attr(p.desc)}">
+          <button class="iconbtn" data-pdel="${i}" aria-label="Excluir paleta">${icon("trash")}</button></div>
+        <div class="sec"><h3>Cores</h3><span class="cnt2">${p.colors.length}</span><button class="more" data-pcolor="${i}">${icon("plus")} Adicionar</button></div>
+        <div class="pcolors">${p.colors.length ? p.colors.map((c, j) => `<span class="pcol big" style="background:${attr(c)}"><button data-prm="${i}:${j}" aria-label="Tirar cor">${icon("x")}</button></span>`).join("") : `<span class="small muted">Nenhuma cor escolhida.</span>`}</div></div>`).join("")
+        : `<div class="card">${empty("shirt", "Nenhuma paleta ainda", "Escolha as cores das roupas desse dia: monte a sua ou comece por uma sugestão.")}</div>`}
+      <button class="btn ghost block mt" id="psuggest">${icon("sparkle")} Sugestões de paletas</button>
+      <div style="height:84px"></div>
+      <button class="fabsave" id="savebtn" data-save="${f.publish ? "published" : "draft"}">${icon("check")} Salvar</button>`;
+  }
+  function colorSheet(i) {
+    const sel = new Set(f.palettes[i].colors.map((c) => c.toLowerCase()));
+    const known = new Set(CATALOG.map(([, h]) => h));
+    const extra = [...sel].filter((c) => !known.has(c));
+    const sh = sheet(`<h3>Escolha as cores</h3><p class="small muted" style="margin-top:-6px">Toque para escolher ou tirar uma cor.</p>
+      <div class="catalog" id="cat">${[...CATALOG, ...extra.map((h) => ["Personalizada", h])].map(([n, h]) => `<button type="button" class="cat ${sel.has(h) ? "on" : ""}" data-h="${h}" aria-label="${n}"><i style="background:${h}"></i><small>${n}</small></button>`).join("")}</div>
+      <label class="row gap mt small muted">Outra cor <input type="color" id="cpick" value="#3e63dd" style="width:48px;height:36px;border:0;background:none"><button type="button" class="chip" id="cadd">${icon("plus")} Usar</button></label>
+      <button class="btn primary block mt" id="cok">Concluir</button>`, { wide: true });
+    const toggle = (h) => { sel.has(h) ? sel.delete(h) : sel.add(h); sh.el.querySelectorAll(".cat").forEach((b) => b.classList.toggle("on", sel.has(b.dataset.h))); };
+    on(sh.el, "click", ".cat", (e, b) => toggle(b.dataset.h));
+    sh.el.querySelector("#cadd").onclick = () => { const h = sh.el.querySelector("#cpick").value.toLowerCase(); if (!known.has(h) && !sel.has(h)) { const b = document.createElement("button"); b.type = "button"; b.className = "cat on"; b.dataset.h = h; b.innerHTML = `<i style="background:${h}"></i><small>Personalizada</small>`; sh.el.querySelector("#cat").appendChild(b); } sel.add(h); sh.el.querySelectorAll(".cat").forEach((b) => b.classList.toggle("on", sel.has(b.dataset.h))); };
+    sh.el.querySelector("#cok").onclick = () => { const order = [...f.palettes[i].colors.filter((c) => sel.has(c.toLowerCase())), ...[...sel].filter((c) => !f.palettes[i].colors.map((x) => x.toLowerCase()).includes(c))]; f.palettes[i].colors = order; sh.close(); draw(); };
+  }
+  function suggestSheet() {
+    const sh = sheet(`<h3>Sugestões de paletas</h3><div class="list" style="max-height:62vh;overflow:auto">${SUGGESTED.map(([n, cs], k) => `<button class="li" data-sg="${k}"><span class="grow" style="min-width:0"><span class="t">${n}</span></span><span class="pcolors">${cs.map(sw).join("")}</span></button>`).join("")}</div>`, { wide: true });
+    on(sh.el, "click", "[data-sg]", (e, b) => { const [n, cs] = SUGGESTED[Number(b.dataset.sg)]; f.palettes.push({ desc: n, colors: [...cs] }); sh.close(); draw(); });
+  }
 
   function tabDetails(team) {
     return `<form class="card" id="f">
@@ -113,7 +143,7 @@ async function editor(el, scheduleId, teamId) {
         ${switchRow("publish", f.publish, "Publicar escala", "Visível para todos os membros", "eye")}
         ${hasExt ? switchRow("ask", f.ask, "Pedir confirmação", "Participantes confirmam que viram a escala", "check") : ""}
       </div>
-      ${hasExt ? `<div class="colorrow"><span class="small muted">Cor da escala</span><div class="swatches"><button type="button" class="sw none ${f.color ? "" : "on"}" data-color="" aria-label="Sem cor">${icon("x")}</button>${COLORS.map((c) => `<button type="button" class="sw ${f.color === c ? "on" : ""}" data-color="${c}" style="background:${c}" aria-label="Cor ${c}"></button>`).join("")}</div></div>` : ""}
+      ${hasExt ? `<button type="button" class="menurow" id="openpal">${icon("shirt")}<span class="grow"><b>Paleta de cores</b><small>Cores das roupas para este dia</small></span><span class="muted small">${f.palettes.length ? `${f.palettes.length} ${f.palettes.length === 1 ? "paleta" : "paletas"}` : "Nenhuma"}</span>${icon("chevronRight", "chev")}</button>` : ""}
     </form>`;
   }
   function tabPeople() {
@@ -144,6 +174,7 @@ async function editor(el, scheduleId, teamId) {
 
   function draw() {
     const team = teams.find((t) => t.id === f.team);
+    if (f.view === "palette") { el.innerHTML = palettePage(); return; }
     const showSongs = teamHasRepertoire(team), showCues = team && teamHas(team, "roteiro");
     if (f.tab === "musicas" && !showSongs) f.tab = "detalhes";
     if (f.tab === "roteiro" && !showCues) f.tab = "detalhes";
@@ -166,11 +197,17 @@ async function editor(el, scheduleId, teamId) {
     if (["publish", "ask", "until"].includes(e.target.name)) readForm();
     if (e.target.dataset.key !== undefined) f.songs[Number(e.target.dataset.key)].song_key = e.target.value.trim() || null;
   });
-  el.addEventListener("input", (e) => { if (["title", "location", "notes"].includes(e.target.name)) readForm(); });
+  el.addEventListener("input", (e) => { if (["title", "location", "notes"].includes(e.target.name)) readForm(); if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
   el.addEventListener("click", async (e) => {
     const t = e.target.closest("button"); if (!t) return;
     if (t.dataset.etab) { readForm(); f.tab = t.dataset.etab; return draw(); }
-    if (t.dataset.color !== undefined && t.classList.contains("sw")) { f.color = t.dataset.color; el.querySelectorAll(".sw").forEach((b) => b.classList.toggle("on", b.dataset.color === f.color)); return; }
+    if (t.id === "openpal") { readForm(); f.view = "palette"; draw(); return window.scrollTo(0, 0); }
+    if (t.dataset.pback !== undefined) { f.view = "main"; return draw(); }
+    if (t.id === "padd") { f.palettes.push({ desc: "", colors: [] }); return draw(); }
+    if (t.dataset.pdel !== undefined) { f.palettes.splice(Number(t.dataset.pdel), 1); return draw(); }
+    if (t.dataset.pcolor !== undefined) return colorSheet(Number(t.dataset.pcolor));
+    if (t.dataset.prm) { const [i, j] = t.dataset.prm.split(":").map(Number); f.palettes[i].colors.splice(j, 1); return draw(); }
+    if (t.id === "psuggest") return suggestSheet();
     if (t.id === "cues") { const team = teams.find((x) => x.id === f.team); const cues = await must(sb.from("schedule_cues").select("*").eq("schedule_id", scheduleId).order("position")); return cueEditor(sched, team, cues, async () => { cueCount = (await sb.from("schedule_cues").select("id").eq("schedule_id", scheduleId)).data?.length || 0; draw(); }); }
     if (t.id === "addsong") { readForm(); return songPicker(f.songs, () => draw()); }
     if (t.dataset.up) { const i = Number(t.dataset.up); [f.songs[i - 1], f.songs[i]] = [f.songs[i], f.songs[i - 1]]; return draw(); }
@@ -247,7 +284,7 @@ async function editor(el, scheduleId, teamId) {
         let ends_at = f.end ? fromLocal(date, f.end) : null;
         if (ends_at && ends_at <= starts_at) ends_at = new Date(new Date(ends_at).getTime() + 864e5).toISOString();
         const row = { org_id: state.org.id, team_id: f.team, title: f.title.trim(), event_type: f.type || null, starts_at, ends_at, location: f.location || null, notes: f.notes || null };
-        if (hasExt) { row.ask_confirmation = f.ask; row.color = f.color || null; }
+        if (hasExt) { row.ask_confirmation = f.ask; row.palettes = f.palettes.filter((p) => p.colors.length).map((p) => ({ desc: p.desc.trim(), colors: p.colors })); }
         let id = scheduleId;
         // grava como rascunho primeiro e só publica no fim (as notificações saem com a escala completa)
         if (!id) id = (await must(sb.from("schedules").insert({ ...row, status: "draft", created_by: state.user.id }).select("id").single())).id;
@@ -273,6 +310,13 @@ async function editor(el, scheduleId, teamId) {
 }
 
 const MAX_REPEAT = 26;
+const CATALOG = [["Branco", "#ffffff"], ["Off-white", "#f5efe6"], ["Bege", "#d9c3a0"], ["Areia", "#c8ad7f"], ["Caramelo", "#b7773e"], ["Marrom", "#6b4226"], ["Terracota", "#c4673d"], ["Mostarda", "#d9a521"],
+  ["Amarelo", "#f2d03b"], ["Laranja", "#f08a24"], ["Vermelho", "#d1343b"], ["Vinho", "#7a1f35"], ["Rosé", "#e8b4b8"], ["Rosa", "#e0629b"], ["Lilás", "#b79ad6"], ["Roxo", "#6b3fa0"],
+  ["Azul claro", "#9cc9f2"], ["Azul", "#2f6fd6"], ["Azul marinho", "#1b2a5c"], ["Turquesa", "#25a6a0"], ["Verde claro", "#a8cf6a"], ["Verde", "#3f9b5a"], ["Verde oliva", "#6b7a3a"], ["Verde escuro", "#1f4d3a"],
+  ["Cinza claro", "#cfd3d8"], ["Cinza", "#8b9099"], ["Grafite", "#3c4048"], ["Preto", "#111111"]].map(([n, h]) => [n, h]);
+const SUGGESTED = [["Branco e azul", ["#ffffff", "#9cc9f2", "#1b2a5c"]], ["Tons terrosos", ["#6b4226", "#b7773e", "#d9c3a0", "#6b7a3a"]], ["Preto e branco", ["#111111", "#ffffff", "#8b9099"]],
+  ["Vinho e rosé", ["#7a1f35", "#e8b4b8", "#f5efe6"]], ["Verde e creme", ["#1f4d3a", "#a8cf6a", "#f5efe6"]], ["Pastel", ["#e8b4b8", "#9cc9f2", "#a8cf6a", "#f2d03b"]],
+  ["Azul e dourado", ["#1b2a5c", "#2f6fd6", "#d9a521"]], ["Neutros", ["#f5efe6", "#d9c3a0", "#8b9099", "#3c4048"]]];
 const addDays = (d, n) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + n); return ymd(x); };
 const addMonths = (d, n) => { const x = new Date(d + "T12:00:00"); const day = x.getDate(); x.setDate(1); x.setMonth(x.getMonth() + n); x.setDate(Math.min(day, new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate())); return ymd(x); };
 
@@ -324,6 +368,7 @@ async function detail(el, id) {
       <div class="info"><h3>${esc(cap(fDateLong(s.starts_at)))}</h3><div class="meta"><span>${icon("clock")}${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""}</span>${s.location ? `<span>${icon("pin")}${esc(s.location)}</span>` : ""}</div></div><div></div></div>
     ${unseen ? `<button class="btn primary block" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length ? `<p class="small ok row gap-s">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
     ${s.notes ? `<div class="card mt"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}
+    ${(s.palettes || []).length ? `<div class="sec">${icon("shirt")}<h2>Vestimentas</h2></div><div class="card">${s.palettes.map((p) => `<div class="palview">${p.desc ? `<b class="small">${esc(p.desc)}</b>` : ""}<div class="pcolors">${(p.colors || []).map((c) => `<span class="pcol big" style="background:${attr(c)}" title="${attr(c)}"></span>`).join("")}</div></div>`).join("")}</div>` : ""}
     ${teamHasRepertoire(s.teams) || songs.length ? `<div class="sec">${icon("music")}<h2>Repertório</h2></div>
     <div class="list">${songs.length ? songs.map((x, i) => {
       const live = x.songs && x.songs.status !== "removed";
@@ -392,7 +437,7 @@ async function calendar(el, scope) {
     for (let d = 1; d <= last.getDate(); d++) {
       const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const n = evs.filter((e) => ymd(e.starts_at) === key);
-      cells.push(`<button class="d${key === today ? " today" : ""}${key === selDay ? " sel" : ""}" data-day="${key}">${d}<span class="marks">${n.slice(0, 3).map((e) => `<i style="background:${attr(e.color || e.teams?.accent_color || "var(--accent)")}"></i>`).join("")}</span></button>`);
+      cells.push(`<button class="d${key === today ? " today" : ""}${key === selDay ? " sel" : ""}" data-day="${key}">${d}<span class="marks">${n.slice(0, 3).map((e) => `<i style="background:${attr(e.teams?.accent_color || "var(--accent)")}"></i>`).join("")}</span></button>`);
     }
     const dayEvs = evs.filter((e) => ymd(e.starts_at) === selDay);
     const myTeamIds = new Set(state.myTeams.map((t) => t.id));
@@ -434,7 +479,7 @@ async function calendar(el, scope) {
           const mine = m.has(state.user.id) ? m.get(state.user.id) : undefined;
           const st = e.status === "draft" ? `<span class="tag gray">Rascunho</span>` : mine === undefined || e.ask_confirmation === false ? "" : mine ? `<span class="tag soft">${icon("check")} Visto</span>` : `<span class="tag warn">Pendente</span>`;
           const n = songs.get(e.id) || 0;
-          return `<a class="tlcard${e.status === "draft" ? " draft" : ""}" href="#/escala/${e.id}" style="--tc:${attr(e.color || e.teams?.accent_color || "var(--accent)")}">
+          return `<a class="tlcard${e.status === "draft" ? " draft" : ""}" href="#/escala/${e.id}" style="--tc:${attr(e.teams?.accent_color || "var(--accent)")}">
             <div class="top"><h3>${esc(e.title)}</h3>${st}</div>
             <div class="meta">${fTime(e.starts_at)}${e.location ? ` · ${esc(e.location)}` : ""}</div>
             <div class="foot"><span class="avs">${ids.slice(0, 6).map((u) => avatar(ppl.get(u) || { display_name: "?" }, 28, false)).join("")}${ids.length > 6 ? `<span class="more">+${ids.length - 6}</span>` : ""}</span>
