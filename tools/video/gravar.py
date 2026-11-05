@@ -40,10 +40,11 @@ class Rec:
         self.click(loc); self.p.keyboard.type(text, delay=70); time.sleep(0.4)
 
 def main(slug, conta):
+    global BASE
     import importlib.util
     spec = importlib.util.spec_from_file_location("roteiro", os.path.join(os.path.dirname(__file__), "roteiros", f"{slug}.py"))
     mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-    acc = json.load(open(conta)); out = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "app", "tutoriais")); os.makedirs(out, exist_ok=True)
+    allc = json.load(open(conta)); acc = allc[getattr(mod, "USER", "ana")]; out = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "app", "tutoriais")); os.makedirs(out, exist_ok=True)
     tmp = f"/tmp/claude-0/video-{slug}"; shutil.rmtree(tmp, ignore_errors=True); os.makedirs(tmp)
     W, H = 390, 844
     with sync_playwright() as pw:
@@ -54,8 +55,12 @@ def main(slug, conta):
         ctx = br.new_context(viewport={"width": W, "height": H}, no_viewport=False, locale="pt-BR", timezone_id="America/Sao_Paulo", storage_state=state,
                              record_video_dir=tmp, record_video_size={"width": 780, "height": 1688}, has_touch=False)
         ctx.add_init_script(CURSOR)
-        page = ctx.new_page(); page.goto(BASE + "/"); page.wait_for_selector(".hero", timeout=20000); time.sleep(1.0)
-        rec = Rec(page); mod.run(rec, page, acc, expect)
+        page = ctx.new_page()
+        start = getattr(mod, "START", None)
+        page.goto(BASE + (f"/#/times/{allc["teams"][start]}" if start else "/")); page.wait_for_selector(".pagehead, .hero", timeout=20000); time.sleep(0.8)
+        if start: page.goto(BASE + "/#/"); page.wait_for_selector(".hero", timeout=20000)
+        time.sleep(1.0)
+        rec = Rec(page); mod.run(rec, page, allc, expect)
         time.sleep(1.2); end = rec.now(); vpath = page.video.path(); ctx.close(); br.close()
     mp4 = os.path.join(out, f"{slug}.mp4")
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", vpath, "-an", "-vf", "scale=540:-2", "-c:v", "libx264", "-preset", "veryfast", "-crf", "30", "-pix_fmt", "yuv420p", "-movflags", "+faststart", mp4], check=True)

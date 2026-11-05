@@ -2,6 +2,8 @@ import time
 TITLE = "Como criar uma escala"
 ABOUT = "Passo a passo para montar uma escala, escolher os participantes e as músicas."
 
+START = "louvor"
+
 def run(r, p, acc, expect):
     nxt = time.strftime("%Y-%m-%d", time.localtime(time.time() + 4 * 86400))
     r.say("Vamos criar uma escala. Toque em Escalas, na barra de baixo.", lambda: r.click(p.locator('.bottomnav a[href*="/escalas"]')))
