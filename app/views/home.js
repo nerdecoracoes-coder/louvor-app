@@ -38,7 +38,7 @@ export async function upcomingAssignments(limit = 6) {
 export function schedRow(s, { showTeam = true, feature = false } = {}) {
   const roles = s.roles || [];
   const where = [s.location, showTeam && s.teams ? s.teams.name : null].filter(Boolean).join(" · ");
-  const status = s.status === "draft" ? `<span class="tag gray">Rascunho</span>` : s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="seen">${icon("check")} Visto</span>` : "";
+  const status = s.status === "draft" ? `<span class="tag gray">Rascunho</span>` : s.ask_confirmation === false ? "" : s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="seen">${icon("check")} Visto</span>` : "";
   return `<a class="sched${feature ? " feature" : ""}${s.status === "draft" ? " draft" : ""}" href="#/escala/${s.id}">
     <div class="date"><span>${fDow(s.starts_at)}</span><b>${fDay(s.starts_at)}</b><span>${fMon(s.starts_at)}</span></div>
     <div class="info"><h3>${esc(s.title)}</h3><div class="meta">${fTime(s.starts_at)}${where ? ` · ${esc(where)}` : ""}</div>
@@ -54,7 +54,7 @@ const relDay = (iso) => {
 export function schedCard(s, { showTeam = true } = {}) {
   const roles = s.roles || [];
   const where = [s.location, showTeam && s.teams ? s.teams.name : null].filter(Boolean).join(" · ");
-  const status = s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="tag soft">${icon("check")} Visto</span>` : "";
+  const status = s.ask_confirmation === false ? "" : s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="tag soft">${icon("check")} Visto</span>` : "";
   return `<a class="scard" href="#/escala/${s.id}"><div class="when"><b>${fDay(s.starts_at)}</b><span>${esc(fMon(s.starts_at))}</span>${status}</div>
     <h3>${esc(s.title)}</h3><div class="meta">${esc(relDay(s.starts_at))} · ${fTime(s.starts_at)}${where ? ` · ${esc(where)}` : ""}</div>
     ${roles.length ? `<div class="side">${roles.map((r) => `<span class="pill">${esc(r)}</span>`).join("")}</div>` : ""}</a>`;

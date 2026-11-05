@@ -2361,3 +2361,8 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke all on function public.peaks_queue(int) from public, anon, authenticated;
 grant execute on function public.peaks_queue(int) to service_role;
+
+-- >>> supabase/migrations/20261105000004_escala_opcoes.sql
+-- Opções da escala (05/11/2026): pedir confirmação dos participantes e cor da escala.
+alter table public.schedules add column if not exists ask_confirmation boolean not null default true;
+alter table public.schedules add column if not exists color text check (color is null or color ~ '^#[0-9a-fA-F]{6}$');

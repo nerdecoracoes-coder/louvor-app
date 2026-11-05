@@ -221,7 +221,7 @@ function lyricsSheet(x) {
   sh.el.querySelector("#cp")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(text); toast("Letra copiada"); } catch { toast("Não foi possível copiar", "err"); } });
 }
 
-function cueEditor(s, team, cues, done) {
+export function cueEditor(s, team, cues, done) {
   let list = cues.map((c) => ({ ...c }));
   const sh = sheet(`<h3>Roteiro do culto</h3><div id="cl"></div>
     <div class="row gap mt wrap"><button class="btn ghost grow" id="add">${icon("plus")} Item</button>${!list.length ? `<button class="btn ghost grow" id="tpl">${icon("sparkle")} Usar modelo</button>` : ""}</div>
