@@ -99,6 +99,7 @@ export async function openPlayer(songId) {
       <div class="ptabs"><button data-tab="faixas" class="on">${icon("tracks")} Faixas</button><button data-tab="mix">${icon("sliders")} Mix</button><button data-tab="letra">${icon("lyrics")} Letra</button></div>
       <div class="pbody" id="pbody"></div>
       <div class="loadbar"><i id="lb" style="width:0"></i></div>
+      <div class="tiny muted" id="diag" style="padding:2px 16px;min-height:14px"></div>
       <div class="timeline" id="tl">
         ${regions.map((r) => { const c = rcol(r.color); return `<div class="rg" data-rg="${r.id}" style="left:${(r.position / L) * 100}%;width:${((r.end_position - r.position) / L) * 100}%${c ? `;--rc:${c.join(",")}` : ""}">${esc(r.name)}</div>`; }).join("")}
         ${marks.map((m) => { const c = rcol(m.color); return `<div class="mk" style="left:${(m.position / L) * 100}%${c ? `;border-color:${css(c)};color:${css(c)}` : ""}" title="${attr(m.name)}">${esc(m.name)}</div>`; }).join("")}
@@ -263,6 +264,12 @@ export async function openPlayer(songId) {
       const ly = root.querySelector("#lyr"); if (ly) ly.classList.toggle("playing", engine.playing && lyr.some((b) => b.start != null));
     };
     engine.addEventListener("state", updateState);
+    engine.diag = () => {
+      const t = engine.timings || {}, ms = [...engine.media.values()];
+      const el = root.querySelector("#diag"); if (!el) return;
+      el.textContent = `Diagnóstico: dados ${t.dados ?? "–"} ms · links ${t.versaoLeve ?? "–"} ms · 1º trecho pronto ${t.pronta ?? "–"} ms · play→som ${t.play ?? "–"} ms · ${ms.filter((m) => m.light).length}/${ms.length} faixas leves · ${(engine.bytesLoaded / 1048576).toFixed(1)} MB`;
+    };
+    engine.addEventListener("state", () => engine.diag?.());
     engine.addEventListener("loading", (e) => { root.querySelector("#lb").style.width = `${Math.round(e.detail.progress * 100)}%`; });
     engine.addEventListener("error", (e) => toast(e.detail.message, "err"));
     engine.addEventListener("background", (e) => { root.querySelector("#lb").style.width = `${Math.round(e.detail.progress * 100)}%`; if (e.detail.progress >= 1) setTimeout(() => (root.querySelector(".loadbar").style.opacity = 0), 600); });
@@ -334,7 +341,8 @@ export async function openPlayer(songId) {
     drawTab(); updateState(); loop();
     // carregamento inicial (primeiros segundos) e o restante em segundo plano
     engine.preload(0, 1, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; })
-      .then(() => { if (engine.timings) { engine.timings.pronta = Math.round(performance.now() - engine.t0open); console.info("[player] tempos (ms)", engine.timings, `${Math.round(engine.bytesLoaded / 1024)} KB`); } })
+      .then(() => { if (engine.timings) {
+        engine.diag(); engine.timings.pronta = Math.round(performance.now() - engine.t0open); console.info("[player] tempos (ms)", engine.timings, `${Math.round(engine.bytesLoaded / 1024)} KB`); } })
       .then(() => engine.background()).catch((e) => toast(errMsg(e), "err"));
   }
 }

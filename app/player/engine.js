@@ -363,11 +363,13 @@ export class Engine extends EventTarget {
     if (this.ctx.state === "suspended") await this.ctx.resume();
     if (this.pos >= this.length - 0.05) this.pos = this.loop ? this.loop[0] : 0;
     this.buffering = true; this.dispatch("state");
+    const tPlay = performance.now();
     // começa assim que o primeiro trecho de cada faixa chega; o resto vem enquanto toca
     try { await this.preload(this.pos, this.pos + 1, (p) => this.dispatch("loading", { progress: p })); }
     catch (e) { this.buffering = false; this.dispatch("state"); this.dispatch("error", { message: e.message }); return; }
     if (this.destroyed) return;
     this.buffering = false;
+    if (this.timings) this.timings.play = Math.round(performance.now() - tPlay);
     this.t0 = this.ctx.currentTime + 0.08; this.p0 = this.pos;
     this.playing = true; this.scheduled.clear();
     this.scheduleItemEnvelopes();
