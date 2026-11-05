@@ -203,18 +203,28 @@ async function render() {
   if (!document.getElementById("view")) renderShell();
   document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === navActive(path)));
   // elemento novo a cada navegação: nenhum ouvinte de evento sobra da tela anterior
+  // a tela nova é montada escondida; a antiga fica visível até a nova ter conteúdo (sem "carregando" no meio)
+  document.querySelectorAll("[data-oldview]").forEach((x) => x.remove());
   const old = document.getElementById("view");
   const view = old.cloneNode(false);
-  old.replaceWith(view);
+  old.id = ""; old.dataset.oldview = "1";
+  view.hidden = true;
+  old.after(view);
+  let swapped = false;
+  const swap = () => { if (swapped || token !== current) return; swapped = true; obs.disconnect(); clearTimeout(timer); old.remove(); view.hidden = false; window.scrollTo({ top: 0 }); };
+  const ready = () => view.children.length > 1 || (view.firstElementChild && !view.firstElementChild.classList.contains("spin"));
+  const obs = new MutationObserver(() => { if (ready()) swap(); });
+  obs.observe(view, { childList: true });
+  const timer = setTimeout(swap, 450);
   document.body.classList.toggle("in-chat", /^\/chat\/.+/.test(path));
   applyOrgTheme();
   const token = (current = {});
-  if (!m) { view.innerHTML = `<div class="empty">${icon("alert")}<b>Página não encontrada</b><a class="btn ghost mt" href="#/">Voltar ao início</a></div>`; return; }
+  if (!m) { view.innerHTML = `<div class="empty">${icon("alert")}<b>Página não encontrada</b><a class="btn ghost mt" href="#/">Voltar ao início</a></div>`; swap(); return; }
   headerActions("");
   view.dataset.route = path;
   try { await m.handler(m.params, view, () => token === current); }
   catch (e) { console.error(e); view.innerHTML = `<div class="empty">${icon("alert")}<b>Não foi possível carregar</b><p>${esc(errMsg(e))}</p><button class="btn ghost mt" onclick="location.reload()">Tentar de novo</button></div>`; }
-  window.scrollTo({ top: 0 });
+  if (token === current) swap(); else { obs.disconnect(); clearTimeout(timer); }
 }
 window.addEventListener("hashchange", render);
 document.addEventListener("org-changed", () => {

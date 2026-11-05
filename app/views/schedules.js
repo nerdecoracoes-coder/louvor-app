@@ -547,37 +547,140 @@ async function calendar(el, scope) {
 }
 
 // ---------------------------------------------------------------- panorama de escalas
-// Quantas vezes cada pessoa foi escalada no mês, e em quais funções. Ajuda a dividir de forma justa.
+const DOWS = ["Domingo", "Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado"];
+const tzParts = (iso) => {
+  const f = new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, weekday: "short", timeZone: TZ_SP }).formatToParts(new Date(iso));
+  const h = Number(f.find((x) => x.type === "hour").value) % 24, w = f.find((x) => x.type === "weekday").value;
+  return { h, dow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].indexOf(w) };
+};
+const TZ_SP = "America/Sao_Paulo";
+
 async function panorama(_, el, alive) {
-  let month = new Date(ymd(new Date()) + "T12:00:00"); month.setDate(1);
   const teamIds = state.space ? [state.space.id] : (isAdmin() ? null : state.myTeams.map((t) => t.id));
   const ppl = await people();
-  async function draw() {
-    el.innerHTML = spinner();
-    const from = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
-    const to = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
-    let q = sb.from("schedule_assignments").select("user_id,role_name,schedules!inner(id,team_id,status,starts_at)").eq("org_id", state.org.id)
-      .eq("schedules.status", "published").gte("schedules.starts_at", from).lt("schedules.starts_at", to);
-    if (teamIds) q = q.in("schedules.team_id", teamIds.length ? teamIds : ["00000000-0000-0000-0000-000000000000"]);
-    const rows = await must(q);
-    if (alive && !alive()) return;
-    const by = new Map();
-    for (const r of rows) {
-      if (!by.has(r.user_id)) by.set(r.user_id, { scheds: new Set(), roles: new Map() });
-      const x = by.get(r.user_id); x.scheds.add(r.schedules.id);
-      if (r.role_name) x.roles.set(r.role_name, (x.roles.get(r.role_name) || 0) + 1);
-    }
-    const list = [...by.entries()].map(([u, x]) => ({ u, n: x.scheds.size, roles: [...x.roles.entries()].sort((a, b) => b[1] - a[1]) })).sort((a, b) => b.n - a.n || personName(ppl, a.u).localeCompare(personName(ppl, b.u)));
-    const max = Math.max(1, ...list.map((x) => x.n));
-    const total = new Set(rows.map((r) => r.schedules.id)).size;
-    el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><h1>Panorama de escalas</h1></div>
-      <div class="calhead"><button class="iconbtn" data-m="-1" aria-label="Mês anterior">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1" aria-label="Próximo mês">${icon("chevronRight")}</button></div>
-      <p class="subhead">${total} escala${total === 1 ? "" : "s"} publicada${total === 1 ? "" : "s"} no mês${state.space ? ` · ${esc(state.space.name)}` : ""}.</p>
-      ${list.length ? `<div class="pano">${list.map((x) => `<div><div class="row1">${avatar(ppl.get(x.u), 40, false)}<div class="who"><b class="ellipsis">${esc(personName(ppl, x.u))}</b>
-        <small>${x.roles.map(([r, n]) => `${esc(r)}${n > 1 ? ` ×${n}` : ""}`).join(" · ") || "Sem função"}</small></div><span class="n">${x.n}</span></div>
-        <div class="bar" style="margin-top:8px"><i style="width:${Math.round((x.n / max) * 100)}%"></i></div></div>`).join("")}</div>`
-        : `<div class="card">${empty("bars", "Nenhuma escala publicada neste mês", "Quando houver escalas publicadas, você vê aqui quem serviu e quantas vezes.")}</div>`}`;
+  const flt = { month: new Date(ymd(new Date()) + "T12:00:00"), h0: 0, h1: 24, user: "all", dows: [true, true, true, true, true, true, true] };
+  flt.month.setDate(1);
+  const ui = { compact: false, onlyFilled: false };
+  const cache = new Map(); // mês -> dados, para trocar de mês sem piscar
+  const mkey = () => `${flt.month.getFullYear()}-${flt.month.getMonth()}`;
+  const roleOrder = new Map();
+  try { for (const r of await must(sb.from("music_roles").select("name,sort").eq("org_id", state.org.id))) roleOrder.set(r.name, r.sort); } catch { /* sem ordem */ }
+
+  async function load() {
+    const k = mkey();
+    if (cache.has(k)) return cache.get(k);
+    const from = new Date(flt.month.getFullYear(), flt.month.getMonth(), 1).toISOString();
+    const to = new Date(flt.month.getFullYear(), flt.month.getMonth() + 1, 1).toISOString();
+    const none = ["00000000-0000-0000-0000-000000000000"];
+    let q1 = sb.from("schedules").select("id,title,team_id,starts_at,ask_confirmation").eq("org_id", state.org.id).eq("status", "published").gte("starts_at", from).lt("starts_at", to).order("starts_at");
+    if (teamIds) q1 = q1.in("team_id", teamIds.length ? teamIds : none);
+    const scheds = await must(q1);
+    const ids = scheds.map((x) => x.id);
+    const as = ids.length ? await must(sb.from("schedule_assignments").select("schedule_id,user_id,role_name,seen_at").in("schedule_id", ids)) : [];
+    const d = { scheds: scheds.map((x) => ({ ...x, ...tzParts(x.starts_at) })), as };
+    cache.set(k, d); return d;
   }
-  el.addEventListener("click", (e) => { const m = e.target.closest("[data-m]"); if (m) { month.setMonth(month.getMonth() + Number(m.dataset.m)); draw(); } });
+
+  const visible = (d) => {
+    const scheds = d.scheds.filter((s) => s.h >= flt.h0 && (s.h < flt.h1 || flt.h1 === 24) && flt.dows[s.dow]
+      && (flt.user === "all" || d.as.some((a) => a.schedule_id === s.id && a.user_id === flt.user)));
+    const keep = new Set(scheds.map((s) => s.id));
+    const as = d.as.filter((a) => keep.has(a.schedule_id) && (flt.user === "all" || a.user_id === flt.user));
+    return { scheds, as };
+  };
+
+  async function draw() {
+    if (!cache.has(mkey())) el.innerHTML = spinner();
+    const d0 = await load();
+    if (alive && !alive()) return;
+    const { scheds, as } = visible(d0);
+    const used = new Set(as.map((a) => a.role_name || "Sem função"));
+    let roles = [...new Set([...roleOrder.keys(), ...used])].filter((r) => used.has(r) || !ui.onlyFilled && roleOrder.has(r));
+    if (ui.onlyFilled) roles = roles.filter((r) => used.has(r));
+    roles.sort((a, b) => (roleOrder.get(a) ?? 999) - (roleOrder.get(b) ?? 999) || a.localeCompare(b));
+    const people_ = new Map();
+    for (const a of as) { if (!people_.has(a.user_id)) people_.set(a.user_id, new Set()); people_.get(a.user_id).add(a.schedule_id); }
+    const today = ymd(new Date());
+    const cw = ui.compact ? 58 : 84, rw = ui.compact ? 70 : 96, rh = ui.compact ? 58 : 84;
+    const dot = (s, a) => s.ask_confirmation === false ? "" : `<i class="pdot ${a.seen_at ? "ok" : "wait"}"></i>`;
+    const cell = (r, s) => {
+      const list = as.filter((a) => a.schedule_id === s.id && (a.role_name || "Sem função") === r);
+      if (!list.length) return `<button class="pcell empty" data-cell="${s.id}|${attr(r)}" aria-label="Vaga livre">${canManageTeam(s.team_id) ? icon("plus") : ""}</button>`;
+      const sz = list.length > 1 ? (ui.compact ? 26 : 32) : (ui.compact ? 36 : 44);
+      return `<button class="pcell" data-cell="${s.id}|${attr(r)}">${list.map((a) => `<span class="pav">${avatar(ppl.get(a.user_id), sz, false)}${dot(s, a)}</span>`).join("")}</button>`;
+    };
+    const grid = scheds.length ? `<div class="pgrid-wrap"><div class="pgrid" style="grid-template-columns:${rw}px repeat(${scheds.length},${cw}px);grid-auto-rows:${rh}px">
+        <div class="ph corner">${icon("calendar")}</div>
+        ${scheds.map((s) => `<button class="ph day${ymd(s.starts_at) === today ? " today" : ""}" data-open="${s.id}"><b>${fDay(s.starts_at)}</b><span>${esc(fDow(s.starts_at).replace(/\.$/, ""))}</span><small>${fTime(s.starts_at)}</small></button>`).join("")}
+        ${roles.map((r) => `<div class="ph role">${icon(roleIcon(r))}<span>${esc(r)}</span></div>${scheds.map((s) => cell(r, s)).join("")}`).join("")}</div></div>`
+      : `<div class="card">${empty("bars", "Nenhuma escala neste período", "Troque o mês ou ajuste os filtros para ver as escalas publicadas.")}</div>`;
+    const filtered = flt.h0 > 0 || flt.h1 < 24 || flt.user !== "all" || flt.dows.some((x) => !x);
+    el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><div class="grow"><h1 style="font-size:22px">Panorama de escalas</h1>
+        ${state.space ? `<span class="small muted">${esc(state.space.name)}</span>` : ""}</div><button class="iconbtn${filtered ? " on" : ""}" id="pfilter" aria-label="Filtros">${icon("filter")}</button></div>
+      <div class="calhead"><button class="iconbtn" data-m="-1" aria-label="Mês anterior">${icon("chevronLeft")}</button><b>${fMonthYear(flt.month)}</b><button class="iconbtn" data-m="1" aria-label="Próximo mês">${icon("chevronRight")}</button></div>
+      <div class="chips pchips"><button class="chip" id="ppeople">${icon("users")} ${people_.size}</button>
+        <button class="chip" id="pview">${icon(ui.compact ? "list" : "calendar")} ${ui.compact ? "Compacta" : "Extensa"}</button>
+        <button class="chip" id="proles">${icon("eye")} ${ui.onlyFilled ? "Só preenchidas" : "Todas funções"}</button></div>
+      <p class="tiny muted" style="margin:6px 0 10px">${icon("hand")} Toque em uma célula para ver as opções</p>${grid}`;
+  }
+
+  const filterPage = () => {
+    const f = { ...flt, dows: [...flt.dows] };
+    const members = [...new Set([...cache.values()].flatMap((d) => d.as.map((a) => a.user_id)))].sort((a, b) => personName(ppl, a).localeCompare(personName(ppl, b)));
+    const allUsers = [...(state.space ? [] : [])];
+    const opts = (members.length ? members : [...ppl.keys()]).map((u) => `<option value="${u}" ${f.user === u ? "selected" : ""}>${esc(personName(ppl, u))}</option>`).join("");
+    const paint = () => {
+      el.innerHTML = `<div class="pagehead"><button class="back" id="fback" aria-label="Voltar">${icon("chevronLeft")}</button><h1 style="font-size:22px">Filtros</h1></div>
+        <div class="calhead"><button class="iconbtn" data-fm="-1">${icon("chevronLeft")}</button><b class="accent">${fMonthYear(f.month)}</b><button class="iconbtn" data-fm="1">${icon("chevronRight")}</button></div>
+        <div class="card"><div class="rng"><input type="range" id="h0" min="0" max="24" step="1" value="${f.h0}"><input type="range" id="h1" min="0" max="24" step="1" value="${f.h1}"></div>
+          <p class="small muted" style="text-align:center;margin:8px 0 0" id="hlab">${f.h0}h / ${f.h1}h</p></div>
+        <div class="sec"><h2>Membros</h2></div>
+        <fieldset class="of"><select id="fuser"><option value="all">Todos</option>${opts}</select></fieldset>
+        <div class="list"><label class="switchrow"><span class="grow">Dias da semana</span><span class="switch"><input type="checkbox" id="alld" ${f.dows.every(Boolean) ? "checked" : ""}><i></i></span></label>
+          ${DOWS.map((n, i) => `<label class="switchrow"><span class="grow">${n}</span><span class="switch"><input type="checkbox" data-dow="${i}" ${f.dows[i] ? "checked" : ""}><i></i></span></label>`).join("")}</div>
+        <button class="fabsave" id="fapply">${icon("check")} Aplicar</button>`;
+      const lab = () => (el.querySelector("#hlab").textContent = `${f.h0}h / ${f.h1}h`);
+      el.querySelector("#h0").oninput = (e) => { f.h0 = Math.min(Number(e.target.value), f.h1 - 1 < 0 ? 0 : f.h1); if (f.h0 > f.h1) f.h0 = f.h1; e.target.value = f.h0; lab(); };
+      el.querySelector("#h1").oninput = (e) => { f.h1 = Math.max(Number(e.target.value), f.h0); e.target.value = f.h1; lab(); };
+      el.querySelector("#fuser").onchange = (e) => (f.user = e.target.value);
+      el.querySelector("#alld").onchange = (e) => { f.dows = f.dows.map(() => e.target.checked); paint(); };
+      el.querySelectorAll("[data-dow]").forEach((c) => (c.onchange = () => { f.dows[Number(c.dataset.dow)] = c.checked; paint(); }));
+      el.querySelectorAll("[data-fm]").forEach((b) => (b.onclick = () => { f.month = new Date(f.month.getFullYear(), f.month.getMonth() + Number(b.dataset.fm), 1, 12); paint(); }));
+      el.querySelector("#fback").onclick = () => draw();
+      el.querySelector("#fapply").onclick = () => { Object.assign(flt, f); draw(); };
+    };
+    void allUsers; paint();
+  };
+
+  el.addEventListener("click", (e) => {
+    const t = e.target;
+    const m = t.closest("[data-m]"); if (m) { flt.month = new Date(flt.month.getFullYear(), flt.month.getMonth() + Number(m.dataset.m), 1, 12); draw(); return; }
+    if (t.closest("#pfilter")) return filterPage();
+    if (t.closest("#pview")) { ui.compact = !ui.compact; return draw(); }
+    if (t.closest("#proles")) { ui.onlyFilled = !ui.onlyFilled; return draw(); }
+    const o = t.closest("[data-open]"); if (o) return go(`/escala/${o.dataset.open}`);
+    if (t.closest("#ppeople")) {
+      const { as } = visible(cache.get(mkey()) || { scheds: [], as: [] });
+      const by = new Map();
+      for (const a of as) { if (!by.has(a.user_id)) by.set(a.user_id, new Set()); by.get(a.user_id).add(a.schedule_id); }
+      const list = [...by.entries()].map(([u, set]) => ({ u, n: set.size })).sort((a, b) => b.n - a.n || personName(ppl, a.u).localeCompare(personName(ppl, b.u)));
+      const max = Math.max(1, ...list.map((x) => x.n));
+      sheet(`<h3>Quem serviu em ${esc(fMonthYear(flt.month))}</h3><div class="pano">${list.map((x) => `<div><div class="row1">${avatar(ppl.get(x.u), 40, false)}<div class="who"><b class="ellipsis">${esc(personName(ppl, x.u))}</b>
+        <small>${x.n} ${x.n === 1 ? "escala" : "escalas"} no mês</small></div><span class="n">${x.n}</span></div><div class="bar" style="margin-top:8px"><i style="width:${Math.round((x.n / max) * 100)}%"></i></div></div>`).join("") || `<p class="muted small">Ninguém escalado neste período.</p>`}</div>`, { wide: true });
+      return;
+    }
+    const c = t.closest("[data-cell]");
+    if (c) {
+      const [sid, role] = c.dataset.cell.split("|");
+      const d = visible(cache.get(mkey())), s = d.scheds.find((x) => x.id === sid);
+      const list = d.as.filter((a) => a.schedule_id === sid && (a.role_name || "Sem função") === role);
+      const sh = sheet(`<h3>${esc(role)}</h3><p class="small muted" style="margin-top:-6px">${esc(s.title)} · ${esc(cap(fDateLong(s.starts_at)))} às ${fTime(s.starts_at)}</p>
+        <div class="list">${list.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span>
+          <span class="s">${s.ask_confirmation === false ? "" : a.seen_at ? "Viu a escala" : "Ainda não viu"}</span></span></div>`).join("") || `<div class="li muted small">Vaga livre.</div>`}</div>
+        <a class="btn primary block mt" href="#/escala/${sid}" data-close>${icon("calendar")} Abrir escala</a>
+        ${!list.length && canManageTeam(s.team_id) ? `<a class="btn ghost block mt-s" href="#/escala/${sid}/editar" data-close>${icon("edit")} Escalar alguém</a>` : ""}`);
+      sh.el.querySelectorAll("[data-close]").forEach((x) => x.addEventListener("click", () => sh.close()));
+    }
+  });
   await draw();
 }

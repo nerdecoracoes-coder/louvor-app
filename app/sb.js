@@ -85,7 +85,23 @@ export function createClient(url, anonKey) {
   };
   schedule();
 
+  // Cache curto das consultas (só leitura): voltar a uma tela já vista abre na hora.
+  // Qualquer escrita limpa tudo. Chat, avisos e notificações nunca entram (precisam estar sempre frescos).
+  const memo = new Map();
+  const MEMO_TTL = 45_000, NOMEMO = /^\/(messages|notifications|chat_reads|polls|poll_votes)\b/;
+  const forget = () => memo.clear();
   async function rest(method, path, body, headers = {}) {
+    if (method !== "GET") forget();
+    const mk = method === "GET" && !NOMEMO.test(path) ? `${session?.user?.id || ""}|${headers.Accept || ""}|${path}` : null;
+    if (mk) {
+      const hit = memo.get(mk);
+      if (hit && Date.now() - hit.at < MEMO_TTL) return { ...hit.r, data: structuredClone(hit.r.data) };
+    }
+    const r = await rest1(method, path, body, headers);
+    if (mk && !r.error) memo.set(mk, { at: Date.now(), r: { ...r, data: structuredClone(r.data) } });
+    return r;
+  }
+  async function rest1(method, path, body, headers = {}) {
     let attempt = 0;
     for (;;) {
       const r = await fetch(`${url}/rest/v1${path}`, {
@@ -173,6 +189,7 @@ export function createClient(url, anonKey) {
   const functions = {
     url: (name) => `${url}/functions/v1/${name}`,
     async invoke(name, body) {
+      forget();
       const r = await fetch(`${url}/functions/v1/${name}`, {
         method: "POST", headers: { apikey: anonKey, ...(await authz()), "Content-Type": "application/json" }, body: JSON.stringify(body ?? {}),
       });
