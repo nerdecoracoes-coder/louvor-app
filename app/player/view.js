@@ -16,6 +16,7 @@ export function closePlayer() {
   current = null;
 }
 
+const loaderHtml = (text, pct = 0) => `<div class="loadov" id="loadov" role="status" aria-live="polite"><span class="lo-ic">${icon("sliders")}</span><b id="lo-t">${esc(text)}</b><div class="lo-bar"><i id="lo-b" style="width:${pct}%"></i></div></div>`;
 const fmt = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r.toFixed(1).padStart(4, "0")}`; };
 const dbLabel = (g) => { const d = gainToDb(g); return d === -Infinity ? "-∞" : (d > 0 ? "+" : "") + d.toFixed(1); };
 
@@ -23,7 +24,7 @@ export async function openPlayer(songId) {
   closePlayer();
   const root = document.createElement("div");
   root.className = "player";
-  root.innerHTML = `<div class="backdrop"></div><div class="ph"><button class="back" data-x aria-label="Fechar">${icon("chevronDown")}</button><div class="grow">${'<div class="spin" style="margin:6px 0"></div>'}</div></div>`;
+  root.innerHTML = `<div class="backdrop"></div><div class="ph"><button class="back" data-x aria-label="Fechar">${icon("chevronDown")}</button><div class="grow"></div></div>${loaderHtml("Abrindo a música…")}`;
   document.body.appendChild(root);
   document.body.classList.add("noscroll");
   const ctrl = { destroy() { engine?.destroy(); cancelAnimationFrame(raf); clearTimeout(saveT); root.remove(); document.body.classList.remove("noscroll"); window.__player = null; } };
@@ -114,7 +115,7 @@ export async function openPlayer(songId) {
       <div class="pinfo">${song.song_key ? `<span class="tile"><b>${esc(song.song_key)}</b><small>tom</small></span>` : ""}${song.bpm ? `<span class="tile"><b>${Number(song.bpm)}</b><small>bpm</small></span>` : ""}
         ${project.time_sig_num ? `<span class="tile"><b>${project.time_sig_num}/${project.time_sig_den}</b><small>compasso</small></span>` : ""}
         <span class="tile mixt"><b id="mixtag">Mix do projeto</b><small id="buf" class="hidden">Carregando…</small></span></div>
-      <div class="tiny muted" id="diag"></div>`;
+      <div class="tiny muted" id="diag"></div>${loaderHtml("Carregando faixas…")}`;
     root.querySelector("[data-x]").onclick = close;
     root.querySelector(".ph h2").onclick = () => root.classList.toggle("diag");   // toque no título: mostra os tempos de carregamento
     const body = root.querySelector("#pbody");
@@ -342,7 +343,16 @@ export async function openPlayer(songId) {
     };
     drawTab(); updateState(); loop();
     // carregamento inicial (primeiros segundos) e o restante em segundo plano
-    engine.preload(0, 1, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; })
+    // enquanto os primeiros segundos de cada faixa não chegam, uma tela de carregamento cobre os controles (nada de tocar antes da hora)
+    const total = engine.needed(0, 1).filter(([f, c]) => !engine.isLoaded(f, c)).length;
+    const lo = (p) => {
+      const t = root.querySelector("#lo-t"), b = root.querySelector("#lo-b"); if (!t) return;
+      t.textContent = total ? `Carregando faixas… ${Math.min(total, Math.round(p * total))}/${total}` : "Preparando…"; b.style.width = `${Math.round(p * 100)}%`;
+    };
+    lo(0);
+    const hideLoader = () => { const o = root.querySelector("#loadov"); if (o) { o.classList.add("out"); setTimeout(() => o.remove(), 350); } };
+    engine.preload(0, 1, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; lo(p); })
+      .then(hideLoader, (e) => { hideLoader(); throw e; })
       .then(() => { if (engine.timings) {
         engine.diag(); engine.timings.pronta = Math.round(performance.now() - engine.t0open); console.info("[player] tempos (ms)", engine.timings, `${Math.round(engine.bytesLoaded / 1024)} KB`); } })
       .then(() => engine.background()).catch((e) => toast(errMsg(e), "err"));

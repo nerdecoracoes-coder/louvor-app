@@ -671,3 +671,14 @@ input[type=range].fader::-moz-range-thumb { width: 15px; height: 15px; border-ra
   .lyr .blk p { font-size: 20px; }
 }
 .pinfo .mixt { flex: 1; max-width: 160px; } .pinfo .mixt b { background: none !important; padding: 0 !important; white-space: nowrap; box-shadow: none !important; }
+
+/* tela de carregamento do player: cobre os controles até as faixas estarem prontas */
+.loadov { position: absolute !important; left: 0; right: 0; bottom: 0; top: 84px; z-index: 6 !important; background: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; transition: opacity .3s; }
+.loadov.out { opacity: 0; pointer-events: none; }
+.loadov .lo-ic { width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; background: var(--accent); color: #fff; box-shadow: 0 0 40px rgba(var(--accent-rgb), .45); animation: lopulse 1.6s ease-in-out infinite; }
+.loadov .lo-ic .ic { width: 38px; height: 38px; }
+.loadov b { font-weight: 500; color: var(--muted); font-size: 17px; font-variant-numeric: tabular-nums; }
+.loadov .lo-bar { width: min(260px, 70vw); height: 4px; border-radius: 4px; background: rgba(255, 255, 255, .1); overflow: hidden; }
+.loadov .lo-bar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .25s; }
+@keyframes lopulse { 50% { transform: scale(1.06); } }
+@media (orientation: landscape) and (max-height: 560px) { .loadov { top: 0 !important; grid-area: 1 / 1 / -1 / -1; } .loadov .lo-ic { width: 52px; height: 52px; } .loadov .lo-ic .ic { width: 26px; height: 26px; } }
