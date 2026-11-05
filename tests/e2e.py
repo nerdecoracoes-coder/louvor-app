@@ -439,7 +439,7 @@ with sync_playwright() as pw:
     # botão + de Escalas leva à criação no dia escolhido; sem o + no cabeçalho; Músicas sem seleção
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")
     assert bruno.locator("[data-act=add]").count() == 0
-    expect(bruno.locator("#addsched")).to_be_visible(timeout=10000)
+    expect(bruno.locator("#addsched")).to_be_visible(timeout=10000); shot(bruno, "27-escalas-lider")
     bruno.locator(".cal [data-day]").nth(11).click()
     day = bruno.locator(".cal .sel").inner_text().split("\n")[0].strip().zfill(2)
     bruno.locator("#addsched").click()

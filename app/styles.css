@@ -604,3 +604,9 @@ input[type=range].fader::-moz-range-thumb { width: 15px; height: 15px; border-ra
 .dots2 i { width: 22px; height: 22px; border-radius: 50%; background: var(--raised-2); box-shadow: inset 0 0 0 1px var(--line-2); transition: background .06s; }
 .dots2 i.ac { box-shadow: inset 0 0 0 2px var(--accent); }
 .dots2 i.on { background: var(--accent); }
+
+/* botão de adicionar em destaque (Escalas, Músicas) */
+.iconbtn.add { width: 48px; height: 48px; background: var(--accent); color: #fff; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), 0 8px 20px rgba(var(--accent-rgb), .4); backdrop-filter: none; }
+.iconbtn.add:hover { background: var(--accent); filter: brightness(1.1); }
+.iconbtn.add:active { transform: scale(.94); }
+.iconbtn.add .ic { width: 26px; height: 26px; stroke-width: 2.2; }

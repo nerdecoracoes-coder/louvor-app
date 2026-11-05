@@ -71,7 +71,7 @@ async function library(_, el, alive) {
     el.querySelector("#count").textContent = count;
   };
   const processing = rows.filter((r) => ["processing", "waiting_files"].includes(r.status)).length;
-  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1>${isStaff() ? `<a class="iconbtn" href="#/org/drive" aria-label="Google Drive">${icon("cloud")}</a><a class="iconbtn" href="#/musicas/nova" aria-label="Adicionar música">${icon("plus")}</a>` : ""}</div>
+  el.innerHTML = `<div class="pagehead"><h1>Músicas</h1>${isStaff() ? `<a class="iconbtn" href="#/org/drive" aria-label="Google Drive">${icon("cloud")}</a><a class="iconbtn add" href="#/musicas/nova" aria-label="Adicionar música">${icon("plus")}</a>` : ""}</div>
     ${processing ? `<div class="card mb row gap small">${icon("refresh", "accent")}<span>${processing} música(s) ainda sendo processada(s) a partir do Google Drive.</span></div>` : ""}
     <div class="tabsbar" role="tablist"><button class="on" data-tab="musicas">Músicas</button><button data-tab="artistas">Artistas</button><button data-tab="vs">Com VS</button></div>
     <label class="search srch hidden" id="sbox" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar por título ou artista"></label>
