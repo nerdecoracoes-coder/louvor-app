@@ -40,7 +40,7 @@ export async function lightFetch(L, start, end) {
   try { cache = await caches.open(CACHE_NAME); const hit = await cache.match(key); if (hit) return new Uint8Array(await hit.arrayBuffer()); } catch { cache = null; }
   let r;
   for (let attempt = 0; attempt < 3; attempt++) {
-    r = await fetch(L.url, { headers: { Range: `bytes=${start}-${end}` } }).catch(() => null);
+    r = await fetch(L.url, { headers: { Range: `bytes=${start}-${end}` }, signal: AbortSignal.timeout?.(20000) }).catch(() => null);
     if (r && (r.status === 206 || r.ok)) break;
     if (r && r.status === 403) break; // link expirado: o pedaço volta a ser lido do WAV
     await new Promise((res) => setTimeout(res, 300 * (attempt + 1)));
@@ -167,7 +167,7 @@ export class Engine extends EventTarget {
     if (end != null) headers.Range = `bytes=${start}-${end}`;
     let r;
     for (let attempt = 0; attempt < 3; attempt++) {
-      r = await fetch(url, { headers }).catch(() => null);
+      r = await fetch(url, { headers, signal: AbortSignal.timeout?.(45000) }).catch(() => null);
       if (r && (r.ok || r.status === 206)) break;
       await new Promise((res) => setTimeout(res, 400 * (attempt + 1)));
     }
@@ -338,7 +338,7 @@ export class Engine extends EventTarget {
         let cache = null, bytes = null;
         try { cache = await caches.open(CACHE_NAME); const hit = await cache.match(key); if (hit) bytes = new Uint8Array(await hit.arrayBuffer()); } catch { cache = null; }
         if (!bytes) {
-          const r = await fetch(m.light.peaksUrl);
+          const r = await fetch(m.light.peaksUrl, { signal: AbortSignal.timeout?.(20000) });
           if (!r.ok) return;
           bytes = new Uint8Array(await r.arrayBuffer());
           try { await cache?.put(key, new Response(bytes)); } catch { /* cota cheia */ }
@@ -362,7 +362,7 @@ export class Engine extends EventTarget {
       try { cache = await caches.open(CACHE_NAME); const hit = await cache.match(key); if (hit) { m.whole = new Uint8Array(await hit.arrayBuffer()); return; } } catch { cache = null; }
       let r;
       for (let attempt = 0; attempt < 3; attempt++) {
-        r = await fetch(m.light.url).catch(() => null);
+        r = await fetch(m.light.url, { signal: AbortSignal.timeout?.(90000) }).catch(() => null);
         if (r?.ok || r?.status === 403) break;
         await new Promise((res) => setTimeout(res, 400 * (attempt + 1)));
       }
@@ -390,17 +390,23 @@ export class Engine extends EventTarget {
   }
 
   // baixa a música toda em segundo plano (vai para o cache do navegador e completa as formas de onda)
-  async background() {
-    // 1) arquivos inteiros, vários ao mesmo tempo (fora do celular com dados móveis / economia de dados)
+  // 1) arquivos inteiros, vários ao mesmo tempo (fora do celular com dados móveis / economia de dados).
+  // Devolve o total de arquivos (0 = não se aplica) e informa o andamento em onProgress(feitos, total).
+  async downloadAll(onProgress) {
     const conn = navigator.connection;
     const wholeOk = !conn?.saveData && conn?.type !== "cellular";
     const lights = [...this.media.values()].filter((m) => m.light);
-    if (wholeOk && lights.length) {
-      const q = [...lights]; let done = 0;
-      await Promise.all(Array.from({ length: Math.min(6, q.length) }, async () => {
-        while (q.length && !this.destroyed) { await this.loadWhole(q.shift()); this.dispatch("background", { progress: Math.min(0.98, ++done / lights.length) }); }
-      }));
-    }
+    if (!wholeOk || !lights.length) return 0;
+    const q = [...lights]; let done = lights.filter((m) => m.whole).length;
+    onProgress?.(done, lights.length);
+    await Promise.all(Array.from({ length: Math.min(6, q.length) }, async () => {
+      while (q.length && !this.destroyed) { const m = q.shift(); if (m.whole) continue; await this.loadWhole(m); onProgress?.(++done, lights.length); this.dispatch("background", { progress: Math.min(0.98, done / lights.length) }); }
+    }));
+    return lights.length;
+  }
+
+  async background() {
+    await this.downloadAll();
     // 2) o que ainda não tem forma de onda: baixa e decodifica trecho a trecho
     if ([...this.media.values()].every((m) => m.light && m.peaksReady)) { this.dispatch("background", { progress: 1 }); return; }
     const total = Math.ceil(this.length / CHUNK);
@@ -423,7 +429,8 @@ export class Engine extends EventTarget {
 
   async play() {
     if (this.playing || this.destroyed) return;
-    if (this.ctx.state === "suspended") await this.ctx.resume();
+    // depois de sair do app o sistema pode demorar (ou nunca responder) para devolver o áudio: não deixa travar
+    if (this.ctx.state !== "running") await Promise.race([this.ctx.resume().catch(() => {}), new Promise((r) => setTimeout(r, 1500))]);
     if (this.pos >= this.length - 0.05) this.pos = this.loop ? this.loop[0] : 0;
     this.buffering = true; this.dispatch("state");
     const tPlay = performance.now();

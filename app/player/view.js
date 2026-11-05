@@ -27,7 +27,13 @@ export async function openPlayer(songId) {
   root.innerHTML = `<div class="backdrop"></div><div class="ph"><button class="back" data-x aria-label="Fechar">${icon("chevronDown")}</button><div class="grow"></div></div>${loaderHtml("Abrindo a música…")}`;
   document.body.appendChild(root);
   document.body.classList.add("noscroll");
-  const ctrl = { destroy() { engine?.destroy(); cancelAnimationFrame(raf); clearTimeout(saveT); root.remove(); document.body.classList.remove("noscroll"); window.__player = null; } };
+  const onVis = () => {
+    if (document.visibilityState !== "visible" || !engine?.ctx) return;
+    // voltou ao app: devolve o áudio sem esperar (se o sistema não devolver, a música fica pausada em vez de travar)
+    if (engine.ctx.state !== "running") { engine.ctx.resume?.().catch(() => {}); setTimeout(() => { if (engine && engine.playing && engine.ctx.state !== "running") engine.pause(); }, 1500); }
+  };
+  document.addEventListener("visibilitychange", onVis);
+  const ctrl = { destroy() { document.removeEventListener("visibilitychange", onVis); engine?.destroy(); cancelAnimationFrame(raf); clearTimeout(saveT); root.remove(); document.body.classList.remove("noscroll"); window.__player = null; } };
   current = ctrl;
   let engine = null, raf = 0, saveT = 0;
   root.querySelector("[data-x]").onclick = close;
@@ -66,7 +72,7 @@ export async function openPlayer(songId) {
     await engine.init();
     engine.timings = marks; engine.t0open = T0;
     window.__player = engine;
-    engine.loadPeaks();
+    engine.peaksP = engine.loadPeaks();
     const nLight = media.filter((m) => m.light).length;
     if (media.length && nLight < media.length) toast(`${media.length - nLight} de ${media.length} faixas ainda estão sendo otimizadas; esta música pode abrir mais devagar.`);
     build(root, song, project, engine);
@@ -343,15 +349,21 @@ export async function openPlayer(songId) {
     };
     drawTab(); updateState(); loop();
     // carregamento inicial (primeiros segundos) e o restante em segundo plano
-    // enquanto os primeiros segundos de cada faixa não chegam, uma tela de carregamento cobre os controles (nada de tocar antes da hora)
+    // A tela de carregamento só sai quando a música está realmente liberada: primeiros trechos de todas as faixas,
+    // arquivos inteiros (quando a conexão permite) e formas de onda. Depois de 20 s aparece "Abrir mesmo assim".
     const total = engine.needed(0, 1).filter(([f, c]) => !engine.isLoaded(f, c)).length;
-    const lo = (p) => {
-      const t = root.querySelector("#lo-t"), b = root.querySelector("#lo-b"); if (!t) return;
-      t.textContent = total ? `Carregando faixas… ${Math.min(total, Math.round(p * total))}/${total}` : "Preparando…"; b.style.width = `${Math.round(p * 100)}%`;
-    };
-    lo(0);
-    const hideLoader = () => { const o = root.querySelector("#loadov"); if (o) { o.classList.add("out"); setTimeout(() => o.remove(), 350); } };
-    engine.preload(0, 1, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; lo(p); })
+    const setLo = (text, p) => { const t = root.querySelector("#lo-t"), b = root.querySelector("#lo-b"); if (!t) return; t.textContent = text; b.style.width = `${Math.round(p * 100)}%`; };
+    setLo(total ? `Carregando faixas… 0/${total}` : "Preparando…", 0);
+    let released = false;
+    const hideLoader = () => { if (released) return; released = true; clearTimeout(skipT); const o = root.querySelector("#loadov"); if (o) { o.classList.add("out"); setTimeout(() => o.remove(), 350); } };
+    const skipT = setTimeout(() => { const o = root.querySelector("#loadov"); if (o && !o.querySelector(".lo-skip")) { const b = document.createElement("button"); b.className = "lo-skip"; b.textContent = "Abrir mesmo assim"; b.onclick = hideLoader; o.appendChild(b); } }, 20000);
+    engine.preload(0, 1, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; if (!released) setLo(`Carregando faixas… ${Math.min(total, Math.round(p * total))}/${total}`, p * 0.5); })
+      .then(async () => {
+        if (released) return;
+        setLo("Baixando a música…", 0.5);
+        await engine.downloadAll((d, t) => { if (!released) setLo(`Baixando a música… ${d}/${t}`, 0.5 + 0.5 * (d / t)); }).catch(() => {});
+        await engine.peaksP?.catch(() => {});
+      })
       .then(hideLoader, (e) => { hideLoader(); throw e; })
       .then(() => { if (engine.timings) {
         engine.diag(); engine.timings.pronta = Math.round(performance.now() - engine.t0open); console.info("[player] tempos (ms)", engine.timings, `${Math.round(engine.bytesLoaded / 1024)} KB`); } })
