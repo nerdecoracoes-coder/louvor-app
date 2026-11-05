@@ -2,7 +2,8 @@
 // próprio do time e exportação para PowerPoint e texto. Serve ao Louvor e à Multimídia.
 import { sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, empty, spinner, teamHas, canManageTeam } from "../core.js";
 import { parseLyricsText, lyricsToText } from "./songs.js";
-import { buildPptx } from "../lib/pptx.js";
+import { buildPptx, zipStore } from "../lib/pptx.js";
+import { fDate, fTime } from "../core.js";
 
 export function register(route) {
   route("/times/:id/letras", (p, el, a) => library(p.id, el, a));
@@ -137,4 +138,43 @@ async function editor(teamId, songId, el, alive) {
     saved = true; toast("Versão salva");
   });
   void canManageTeam;
+}
+
+// ---------------------------------------------------------------- pacote do culto
+// Um .zip com: ordem do culto, um PowerPoint com todas as músicas na ordem e, para cada música, PowerPoint e texto.
+export const letrasTeamOf = () => state.myTeams.find((t) => t.id === state.space?.id && teamHas(t, "letras")) || state.myTeams.find((t) => teamHas(t, "letras")) || state.orgTeams.find((t) => teamHas(t, "letras") && state.role === "admin") || null;
+
+export async function downloadPackage(s) {
+  const team = letrasTeamOf();
+  if (!team) throw new Error("Seu time não usa letras para a mídia.");
+  const lib = new Map((await loadLibrary(team.id)).map((x) => [x.id, x]));
+  const mine = new Map((await must(sb.from("lyric_slides").select("*").eq("team_id", team.id))).map((x) => [x.song_id, x]));
+  let list = (await must(sb.from("schedule_songs").select("song_id,position,title_snapshot,artist_snapshot,song_key").eq("schedule_id", s.id).order("position")))
+    .map((x) => { const l = lib.get(x.song_id); return { id: x.song_id, title: l?.title || x.title_snapshot, artist: l?.artist || x.artist_snapshot, key: x.song_key || l?.song_key, blocks: l?.lyrics?.blocks || [] }; });
+  if (!list.length) {
+    const r = await sb.rpc("service_songs", { p_schedule: s.id });
+    list = (r.data || []).map((x) => ({ id: x.song_id, title: x.title, artist: x.artist, key: x.song_key, blocks: x.lyrics?.blocks || [] }));
+  }
+  if (!list.length) throw new Error("Esta escala ainda não tem músicas.");
+  const cues = (await sb.from("schedule_cues").select("at_time,title,responsible,duration_min,kind").eq("schedule_id", s.id).order("position")).data || [];
+  const folder = slug(`${s.title} ${String(s.starts_at).slice(0, 10)}`), pad = (n) => String(n).padStart(2, "0");
+  const files = [], all = [];
+  list.forEach((m, i) => {
+    const saved = mine.get(m.id), blocks = saved?.blocks?.length ? saved.blocks : m.blocks, st = { ...DEFAULT_STYLE, ...(saved?.style || {}) };
+    const sl = slidesOf(blocks, st.per);
+    const slides = [{ label: "", text: m.title + (m.artist ? "\n" + m.artist : ""), style: st }, ...sl.map((x) => ({ ...x, style: st }))];
+    all.push(...slides);
+    const base = `${folder}/${pad(i + 1)}-${slug(m.title)}`;
+    if (sl.length) { files.push([`${base}.pptx`, new Uint8Array(0)]); files[files.length - 1][1] = buildPptx(slides, st); }
+    files.push([`${base}.txt`, textOf(m.title, blocks)]);
+  });
+  const order = [`${s.title}`, `${fDate(s.starts_at)} às ${fTime(s.starts_at)}`, "", "MÚSICAS", ...list.map((m, i) => `${i + 1}. ${m.title}${m.artist ? " — " + m.artist : ""}${m.key ? ` (Tom ${m.key})` : ""}${m.blocks.length ? "" : "  [sem letra cadastrada]"}`),
+    ...(cues.length ? ["", "ROTEIRO", ...cues.map((c) => `${c.at_time ? String(c.at_time).slice(0, 5) : "--:--"}  ${c.title}${c.duration_min ? ` (${c.duration_min} min)` : ""}${c.responsible ? ` — ${c.responsible}` : ""}`)] : [])].join("\n");
+  files.unshift([`${folder}/00-ordem-do-culto.txt`, order + "\n"]);
+  if (all.length) files.splice(1, 0, [`${folder}/culto-completo.pptx`, buildPptx(all, DEFAULT_STYLE)]);
+  // os Blob dos PowerPoint viram bytes para entrar no zip
+  const out = [];
+  for (const [n, d] of files) out.push([n, d instanceof Blob ? new Uint8Array(await d.arrayBuffer()) : d]);
+  download(zipStore(out), `${folder}.zip`);
+  return list.length;
 }

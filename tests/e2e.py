@@ -380,7 +380,11 @@ with sync_playwright() as pw:
     with ana.expect_download() as dl: ana.locator("#dpptx").click()
     path = dl.value.path(); import zipfile; z = zipfile.ZipFile(path); assert "ppt/slides/slide2.xml" in z.namelist() and "TEU AMOR".encode() in z.read("ppt/slides/slide2.xml")
     ana.locator("#save").click(); toast_has(ana, "Versão salva"); shot(ana, "21e-letras")
-    ok("Letras para a mídia: partes, estilo, PowerPoint gerado e versão salva")
+    ana.goto(sched_url); ana.reload()
+    with ana.expect_download() as dl2: ana.locator("[data-goto=pkg]").click()
+    zn = zipfile.ZipFile(dl2.value.path()).namelist()
+    assert any(n.endswith("00-ordem-do-culto.txt") for n in zn) and any(n.endswith("culto-completo.pptx") for n in zn) and any(n.endswith("-emaus.pptx") for n in zn), zn
+    ok("Letras para a mídia: partes, estilo, PowerPoint gerado e versão salva; pacote do culto em .zip")
 
     # ------------------------------------------------------------------ Infantil e Diáconos
     for typ, nome in [("infantil", "Kids"), ("diaconal", "Diaconal")]:

@@ -3,6 +3,7 @@ import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName
   empty, spinner, fDate, fDateLong, fTime, fDow, fDay, fMon, ymd, fromLocal, confirmDialog, roleIcon, linkify, fDur, fMonthYear, cap, teamHasRepertoire, teamHas } from "../core.js";
 import { schedRow } from "./home.js";
 import { scheduleExtras, cueEditor } from "./multimidia.js";
+import { downloadPackage, letrasTeamOf } from "./letras.js";
 
 export function register(route) {
   route("/escala/nova", (p, el) => editor(el, null, null));
@@ -425,6 +426,7 @@ async function detail(el, id, tab = "det") {
   const panes = {
     det: () => `<div class="list">${askConf && s.status === "published" ? row("check", "Confirmados", `${seenN} de ${uniq.length}`, "par") : ""}
         ${showCues ? row("list", "Roteiro", `${cues.length} ${cues.length === 1 ? "item" : "itens"}`, "rot") : ""}${row("users", "Participantes", String(uniq.length), "par")}</div>
+      ${letrasTeamOf() ? row("download", "Pacote do culto", "Letras e slides", "pkg") : ""}
       ${unseen ? `<button class="btn primary block mt" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length && askConf ? `<p class="small ok row gap-s mt">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
       ${s.notes ? `<div class="sec">${icon("edit")}<h2>Observações</h2></div><div class="card"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}
       ${(s.palettes || []).length ? `<div class="sec">${icon("shirt")}<h2>Vestimentas</h2></div><div class="card">${s.palettes.map((p) => `<div class="palview">${p.desc ? `<b class="small">${esc(p.desc)}</b>` : ""}<div class="pcolors">${(p.colors || []).map((c) => `<span class="pcol big" style="background:${attr(c)}" title="${attr(c)}"></span>`).join("")}</div></div>`).join("")}</div>` : ""}
@@ -449,7 +451,12 @@ async function detail(el, id, tab = "det") {
     <div id="pane">${panes[tab]()}</div>`;
   if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
-  el.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.goto)));
+  el.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", async () => {
+    if (b.dataset.goto !== "pkg") return detail(el, id, b.dataset.goto);
+    busy(b);
+    try { const n = await downloadPackage(s); toast(`Pacote gerado com ${n} ${n === 1 ? "música" : "músicas"}`); } catch (e) { toast(errMsg(e), "err"); }
+    busy(b, false);
+  }));
   el.querySelector("#share")?.addEventListener("click", async () => {
     const data = { title: s.title, text: `${s.title} — ${fDateLong(s.starts_at)} às ${fTime(s.starts_at)}`, url: location.href };
     try { if (navigator.share) await navigator.share(data); else { await navigator.clipboard.writeText(data.url); toast("Link copiado"); } } catch { /* cancelado */ }
