@@ -476,7 +476,7 @@ with sync_playwright() as pw:
     # a mesma pessoa em duas funções pede confirmação de quem escala
     bruno.locator("[data-etab=participantes]").click()
     def pick(role):
-        bruno.locator(".rolebox", has_text=role).locator("[data-pick]").first.click()
+        bruno.locator(".pcard.pslot", has_text=role).first.click()
     pick("Ministro"); bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click(); bruno.locator(".sheet #ok").click()
     pick("Guitarra"); bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click()
     expect(bruno.locator(".sheet", has_text="Escalar também como Guitarra")).to_be_visible(timeout=5000)

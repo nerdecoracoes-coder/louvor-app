@@ -153,17 +153,21 @@ async function editor(el, scheduleId, teamId) {
     </form>`;
   }
   function tabPeople() {
+    const cards = (r) => {
+      const picked = f.picks.get(r.id) || [], n = Math.max(f.slots.get(r.id) ?? 1, picked.length);
+      const ic = icon(roleIcon(r.name), "roleic");
+      const filled = picked.map((u) => { const w = warnFor(u, r.id); return `<div class="pcard${w.length ? " warned" : ""}">${avatar(ppl.get(u), 46, false)}
+          <span class="grow" style="min-width:0"><b class="ellipsis" style="display:block">${esc(personName(ppl, u))}</b><small>${esc(r.name)}</small>
+            ${w.map((x) => `<small class="${/Indispon/.test(x) ? "danger-t" : "warn"}" style="display:block">${icon("alert")} ${esc(x)}</small>`).join("")}</span>
+          <span class="roleic-w" title="${attr(r.name)}">${ic}</span>
+          <button type="button" class="iconbtn" data-unpick="${r.id}:${u}" aria-label="Tirar ${attr(personName(ppl, u))} da função ${attr(r.name)}">${icon("x")}</button></div>`; });
+      const empties = Array.from({ length: n - picked.length }, () => `<div class="pcard pslot" data-pick="${r.id}" role="button" tabindex="0"><span class="cover" style="width:46px;height:46px">${icon(roleIcon(r.name))}</span>
+          <span class="grow"><b style="display:block">${esc(r.name)}</b><small>Toque para escolher</small></span>
+          ${n > 1 ? `<button type="button" class="iconbtn" data-slot="${r.id}" data-d="-1" aria-label="Tirar uma vaga de ${attr(r.name)}">${icon("minus")}</button>` : ""}${icon("chevronRight", "chev")}</div>`);
+      return `<div class="rolegrp">${filled.join("")}${empties.join("")}<button type="button" class="addslot" data-slot="${r.id}" data-d="1">${icon("plus")} Vaga de ${esc(r.name)}</button></div>`;
+    };
     return `<div class="sec">${icon("users")}<h2>Participantes</h2><button class="more" id="suggest">${icon("sparkle")} Sugerir escala</button></div>
-    ${teamRoles.length ? `<div class="rolelist">${teamRoles.map((r) => {
-      const picked = f.picks.get(r.id) || [];
-      return `<div class="rolebox"><div class="rolehead"><span class="cover" style="width:38px;height:38px">${icon(roleIcon(r.name))}</span><span class="t grow">${esc(r.name)}</span>
-          <span class="row gap-s small muted">vagas <button class="chip" style="height:28px;padding:0 9px" data-slot="${r.id}" data-d="-1">−</button><b>${f.slots.get(r.id) ?? 1}</b><button class="chip" style="height:28px;padding:0 9px" data-slot="${r.id}" data-d="1">+</button></span></div>
-          <div class="pcards">${picked.map((u) => { const w = warnFor(u, r.id); return `<div class="pcard${w.length ? " warned" : ""}">${avatar(ppl.get(u), 46, false)}
-              <span class="grow" style="min-width:0"><b class="ellipsis" style="display:block">${esc(personName(ppl, u))}</b><small>${esc(r.name)}</small>
-                ${w.map((x) => `<small class="${/Indispon/.test(x) ? "danger-t" : "warn"}" style="display:block">${icon("alert")} ${esc(x)}</small>`).join("")}</span>
-              <button type="button" class="iconbtn" data-unpick="${r.id}:${u}" aria-label="Tirar ${attr(personName(ppl, u))} desta função">${icon("x")}</button></div>`; }).join("")}
-            <button class="chip" data-pick="${r.id}">${icon("plus")} ${picked.length ? "Escolher mais" : "Escolher"}</button></div></div>`;
-    }).join("")}</div>` : `<div class="card">${empty("users", "Nenhum integrante com função neste time", `Defina as funções musicais dos integrantes em <a class="link" href="#/times/${f.team}/integrantes">Integrantes</a>.`)}</div>`}`;
+    ${teamRoles.length ? `<div class="rolelist">${teamRoles.map(cards).join("")}</div>` : `<div class="card">${empty("users", "Nenhum integrante com função neste time", `Defina as funções musicais dos integrantes em <a class="link" href="#/times/${f.team}/integrantes">Integrantes</a>.`)}</div>`}`;
   }
   function tabSongs() {
     return `<div class="sec">${icon("music")}<h2>Músicas</h2><button class="more" id="addsong">${icon("plus")} Adicionar</button></div>
@@ -206,7 +210,7 @@ async function editor(el, scheduleId, teamId) {
   });
   el.addEventListener("input", (e) => { if (["title", "location", "notes"].includes(e.target.name)) readForm(); if (e.target.name === "notes") { autosize(e.target); const c = el.querySelector("#ncount"); if (c) c.textContent = `${e.target.value.length}/500`; } if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
   el.addEventListener("click", async (e) => {
-    const t = e.target.closest("button"); if (!t) return;
+    const t = e.target.closest("button, .pcard.pslot"); if (!t) return;
     if (t.dataset.etab) { readForm(); f.tab = t.dataset.etab; return draw(); }
     if (t.id === "openpal") { readForm(); f.view = "palette"; draw(); return window.scrollTo(0, 0); }
     if (t.dataset.pback !== undefined) { f.view = "main"; return draw(); }
@@ -219,7 +223,7 @@ async function editor(el, scheduleId, teamId) {
     if (t.id === "addsong") { readForm(); return songPicker(f.songs, () => draw()); }
     if (t.dataset.up) { const i = Number(t.dataset.up); [f.songs[i - 1], f.songs[i]] = [f.songs[i], f.songs[i - 1]]; return draw(); }
     if (t.dataset.rm) { f.songs.splice(Number(t.dataset.rm), 1); return draw(); }
-    if (t.dataset.slot) { const v = Math.max(1, Math.min(8, (f.slots.get(t.dataset.slot) ?? 1) + Number(t.dataset.d))); f.slots.set(t.dataset.slot, v); return draw(); }
+    if (t.dataset.slot) { e.stopPropagation(); const v = Math.max(1, Math.min(8, (f.slots.get(t.dataset.slot) ?? 1) + Number(t.dataset.d))); f.slots.set(t.dataset.slot, v); return draw(); }
     if (t.dataset.unpick) { const [rid, uid] = t.dataset.unpick.split(":"); f.picks.set(rid, (f.picks.get(rid) || []).filter((x) => x !== uid)); return draw(); }
     if (t.dataset.pick) { readForm(); return memberPicker(t.dataset.pick); }
     if (t.id === "suggest") { readForm(); if (!f.date || !f.time) return toast("Informe data e horário primeiro.", "err"); await loadCandidates(); suggest(); return draw(); }
