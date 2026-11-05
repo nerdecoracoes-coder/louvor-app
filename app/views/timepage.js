@@ -1,5 +1,5 @@
 // Página "Time" (dentro do time): convite, integrantes, funções, equipes, classificações, liderança, arquivos e avisos.
-import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, isAdmin, isStaff, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
+import { teamHas, sb, state, must, esc, attr, icon, avatar, teamBadge, people, isAdmin, isStaff, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
   confirmDialog, roleIcon, selectOrg, teamTypeLabel, teamHasRepertoire, applyAccent } from "../core.js";
 
 export function register(route) {
@@ -44,6 +44,7 @@ export async function timePage(id, el, alive) {
       ${row("layers", "Equipes", `#/times/${id}/equipes`, groups ? groups.length : null)}
       ${teamHasRepertoire(team) ? row("tag", "Classificações", `#/times/${id}/classificacoes`, null) : ""}
       ${row("crown", "Liderança", `#/times/${id}/lideranca`, leaders)}
+      ${teamHas(team, "letras") ? row("lyrics", "Letras para a mídia", `#/times/${id}/letras`, null, "Partes, estilo e exportar para PowerPoint") : ""}
       ${row("file", "Arquivos", `#/times/${id}/arquivos`, null)}
       ${row("megaphone", "Avisos do time", `#/times/${id}/avisos`, null)}
       ${manage ? row("sliders", "Recursos e configurações", `#/times/${id}/config`, null, "Nome, cor, tipo e recursos do time") : ""}

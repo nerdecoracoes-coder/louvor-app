@@ -821,3 +821,13 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .kact { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; }
 .kcode { font: 700 48px/1 var(--serif); letter-spacing: .18em; text-align: center; padding: 18px 0; color: var(--accent); font-variant-numeric: tabular-nums; }
 .kid .s .tag { margin-left: 4px; }
+
+/* letras para a mídia */
+.swatches { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.sw { width: 34px; height: 34px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--line-2); display: grid; place-items: center; position: relative; }
+.sw.on { box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px var(--accent); }
+.sw.custom { background: var(--raised-2); color: var(--muted); cursor: pointer; } .sw.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; } .sw.custom svg { width: 16px; height: 16px; }
+.thumbs { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.thumb { container-type: inline-size; aspect-ratio: 16 / 9; border-radius: 8px; box-shadow: inset 0 0 0 1px var(--line-2); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 4%; position: relative; overflow: hidden; font-weight: 700; line-height: 1.2; }
+.thumb small { position: absolute; left: 6%; top: 5%; font-size: 7cqw; font-weight: 400; opacity: .6; }
+.thumb span { white-space: pre-line; }

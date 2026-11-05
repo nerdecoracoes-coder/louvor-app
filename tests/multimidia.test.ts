@@ -24,7 +24,7 @@ beforeAll(async () => {
 
 describe("multimídia", () => {
   test("o tipo já vem com roteiro, pedidos e checklist e com as funções do ministério", async () => {
-    expect((await admin.api.get(`/teams?id=eq.${midia}&select=features`)).data[0].features).toEqual(["checklist", "pedidos", "roteiro"]);
+    expect((await admin.api.get(`/teams?id=eq.${midia}&select=features`)).data[0].features).toEqual(["checklist", "letras", "pedidos", "roteiro"]);
     const roles = (await lider.api.get(`/music_roles?org_id=eq.${org}&team_type=eq.multimidia&order=sort`)).data.map((r: any) => r.name);
     expect(roles).toEqual(["Direção", "Projeção", "Transmissão/Corte", "Câmera 2", "Câmera 3", "Iluminação"]);
   });

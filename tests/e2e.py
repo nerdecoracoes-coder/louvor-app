@@ -369,6 +369,19 @@ with sync_playwright() as pw:
     toast_has(ana, "Pedido pronto")
     carla.goto(BASE + "/#/notificacoes"); carla.reload()
     expect(carla.get_by_text("Pedido pronto: Vídeo de abertura do retiro")).to_be_visible(timeout=10000)
+    # ------------------------------------------------------------------ Letras para a mídia (Multimídia vê as letras do Louvor)
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras")
+    expect(ana.locator("#ll .li", has_text="Emaús")).to_be_visible(timeout=10000)
+    ana.locator("#ll .li", has_text="Emaús").click()
+    expect(ana.locator(".thumb").first).to_be_visible(timeout=10000)
+    n0 = ana.locator(".thumb").count()
+    ana.locator("#sper").select_option("1"); assert ana.locator(".thumb").count() >= n0
+    ana.locator("#scaps").click(); expect(ana.locator(".thumb span").first).to_contain_text("TEU AMOR")
+    with ana.expect_download() as dl: ana.locator("#dpptx").click()
+    path = dl.value.path(); import zipfile; z = zipfile.ZipFile(path); assert "ppt/slides/slide2.xml" in z.namelist() and "TEU AMOR".encode() in z.read("ppt/slides/slide2.xml")
+    ana.locator("#save").click(); toast_has(ana, "Versão salva"); shot(ana, "21e-letras")
+    ok("Letras para a mídia: partes, estilo, PowerPoint gerado e versão salva")
+
     # ------------------------------------------------------------------ Infantil e Diáconos
     for typ, nome in [("infantil", "Kids"), ("diaconal", "Diaconal")]:
         ana.goto(BASE + "/#/times/novo"); ana.fill("input[name=name]", nome); ana.select_option("select[name=team_type]", typ)
