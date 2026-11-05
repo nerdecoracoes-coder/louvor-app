@@ -386,6 +386,16 @@ with sync_playwright() as pw:
     assert any(n.endswith("00-ordem-do-culto.txt") for n in zn) and any(n.endswith("culto-completo.pptx") for n in zn) and any(n.endswith("-emaus.pptx") for n in zn), zn
     ok("Letras para a mídia: partes, estilo, PowerPoint gerado e versão salva; pacote do culto em .zip")
 
+    # ------------------------------------------------------------------ Tutoriais em vídeo
+    ana.goto(BASE + "/#/ajuda"); expect(ana.locator(".list .li", has_text="Como criar uma escala")).to_be_visible(timeout=10000)
+    ana.locator(".list .li", has_text="Como criar uma escala").click()
+    expect(ana.locator("#tv")).to_be_visible(timeout=10000); expect(ana.locator(".tsteps li")).not_to_have_count(0)
+    ana.evaluate("document.querySelector('#tv').muted = true; document.querySelector('#tv').play()")
+    ana.wait_for_function("document.querySelector('#tv').currentTime > 1.2", timeout=15000)
+    expect(ana.locator("#tc")).not_to_be_empty(); shot(ana, "21f-tutorial")
+    ana.evaluate("document.querySelector('#tv').pause()")
+    ok("Tutoriais: vídeo toca com legendas sincronizadas")
+
     # ------------------------------------------------------------------ Infantil e Diáconos
     for typ, nome in [("infantil", "Kids"), ("diaconal", "Diaconal")]:
         ana.goto(BASE + "/#/times/novo"); ana.fill("input[name=name]", nome); ana.select_option("select[name=team_type]", typ)

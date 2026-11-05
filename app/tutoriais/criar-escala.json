@@ -1,0 +1,52 @@
+{
+ "slug": "criar-escala",
+ "title": "Como criar uma escala",
+ "about": "Passo a passo para montar uma escala, escolher os participantes e as músicas.",
+ "duration": 63.5,
+ "cues": [
+  {
+   "t": 0.0,
+   "text": "Vamos criar uma escala. Toque em Escalas, na barra de baixo."
+  },
+  {
+   "t": 5.0,
+   "text": "Toque no botão mais para criar uma nova escala."
+  },
+  {
+   "t": 8.92,
+   "text": "Escreva o nome do culto."
+  },
+  {
+   "t": 13.5,
+   "text": "Escolha a data e o horário de início. O término é opcional."
+  },
+  {
+   "t": 19.77,
+   "text": "Agora vamos escolher quem participa. Toque na aba Participantes."
+  },
+  {
+   "t": 25.11,
+   "text": "Toque em Sugerir escala e o aplicativo monta a equipe sozinho, pelas funções de cada pessoa."
+  },
+  {
+   "t": 32.77,
+   "text": "Revise os nomes. Para trocar alguém, toque no cartão da função."
+  },
+  {
+   "t": 38.02,
+   "text": "Agora, na aba Músicas, escolha o repertório."
+  },
+  {
+   "t": 41.69,
+   "text": "Toque em Adicionar músicas e marque as que vão ser tocadas."
+  },
+  {
+   "t": 49.73,
+   "text": "Pronto. Toque em Salvar. Os participantes recebem o aviso da escala."
+  },
+  {
+   "t": 55.4,
+   "text": "A escala está publicada. Aqui você vê os detalhes, as músicas e quem está escalado."
+  }
+ ]
+}
