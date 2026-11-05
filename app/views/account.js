@@ -75,7 +75,7 @@ async function inviteView(token) {
   el.innerHTML = authShell(`${logo()}${card}
     ${inv.already_member ? `<h1>Você já faz parte ${isOrg ? "desta igreja" : "deste time"}</h1><p class="sub">Nada a fazer por aqui.</p><button class="btn primary block" id="open">${isOrg ? "Abrir o app" : "Abrir o time"}</button>`
       : isOrg ? `<h1>Tornar-se membro?</h1><p class="sub">Você será cadastrado(a) como membro da igreja. A entrada nos times é feita pelo convite do líder de cada time.</p><button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`
-      : !inv.is_church_member && T.category !== "open" ? `<h1>Convite só para membros</h1><p class="sub">${esc(T.name)} é um ministério da ${esc(inv.org.name)} e recebe apenas membros cadastrados da igreja. Peça ao administrador o convite de membro e abra este link de novo.</p><a class="btn ghost block" href="#/">Ir para o início</a>`
+      : !inv.is_church_member && T.category !== "open" ? `<h1>Entrar no time?</h1><p class="sub">Você entrará no ${esc(T.name)} e passará a fazer parte da ${esc(inv.org.name)} no app. O líder poderá definir suas funções.</p><button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`
       : !inv.is_church_member ? `<h1>Participar como convidado?</h1><p class="sub">Você entrará no time ${esc(T.name)} como convidado(a) de outra igreja. Verá apenas este time.</p>
         <label class="field"><span>Sua igreja</span><input class="input" id="church" maxlength="80" placeholder="Ex.: Nova Vida Niterói"></label>
         <button class="btn primary block" id="accept">Aceitar convite</button><a class="btn ghost block mt-s" href="#/">Agora não</a>`

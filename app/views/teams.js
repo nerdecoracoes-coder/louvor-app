@@ -141,7 +141,7 @@ export async function inviteSheet(team) {
   const link = `${location.origin}${location.pathname}#/convite/${r.data}`;
   const text = `Você foi convidado(a) para o time ${team.name} (${state.org.name}). Entre pelo link: ${link}`;
   s.el.innerHTML = `<div class="grab"></div><h3>Convidar para ${esc(team.name)}</h3>
-    <p class="small muted">${team.category === "open" ? "Time aberto: membros da igreja entram como integrantes e pessoas de outras igrejas entram como convidadas, só neste time." : "Ministério da igreja: o link funciona só para quem já é membro da igreja. Para alguém novo, o administrador envia antes o convite de membro."} O link vale por 30 dias.</p>
+    <p class="small muted">${team.category === "open" ? "Time aberto: membros da igreja entram como integrantes e pessoas de outras igrejas entram como convidadas, só neste time." : "Ministério da igreja: quem aceitar entra no time e passa a ser membro da igreja no app."} O link vale por 30 dias.</p>
     <label class="field"><span>Link exclusivo</span><input class="input" readonly value="${attr(link)}" id="lnk"></label>
     <div class="two"><button class="btn ghost" id="cp">${icon("copy")} Copiar link</button>
       <a class="btn primary" href="https://wa.me/?text=${encodeURIComponent(text)}" target="_blank" rel="noopener">${icon("whatsapp")} WhatsApp</a></div>

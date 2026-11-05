@@ -61,21 +61,29 @@ describe("convidados", () => {
     expect((await membro.api.get(`/profiles?id=eq.${conv.id}`)).data).toHaveLength(1);
   });
 
-  test("convidado não entra em time de ministério, nem por inclusão, nem por cópia", async () => {
-    const tokMin = (await admin.api.rpc("create_team_invite", { p_team: louvor })).data;
-    const r = await conv.api.rpc("accept_invite", { p_token: tokMin });
-    expect(JSON.stringify(r.data)).toContain("not_church_member");
+  test("convidado não entra em time de ministério por inclusão nem por cópia (só pelo convite do time)", async () => {
     expect((await admin.api.rpc("add_team_members", { p_team: louvor, p_users: [conv.id] })).data).toBe(0);
     const c = await admin.api.rpc("copy_team_member", { p_from: chega, p_to: louvor, p_user: conv.id, p_move: false });
     expect(JSON.stringify(c.data)).toContain("not_church_member");
     expect((await admin.api.rpc("set_org_admin", { p_org: org, p_user: conv.id, p_admin: true })).ok).toBe(false);
   });
 
-  test("quem não é membro não entra em time de ministério pelo link", async () => {
+  test("quem ainda não é membro e aceita o convite de um ministério entra no time e vira membro da igreja", async () => {
     const tokMin = (await admin.api.rpc("create_team_invite", { p_team: louvor })).data;
     const r = await fora.api.rpc("accept_invite", { p_token: tokMin });
-    expect(JSON.stringify(r.data)).toContain("not_church_member");
-    expect((await admin.api.get(`/org_members?org_id=eq.${org}&user_id=eq.${fora.id}`)).data).toHaveLength(0);
+    expect(r.data.status).toBe("joined");
+    expect((await admin.api.get(`/org_members?org_id=eq.${org}&user_id=eq.${fora.id}`)).data[0].role).toBe("member");
+    expect((await admin.api.get(`/team_members?team_id=eq.${louvor}&user_id=eq.${fora.id}`)).data[0].is_guest).toBe(false);
+  });
+
+  test("convidado de um time aberto que aceita o convite de um ministério passa a membro", async () => {
+    const g = await newUser("Convidado Vira Membro");
+    await g.api.rpc("accept_invite", { p_token: tokOpen, p_church: "Filial Y" });
+    expect((await admin.api.get(`/org_members?org_id=eq.${org}&user_id=eq.${g.id}`)).data[0].role).toBe("guest");
+    const tokMin = (await admin.api.rpc("create_team_invite", { p_team: louvor })).data;
+    expect((await g.api.rpc("accept_invite", { p_token: tokMin })).data.status).toBe("joined");
+    expect((await admin.api.get(`/org_members?org_id=eq.${org}&user_id=eq.${g.id}`)).data[0].role).toBe("member");
+    expect((await admin.api.get(`/team_members?team_id=eq.${chega}&user_id=eq.${g.id}`)).data[0].is_guest).toBe(false);
   });
 
   test("time com convidados não pode virar ministério", async () => {

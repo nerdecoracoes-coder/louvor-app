@@ -63,10 +63,13 @@ describe("convites", () => {
     expect(r.ok).toBe(false);
   });
 
-  test("time de ministério: quem não é membro da igreja não entra pelo link", async () => {
-    const r = await bruno.api.rpc("accept_invite", { p_token: token });
-    expect(r.ok).toBe(false);
-    expect(JSON.stringify(r.data)).toContain("not_church_member");
+  test("time de ministério: quem ainda não é membro entra pelo link e passa a ser membro da igreja", async () => {
+    const v = await newUser("Visitante");
+    const r = await v.api.rpc("accept_invite", { p_token: token });
+    expect(r.data.status).toBe("joined");
+    expect((await ana.api.get(`/org_members?org_id=eq.${orgA}&user_id=eq.${v.id}`)).data[0].role).toBe("member");
+    await ana.api.del(`team_members?team_id=eq.${louvor}&user_id=eq.${v.id}`);
+    await ana.api.del(`org_members?org_id=eq.${orgA}&user_id=eq.${v.id}`);
   });
 
   test("aceitar convite entra no time como integrante comum (sem liderança nem admin)", async () => {

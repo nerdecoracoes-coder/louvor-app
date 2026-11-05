@@ -84,3 +84,9 @@ A maior parte do que já existe faz sentido só para certos tipos de time. A est
 - Pedidos: qualquer membro pede (botão +); o time recebe aviso; responsável, link ou arquivo de entrega; quem pediu é avisado.
 - Checklist: o líder define os itens (há uma lista sugerida); quem é do time marca em cada escala.
 - Próximos passos a definir com os líderes: equipamentos, ambiente dos Diáconos e do Ministério Infantil.
+
+## 9. Convite do time sem exigir membresia (04/11/2026, provisório)
+- Enquanto a membresia da igreja não estiver organizada no app, o convite de um time de ministério basta:
+  quem aceita entra no time e passa a ser membro da igreja automaticamente.
+- Times abertos a convidados seguem iguais (pessoas de outras igrejas entram como convidadas).
+- Rever quando a área da igreja estiver em uso: voltar a exigir o convite de membro, se fizer sentido.
