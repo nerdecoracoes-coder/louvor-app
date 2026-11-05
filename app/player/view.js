@@ -65,6 +65,7 @@ export async function openPlayer(songId) {
     await engine.init();
     engine.timings = marks; engine.t0open = T0;
     window.__player = engine;
+    engine.loadPeaks();
     const nLight = media.filter((m) => m.light).length;
     if (media.length && nLight < media.length) toast(`${media.length - nLight} de ${media.length} faixas ainda estão sendo otimizadas; esta música pode abrir mais devagar.`);
     build(root, song, project, engine);

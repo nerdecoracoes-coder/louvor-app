@@ -219,7 +219,7 @@ export class Engine extends EventTarget {
     if (s0 >= L.samples) return null;
     const s1 = Math.min(L.samples, Math.round((c + 1) * CHUNK * OPUS_RATE));
     const { start, end } = byteRange(L, s0, s1);
-    const bytes = await this.fetchLight(m, start, end);
+    const bytes = m.whole ? m.whole.subarray(start, end + 1) : await this.fetchLight(m, start, end);
     const lib = await loadOpus();
     const nch = L.channels > 1 ? 2 : 1;
     // um decodificador por número de canais; os pedaços passam por ele um de cada vez (reset entre eles)
@@ -330,6 +330,57 @@ export class Engine extends EventTarget {
     }
   }
 
+  // forma de onda pronta (gerada na conversão): desenha tudo de uma vez, sem baixar nem decodificar o áudio
+  async loadPeaks() {
+    await Promise.all([...this.media.values()].filter((m) => m.light?.peaksUrl).map(async (m) => {
+      try {
+        const key = `https://somos.cache/peaks/${m.light.key}`;
+        let cache = null, bytes = null;
+        try { cache = await caches.open(CACHE_NAME); const hit = await cache.match(key); if (hit) bytes = new Uint8Array(await hit.arrayBuffer()); } catch { cache = null; }
+        if (!bytes) {
+          const r = await fetch(m.light.peaksUrl);
+          if (!r.ok) return;
+          bytes = new Uint8Array(await r.arrayBuffer());
+          try { await cache?.put(key, new Response(bytes)); } catch { /* cota cheia */ }
+        }
+        const n = bytes.length >> 1, i8 = new Int8Array(bytes.buffer, bytes.byteOffset, n * 2);
+        const total = Math.max(n, Math.ceil((m.format?.duration || this.length) * PEAK_RATE)) + 1;
+        const pk = new Float32Array(total * 2).fill(NaN);
+        for (let i = 0; i < n * 2; i++) pk[i] = i8[i] / 127;
+        m.peaks = pk; m.peaksReady = true;
+        this.dispatch("peaks", { fileId: m.drive_file_id });
+      } catch { /* sem a forma pronta, ela é montada ao baixar o áudio */ }
+    }));
+  }
+
+  // arquivo inteiro da versão leve na memória (e no cache do navegador): buscas e avanços ficam instantâneos
+  loadWhole(m) {
+    if (m.whole || !m.light) return Promise.resolve();
+    m.wholeP ??= (async () => {
+      const key = `https://somos.cache/light/${m.light.key}?whole`;
+      let cache = null;
+      try { cache = await caches.open(CACHE_NAME); const hit = await cache.match(key); if (hit) { m.whole = new Uint8Array(await hit.arrayBuffer()); return; } } catch { cache = null; }
+      let r;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        r = await fetch(m.light.url).catch(() => null);
+        if (r?.ok || r?.status === 403) break;
+        await new Promise((res) => setTimeout(res, 400 * (attempt + 1)));
+      }
+      if (!r?.ok) throw new Error("download");
+      const buf = new Uint8Array(await r.arrayBuffer());
+      if (this.destroyed) return;
+      this.bytesLoaded += buf.length; m.whole = buf;
+      try {
+        if (cache) {
+          await cache.put(key, new Response(buf));
+          const old = (await cache.keys()).filter((q) => q.url.endsWith("?whole"));   // guarda só as músicas mais recentes
+          for (const q of old.slice(0, Math.max(0, old.length - 150))) await cache.delete(q);
+        }
+      } catch { /* cota cheia */ }
+    })().catch(() => { m.wholeP = null; });
+    return m.wholeP;
+  }
+
   async preload(a, b, onProgress) {
     const need = this.needed(a, b).filter(([f, c]) => !this.isLoaded(f, c));
     let done = 0;
@@ -340,6 +391,18 @@ export class Engine extends EventTarget {
 
   // baixa a música toda em segundo plano (vai para o cache do navegador e completa as formas de onda)
   async background() {
+    // 1) arquivos inteiros, vários ao mesmo tempo (fora do celular com dados móveis / economia de dados)
+    const conn = navigator.connection;
+    const wholeOk = !conn?.saveData && conn?.type !== "cellular";
+    const lights = [...this.media.values()].filter((m) => m.light);
+    if (wholeOk && lights.length) {
+      const q = [...lights]; let done = 0;
+      await Promise.all(Array.from({ length: Math.min(6, q.length) }, async () => {
+        while (q.length && !this.destroyed) { await this.loadWhole(q.shift()); this.dispatch("background", { progress: Math.min(0.98, ++done / lights.length) }); }
+      }));
+    }
+    // 2) o que ainda não tem forma de onda: baixa e decodifica trecho a trecho
+    if ([...this.media.values()].every((m) => m.light && m.peaksReady)) { this.dispatch("background", { progress: 1 }); return; }
     const total = Math.ceil(this.length / CHUNK);
     for (let c = 0; c <= total && !this.destroyed; c++) {
       const list = this.needed(c * CHUNK, (c + 1) * CHUNK).filter(([f, k]) => !this.isLoaded(f, k));
@@ -498,7 +561,7 @@ export class Engine extends EventTarget {
   destroy() {
     this.destroyed = true;
     this.halt();
-    for (const m of this.media.values()) { m.chunks.clear(); m.full = null; }
+    for (const m of this.media.values()) { m.chunks.clear(); m.full = null; m.whole = null; }
     try { this.ctx?.close(); } catch {}
   }
 }

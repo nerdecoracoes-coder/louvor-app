@@ -93,8 +93,9 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   // 2a) Conversor da versão leve (GitHub): pede a fila e informa o resultado. Protegido pelo mesmo segredo do agendamento.
   const mode = url.searchParams.get("mode");
-  if (mode === "light-queue" || mode === "light-done") {
+  if (mode === "light-queue" || mode === "light-done" || mode === "peaks-queue") {
     if (!env.cronSecret || !safeEqual(req.headers.get("x-cron-secret") ?? "", env.cronSecret)) return json({ error: "forbidden" }, 403);
+    if (mode === "peaks-queue") return json({ items: await db.rpc("peaks_queue", { p_limit: Number(url.searchParams.get("limit") ?? 30) }) });
     if (mode === "light-queue") return json({ items: await db.rpc("light_queue", { p_limit: Number(url.searchParams.get("limit") ?? 40) }) });
     const body = await req.json().catch(() => ({}));
     for (const it of (body.items ?? []) as any[]) {
@@ -222,7 +223,8 @@ export async function handleMedia(req: Request, env: Env): Promise<Response> {
     const files: Record<string, unknown> = {};
     for (const m of media) {
       const x = by.get(`${m.drive_file_id}|${m.md5 ?? "s" + m.size}`);
-      if (x) files[m.drive_file_id] = { ...x.info, key: x.key, bytes: x.bytes, url: await presignGet(env.r2, x.key, 6 * 3600) };
+      if (x) files[m.drive_file_id] = { ...x.info, key: x.key, bytes: x.bytes, url: await presignGet(env.r2, x.key, 6 * 3600),
+        ...(x.info?.peaks ? { peaksUrl: await presignGet(env.r2, x.key + ".peaks", 6 * 3600) } : {}) };
     }
     return json({ files, expires_in: 6 * 3600 });
   }

@@ -60,6 +60,27 @@ describe("versão leve", () => {
     expect((await (await cron("mode=light-queue&limit=500")).json()).items.filter((x: any) => x.org_id === org)).toHaveLength(0);
   });
 
+  test("forma de onda pronta: gerada na conversão, listada no manifesto e gerada também para faixas antigas", async () => {
+    const peaksKeys = [...store.keys()].filter((k) => k.endsWith(".peaks"));
+    expect(peaksKeys).toHaveLength(nMedia);
+    const pk = store.get(peaksKeys[0])!; expect(pk.length).toBe(2 * 6 * 50); // 6 s a 50 pontos por segundo
+    const r = await (await manifest(member.api.token, projectId)).json();
+    expect(Object.values(r.files as Record<string, any>).every((f) => f.peaksUrl?.includes(".peaks?"))).toBe(true);
+    // faixa antiga (sem forma de onda no registro): o conversor completa pela fila
+    const row = (await db.select("light_audio", `org_id=eq.${org}&limit=1`))[0];
+    await db.update("light_audio", `drive_file_id=eq.${row.drive_file_id}&src=eq.${encodeURIComponent(row.src)}`, { info: { ...row.info, peaks: undefined } });
+    store.delete(row.key + ".peaks");
+    const deps = {
+      queue: async () => [], done: async (items: unknown[]) => { await cron("mode=light-done", { method: "POST", body: JSON.stringify({ items }) }); },
+      drive, upload: async (key: string, bytes: Uint8Array) => { store.set(key, bytes); },
+      peaksQueue: async (limit: number) => (await (await cron(`mode=peaks-queue&limit=${limit}`)).json()).items.filter((x: any) => x.org_id === org),
+      download: async (key: string) => store.get(key)!,
+    };
+    await run(deps as any, { minutes: 1, log: () => {} });
+    expect(store.get(row.key + ".peaks")?.length).toBe(2 * 6 * 50);
+    expect((await db.select("light_audio", `drive_file_id=eq.${row.drive_file_id}`))[0].info.peaks).toMatchObject({ rate: 50 });
+  });
+
   test("player: integrante recebe links temporários do R2; quem é de fora não", async () => {
     const r = await (await manifest(member.api.token, projectId)).json();
     const files = Object.values(r.files) as any[];
@@ -82,7 +103,7 @@ describe("versão leve", () => {
     new Function("exports", "module", "define", readFileSync("app/player/opus-decoder.min.js", "utf8"))(undefined, undefined, undefined);
     const { OpusDecoder } = (globalThis as any)["opus-decoder"];
     const worst: Record<string, number> = {};
-    for (const [key, file] of store) {
+    for (const [key, file] of [...store].filter(([k]) => k.endsWith(".opus"))) {
       const info = ogg.buildIndex(file);
       const nch = info.channels > 1 ? 2 : 1;
       const dec = new OpusDecoder(nch > 1 ? { channels: 2, streamCount: 1, coupledStreamCount: 1, channelMappingTable: [0, 1], preSkip: 0 } : { channels: 1, streamCount: 1, coupledStreamCount: 0, channelMappingTable: [0], preSkip: 0 });

@@ -315,6 +315,9 @@ with sync_playwright() as pw:
         if (b) { const d = b.getChannelData(0); for (let i = 0; i < d.length; i++) rms += d[i] * d[i]; rms = Math.sqrt(rms / d.length); }
         return { light: ms.filter(m => m.light).length, total: ms.length, sr: e.ctx.sampleRate, sources: e.sources.size, rms, len: b?.length } }""")
     assert lt["light"] == lt["total"] and lt["sr"] == 48000 and lt["sources"] >= 7 and lt["rms"] > 0.02 and lt["len"] == 4 * 48000, lt
+    # forma de onda pronta (sem decodificar) e arquivos inteiros baixados em poucos pedidos grandes
+    carla.wait_for_function("[...window.__player.media.values()].every(m => m.peaksReady && m.whole)", timeout=20000)
+    assert sum(1 for u in reqs if "/r2/" in u and ".peaks" in u) <= 9
     assert any("/r2/" in u for u in reqs) and not any("drive-media?file=" in u for u in reqs), [u for u in reqs if "drive-media" in u][:3]
     carla.goto(BASE + "/#/musicas")
     ok(f"versão leve: {conv['ok']} faixas convertidas ({conv['inBytes'] // 1000} KB → {conv['outBytes'] // 1000} KB); player toca direto do R2 com {lt['sources']} trechos")
