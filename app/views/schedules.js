@@ -310,6 +310,9 @@ async function calendar(el, scope) {
   const inTeam = scope.startsWith("time:") && state.space?.id === scope.slice(5);
   let month = new Date(ymd(new Date()) + "T12:00:00"); month.setDate(1);
   let selDay = ymd(new Date());
+  const MODE_KEY = "somos.sched.mode";
+  let mode = "calendar"; try { mode = localStorage.getItem(MODE_KEY) === "timeline" ? "timeline" : "calendar"; } catch {}
+  const ppl = await people();
   const allTeams = await must(sb.from("teams").select("id,name,accent_color,logo_url").eq("org_id", state.org.id).order("name"));
   async function load() {
     const from = new Date(month.getFullYear(), month.getMonth(), 1).toISOString();
@@ -328,6 +331,8 @@ async function calendar(el, scope) {
   async function draw() {
     el.innerHTML = spinner();
     const evs = (await load()).sort((a, b) => a.starts_at.localeCompare(b.starts_at));
+    let extra = { who: new Map(), songs: new Map() };
+    if (mode === "timeline" && evs.length) extra = await loadExtra(evs.map((e) => e.id));
     const first = new Date(month); const last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
     const today = ymd(new Date());
     const cells = [];
@@ -340,20 +345,55 @@ async function calendar(el, scope) {
     const dayEvs = evs.filter((e) => ymd(e.starts_at) === selDay);
     const myTeamIds = new Set(state.myTeams.map((t) => t.id));
     const teamChips = (isAdmin() ? allTeams : allTeams.filter((t) => myTeamIds.has(t.id)));
-    el.innerHTML = `<div class="pagehead">${inTeam ? "" : `<a class="back" href="#/">${icon("chevronLeft")}</a>`}<h1>${inTeam ? "Escalas" : scope === "meu" ? "Minhas escalas" : "Calendário"}</h1>${inTeam && canManageTeam(scope.slice(5)) ? `<a class="iconbtn add" id="addsched" href="#/escala/nova/${scope.slice(5)}?data=${selDay}" aria-label="Nova escala em ${fDate(selDay + "T12:00:00")}">${icon("plus")}</a>` : ""}</div>
+    el.innerHTML = `<div class="pagehead">${inTeam ? "" : `<a class="back" href="#/">${icon("chevronLeft")}</a>`}<h1>${inTeam ? "Escalas" : scope === "meu" ? "Minhas escalas" : "Calendário"}</h1><button class="iconbtn" id="modebtn" aria-label="${mode === "timeline" ? "Ver em calendário" : "Ver em linha do tempo"}" title="${mode === "timeline" ? "Modo calendário" : "Modo linha do tempo"}">${icon(mode === "timeline" ? "calendar" : "list")}</button>${inTeam && canManageTeam(scope.slice(5)) ? `<a class="iconbtn add" id="addsched" href="#/escala/nova/${scope.slice(5)}?data=${selDay}" aria-label="Nova escala em ${fDate(selDay + "T12:00:00")}">${icon("plus")}</a>` : ""}</div>
       ${inTeam ? "" : `<div class="chips mb"><a class="chip ${scope === "geral" ? "on" : ""}" href="#/calendario/geral">${icon("org")} Geral</a><a class="chip ${scope === "meu" ? "on" : ""}" href="#/calendario/meu">${icon("calendar")} Minhas escalas</a>
         ${teamChips.map((t) => `<a class="chip ${scope === "time:" + t.id ? "on" : ""}" href="#/calendario/time:${t.id}"><i style="width:8px;height:8px;border-radius:8px;background:${attr(t.accent_color || "var(--accent)")}"></i>${esc(t.name)}</a>`).join("")}</div>`}
-      <div class="card"><div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div>
-        <div class="cal">${["D", "S", "T", "Q", "Q", "S", "S"].map((x) => `<div class="dow">${x}</div>`).join("")}${cells.join("")}</div></div>
+      ${mode === "timeline" ? timeline(evs, extra) : `<div class="card"><div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div>
+        <div class="cal">${["D", "S", "T", "Q", "Q", "S", "S"].map((x) => `<div class="dow">${x}</div>`).join("")}${cells.join("")}</div></div>`}
       ${inTeam ? `<div class="menulist"><a href="#/panorama">${icon("bars")}<span class="grow">Panorama de escalas<small>Quantas vezes cada pessoa serve no mês</small></span>${icon("chevronRight", "chev")}</a></div>` : ""}
-      <div class="sec"><h2>${esc(cap(fDateLong(selDay + "T15:00:00Z")))}</h2></div>
+      ${mode === "timeline" ? "" : `<div class="sec"><h2>${esc(cap(fDateLong(selDay + "T15:00:00Z")))}</h2></div>
       ${dayEvs.length ? dayEvs.map((s) => schedRow(s)).join("") : `<p class="muted small">Nada neste dia.</p>`}
       <div class="sec"><h2>Todos do mês</h2><span class="muted small">${evs.length}</span></div>
-      ${evs.length ? evs.map((s) => schedRow(s)).join("") : `<div class="card">${empty("calendar", "Nenhuma escala neste mês")}</div>`}`;
+      ${evs.length ? evs.map((s) => schedRow(s)).join("") : `<div class="card">${empty("calendar", "Nenhuma escala neste mês")}</div>`}`}`;
+  }
+  async function loadExtra(ids) {
+    const [as, ss] = await Promise.all([
+      sb.from("schedule_assignments").select("schedule_id,user_id,seen_at").in("schedule_id", ids),
+      sb.from("schedule_songs").select("schedule_id").in("schedule_id", ids)]);
+    const who = new Map(), songs = new Map();
+    for (const r of as.data || []) { if (!who.has(r.schedule_id)) who.set(r.schedule_id, new Map()); who.get(r.schedule_id).set(r.user_id, r.seen_at); }
+    for (const r of ss.data || []) songs.set(r.schedule_id, (songs.get(r.schedule_id) || 0) + 1);
+    return { who, songs };
+  }
+  // Linha do tempo: escalas do mês uma embaixo da outra, agrupadas por dia
+  function timeline(evs, { who, songs }) {
+    const month_ = fMonthYear(month);
+    const nav = `<div class="card"><div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${month_}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div></div>`;
+    if (!evs.length) return nav + `<div class="card mt">${empty("calendar", "Nenhuma escala neste mês")}</div>`;
+    const today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
+    const byDay = new Map();
+    for (const e of evs) { const k = ymd(e.starts_at); if (!byDay.has(k)) byDay.set(k, []); byDay.get(k).push(e); }
+    return nav + [...byDay].map(([k, list]) => {
+      const iso = k + "T15:00:00Z";
+      const rel = k === today ? " • Hoje" : k === tomorrow ? " • Amanhã" : "";
+      return `<div class="tl-day${k === today ? " today" : ""}"><h2>${Number(k.slice(8))} ${esc(cap(fMon(iso)).replace(/\.$/, ""))} • ${esc(cap(new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" }).format(new Date(iso))))}${rel}</h2>
+        ${list.map((e) => {
+          const m = who.get(e.id) || new Map(), ids = [...m.keys()];
+          const mine = m.has(state.user.id) ? m.get(state.user.id) : undefined;
+          const st = e.status === "draft" ? `<span class="tag gray">Rascunho</span>` : mine === undefined ? "" : mine ? `<span class="tag soft">${icon("check")} Visto</span>` : `<span class="tag warn">Pendente</span>`;
+          const n = songs.get(e.id) || 0;
+          return `<a class="tlcard${e.status === "draft" ? " draft" : ""}" href="#/escala/${e.id}" style="--tc:${attr(e.teams?.accent_color || "var(--accent)")}">
+            <div class="top"><h3>${esc(e.title)}</h3>${st}</div>
+            <div class="meta">${fTime(e.starts_at)}${e.location ? ` · ${esc(e.location)}` : ""}</div>
+            <div class="foot"><span class="avs">${ids.slice(0, 6).map((u) => avatar(ppl.get(u) || { display_name: "?" }, 28, false)).join("")}${ids.length > 6 ? `<span class="more">+${ids.length - 6}</span>` : ""}</span>
+              <span class="muted small">${icon("music")} ${n} ${n === 1 ? "música" : "músicas"}</span></div></a>`;
+        }).join("")}</div>`;
+    }).join("");
   }
   el.addEventListener("click", (e) => {
     const m = e.target.closest("[data-m]"); if (m) { month.setMonth(month.getMonth() + Number(m.dataset.m)); selDay = ymd(month); return draw(); }
     const d = e.target.closest("[data-day]"); if (d) { selDay = d.dataset.day; draw(); }
+    if (e.target.closest("#modebtn")) { mode = mode === "timeline" ? "calendar" : "timeline"; try { localStorage.setItem(MODE_KEY, mode); } catch {} draw(); }
   });
   await draw();
 }

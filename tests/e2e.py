@@ -445,6 +445,15 @@ with sync_playwright() as pw:
     bruno.locator("#addsched").click()
     expect(bruno.locator("input[name=date]")).to_have_value(re.compile(rf"-{day}$"), timeout=10000)
     assert carla.locator("#addsched").count() == 0   # integrante comum não cria escala
+    # modo linha do tempo (ícone ao lado do +), lembrado entre visitas
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")
+    expect(bruno.locator("#modebtn")).to_be_visible(timeout=10000)
+    bruno.locator("#modebtn").click()
+    expect(bruno.locator(".tl-day").first).to_be_visible(timeout=10000); shot(bruno, "27b-escalas-timeline")
+    assert bruno.locator(".cal").count() == 0 and bruno.locator("#addsched").count() == 1
+    assert bruno.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    bruno.reload(); expect(bruno.locator(".tl-day").first).to_be_visible(timeout=10000)
+    bruno.locator("#modebtn").click(); expect(bruno.locator(".cal")).to_be_visible(timeout=10000)
     bruno.goto(f"{BASE}/#/musicas")
     expect(bruno.locator('.pagehead a[href="#/musicas/nova"]')).to_be_visible(timeout=10000)
     assert bruno.locator("#sel").count() == 0 and bruno.locator("#rem").count() == 0
