@@ -273,13 +273,23 @@ with sync_playwright() as pw:
     carla.locator('[data-t="pause"], [data-t="play"]').first.click()
     carla.wait_for_timeout(300)
     assert carla.evaluate("window.__player.playing") is False
-    carla.locator(".timeline [data-rg]").first.click(); carla.wait_for_timeout(800)
+    assert carla.locator(".timeline [data-rg], .timeline .mk").count() == 0   # sem a faixa duplicada de regiões; só os cartões
+    carla.locator(".part").first.click(); carla.wait_for_timeout(900)           # toca a partir da região
+    carla.locator(".part").first.click(); carla.wait_for_timeout(500)           # segundo toque: repete só essa região
     loop = carla.evaluate("window.__player.loop")
     assert loop and abs(loop[0] - 3.428571) < 0.01, loop
     ok("pause, próximo marcador e repetição de região")
     carla.evaluate("window.__player.setLoop(null); window.__player.pause()")
     carla.wait_for_timeout(1500)
     shot(carla, "13-player-faixas")
+    # celular de lado: faixas, mix, linha do tempo e transporte cabem na tela
+    vp = carla.viewport_size; carla.set_viewport_size({"width": 844, "height": 390}); carla.wait_for_timeout(500)
+    shot(carla, "13b-player-lado-faixas")
+    assert carla.evaluate("(() => { const r = document.querySelector('.trk .wave').getBoundingClientRect(); return r.height > 20 && r.bottom < innerHeight - 60; })()")
+    tr = carla.locator('.transport').bounding_box(); assert tr["y"] + tr["height"] <= 392 and tr["x"] + tr["width"] <= 846, tr
+    carla.locator('[data-tab="mix"]').click(); carla.wait_for_timeout(300); shot(carla, "13c-player-lado-mix")
+    assert carla.evaluate("(() => { const r = document.querySelector('.strip .vfader').getBoundingClientRect(); return r.bottom < innerHeight - 50 && r.height > 50; })()")
+    carla.locator('[data-tab="faixas"]').click(); carla.set_viewport_size(vp); carla.wait_for_timeout(300)
     carla.locator('[data-tab="mix"]').click(); carla.wait_for_timeout(300)
     expect(carla.locator(".strip")).to_have_count(10)
     carla.locator('.strip [data-m]').first.click()

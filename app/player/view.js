@@ -94,16 +94,11 @@ export async function openPlayer(songId) {
         <span class="cover">${song.cover_url ? `<img src="${attr(song.cover_url)}" alt="">` : icon("music")}</span>
         <div class="grow" style="min-width:0"><h2 class="ellipsis">${esc(song.title)}</h2><div class="s ellipsis">${esc(song.artist || "")}</div></div>
         <button class="iconbtn" id="mixreset" title="Restaurar a mixagem do projeto" aria-label="Restaurar mix">${icon("refresh")}</button></div>
-      <div class="pmeta">${song.song_key ? `<span class="tag soft">Tom ${esc(song.song_key)}</span>` : ""}${song.bpm ? `<span class="tag soft">${Number(song.bpm)} BPM</span>` : ""}
-        ${project.time_sig_num ? `<span class="tag gray">${project.time_sig_num}/${project.time_sig_den}</span>` : ""}<span class="tag gray">${audioTracks.filter((t) => t.kind === "audio").length} faixas</span>
-        <span class="tag gray" id="mixtag">Mix do projeto</span><span class="tag gray hidden" id="buf">Carregando…</span></div>
       <div class="ptabs"><button data-tab="faixas" class="on">${icon("tracks")} Faixas</button><button data-tab="mix">${icon("sliders")} Mix</button><button data-tab="letra">${icon("lyrics")} Letra</button></div>
       <div class="pbody" id="pbody"></div>
       <div class="loadbar"><i id="lb" style="width:0"></i></div>
-      <div class="tiny muted" id="diag" style="padding:2px 16px;min-height:14px"></div>
       <div class="timeline" id="tl">
-        ${regions.map((r) => { const c = rcol(r.color); return `<div class="rg" data-rg="${r.id}" style="left:${(r.position / L) * 100}%;width:${((r.end_position - r.position) / L) * 100}%${c ? `;--rc:${c.join(",")}` : ""}">${esc(r.name)}</div>`; }).join("")}
-        ${marks.map((m) => { const c = rcol(m.color); return `<div class="mk" style="left:${(m.position / L) * 100}%${c ? `;border-color:${css(c)};color:${css(c)}` : ""}" title="${attr(m.name)}">${esc(m.name)}</div>`; }).join("")}
+        ${parts.map((x) => `<i class="tk" style="left:${(x.start / L) * 100}%${x.color ? `;background:${css(x.color)}` : ""}"></i>`).join("")}
         <div class="rail"></div><div class="prog" id="prog"></div><div class="head" id="head"></div></div>
       <div class="times"><span id="tcur">0:00.0</span><span id="tmark"></span><span>${fmt(L)}</span></div>
       ${parts.length ? `<div class="parts" id="parts">${parts.map((x) => `<button class="part" data-part="${x.id}" style="${x.color ? `--pc:${x.color.join(",")}` : ""}"><b class="ellipsis">${esc(x.name)}</b><span>${fmt(x.start).replace(/\.\d$/, "")}</span></button>`).join("")}</div>` : ""}
@@ -115,9 +110,13 @@ export async function openPlayer(songId) {
         <button data-t="fwd" aria-label="Avançar 5 segundos">${icon("fwd")}</button>
         <button data-t="next" aria-label="Próximo marcador">${icon("next")}</button>
         <button data-t="rep" aria-label="Repetir">${icon("repeat")}</button>
-        <label class="master">${icon("volume")}<input type="range" class="fader" id="mvol" min="0" max="1.5" step="0.01" value="${engine.master.user}" aria-label="Volume master"><span class="tiny" id="mdb">${dbLabel(engine.master.user)}</span></label>
-      </div>`;
+      </div>
+      <div class="pinfo">${song.song_key ? `<span class="tile"><b>${esc(song.song_key)}</b><small>tom</small></span>` : ""}${song.bpm ? `<span class="tile"><b>${Number(song.bpm)}</b><small>bpm</small></span>` : ""}
+        ${project.time_sig_num ? `<span class="tile"><b>${project.time_sig_num}/${project.time_sig_den}</b><small>compasso</small></span>` : ""}
+        <span class="tile mixt"><b id="mixtag">Mix do projeto</b><small id="buf" class="hidden">Carregando…</small></span></div>
+      <div class="tiny muted" id="diag"></div>`;
     root.querySelector("[data-x]").onclick = close;
+    root.querySelector(".ph h2").onclick = () => root.classList.toggle("diag");   // toque no título: mostra os tempos de carregamento
     const body = root.querySelector("#pbody");
 
     // ---------- abas
@@ -180,7 +179,7 @@ export async function openPlayer(songId) {
       const d = e.target.dataset;
       if (d.v) engine.setTrack(T(d.v), { volume: Number(e.target.value) });
       else if (d.p) engine.setTrack(T(d.p), { pan: Number(e.target.value) });
-      else if (e.target.id === "mvol" || e.target.id === "mvol2") { engine.setMaster(Number(e.target.value)); root.querySelectorAll("#mvol,#mvol2").forEach((x) => x !== e.target && (x.value = e.target.value)); root.querySelector("#mdb").textContent = dbLabel(engine.master.user); const d2 = root.querySelector("#mdb2"); if (d2) d2.textContent = dbLabel(engine.master.user * engine.master.volume); }
+      else if (e.target.id === "mvol" || e.target.id === "mvol2") { engine.setMaster(Number(e.target.value)); root.querySelectorAll("#mvol,#mvol2").forEach((x) => x !== e.target && (x.value = e.target.value)); const d1 = root.querySelector("#mdb"); if (d1) d1.textContent = dbLabel(engine.master.user); const d2 = root.querySelector("#mdb2"); if (d2) d2.textContent = dbLabel(engine.master.user * engine.master.volume); }
       else return;
       syncControls(); saveMix();
     });
@@ -261,7 +260,7 @@ export async function openPlayer(songId) {
       pp.setAttribute("aria-label", engine.playing ? "Pausar" : "Tocar");
       root.querySelector('[data-t="rep"]').classList.toggle("on", engine.repeat || !!engine.loop);
       root.querySelector("#buf").classList.toggle("hidden", !engine.buffering);
-      root.querySelectorAll("[data-rg]").forEach((x) => { const r = regions.find((y) => y.id === x.dataset.rg); x.classList.toggle("on", !!engine.loop && engine.loop[0] === r.position); });
+      root.querySelectorAll("[data-part]").forEach((x) => { const r = parts.find((y) => String(y.id) === x.dataset.part); x.classList.toggle("loop", !!engine.loop && !!r && engine.loop[0] === r.start); });
       const ly = root.querySelector("#lyr"); if (ly) ly.classList.toggle("playing", engine.playing && lyr.some((b) => b.start != null));
     };
     engine.addEventListener("state", updateState);
@@ -299,6 +298,8 @@ export async function openPlayer(songId) {
     root.querySelector("#parts")?.addEventListener("click", (e) => {
       const b = e.target.closest("[data-part]"); if (!b) return;
       const x = parts.find((y) => String(y.id) === b.dataset.part); if (!x) return;
+      // segundo toque na parte que está tocando liga/desliga a repetição só dessa parte
+      if (x.region && b.classList.contains("on") && engine.playing) { const on = engine.loop && engine.loop[0] === x.start; engine.setLoop(on ? null : [x.start, x.end]); toast(on ? "Repetição desligada" : `Repetindo ${x.name}`); return; }
       if (engine.loop && !(engine.loop[0] === x.start)) engine.setLoop(null);
       engine.seek(x.start);
       if (!engine.playing) engine.play();
