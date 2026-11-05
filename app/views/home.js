@@ -3,11 +3,11 @@ import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDat
   canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire, invalidatePeople,
   teamBadge, teamHasRepertoire, teamTypeLabel, teamHas } from "../core.js";
 import { openRequestsCard } from "./multimidia.js";
+import { churchHome } from "./igreja.js";
 
 export function register(route) {
-  route("/", (p, el, a) => (state.space ? teamHome(state.space, el, a) : homeView(p, el, a)));
-  route("/inicio", (p, el, a) => (state.space ? teamHome(state.space, el, a) : homeView(p, el, a)));
-  route("/igreja", homeView);
+  route("/", (p, el, a) => (state.space ? teamHome(state.space, el, a) : churchHome(el, a)));
+  route("/inicio", (p, el, a) => (state.space ? teamHome(state.space, el, a) : churchHome(el, a)));
   route("/avisos", noticesView);
   route("/avisos/novo", (p, el) => noticeForm(el, null));
   route("/bloqueios", blocksView);
@@ -92,7 +92,7 @@ export function monthBirthdays(list) {
   return list.filter((p) => p.birth_date && Number(p.birth_date.slice(5, 7)) === m)
     .map((p) => ({ p, day: Number(p.birth_date.slice(8, 10)) })).sort((a, b) => a.day - b.day || a.p.display_name.localeCompare(b.p.display_name));
 }
-function birthdaySection(list, who) {
+export function birthdaySection(list, who) {
   const items = monthBirthdays(list), today = Number(ymd(new Date()).slice(8, 10));
   if (!items.length) return "";
   const month = new Intl.DateTimeFormat("pt-BR", { month: "long", timeZone: "America/Sao_Paulo" }).format(new Date());
@@ -243,7 +243,7 @@ async function teamHome(team, el, alive) {
   if (teamHas(team, "pedidos")) openRequestsCard(team).then((h) => { const b = el.querySelector("#reqs"); if (b) b.innerHTML = h; }).catch(() => {});
 }
 
-function noticeCard(n) {
+export function noticeCard(n) {
   const img = safeUrl(n.image_url);
   return `<button class="notice" data-notice="${n.id}">
     <div class="art" ${img ? `style="background-image:url('${attr(img)}')"` : ""}>${img ? "" : icon("megaphone")}</div>
@@ -252,7 +252,7 @@ function noticeCard(n) {
     <span class="go">${icon("chevronRight")}</span></button>`;
 }
 
-function openNotice(n, ppl) {
+export function openNotice(n, ppl) {
   if (!n) return;
   const link = safeUrl(n.link_url);
   const img = safeUrl(n.image_url);

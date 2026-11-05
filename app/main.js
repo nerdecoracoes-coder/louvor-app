@@ -5,6 +5,7 @@ import * as multimidia from "./views/multimidia.js";
 import * as ministerios from "./views/ministerios.js";
 import * as letras from "./views/letras.js";
 import * as ajuda from "./views/ajuda.js";
+import * as igreja from "./views/igreja.js";
 import * as teams from "./views/teams.js";
 import * as schedules from "./views/schedules.js";
 import * as songs from "./views/songs.js";
@@ -20,7 +21,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ajuda.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
+home.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
 
@@ -41,7 +42,7 @@ function navItems() {
   return [
     ["inicio", "home", "Início", "#/"],
     ["times", "users", "Times", "#/times"],
-    ["calendario", "calendar", "Calendário", "#/calendario"],
+    ["calendario", "calendar", "Agenda", "#/agenda"],
     ...(hasRepertoire() && !state.myTeams.length ? [["musicas", "music", "Músicas", "#/musicas"]] : []),
     ["chat", "chat", "Chat", "#/chat"],
   ];
@@ -60,7 +61,7 @@ function navActive(path) {
     return "";
   }
   if (path.startsWith("/times")) return "times";
-  if (path.startsWith("/calendario")) return "calendario";
+  if (path.startsWith("/agenda") || path.startsWith("/calendario")) return "calendario";
   return "";
 }
 
@@ -123,15 +124,25 @@ function openMenu() {
   const rep = t ? teamHasRepertoire(t) : hasRepertoire();
   const asks = !isGuest() && state.orgTeams.some((x) => teamHas(x, "pedidos") && x.id !== t?.id);
   // [ícone, texto, link ou ação]
-  const items = [
+  const items = t ? [
     ["org", "Visão geral da igreja", "#/igreja"],
     ["swap", "Trocar de time", "act:switch"],
     ["calendar", "Minhas escalas", "#/calendario/meu"],
     ["userOff", "Indisponibilidades", "#/bloqueios"],
     ["bars", "Panorama de escalas", "#/panorama"],
-    ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"]] : []),
+    ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"], ["clock", "Metrônomo", "#/metronomo"]] : []),
     ["gift", "Aniversariantes", "#/aniversariantes"],
-    ["clock", "Metrônomo", "#/metronomo"],
+    ["play", "Tutoriais", "#/ajuda"],
+    ...(asks ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
+  ] : [
+    ["org", "Início da igreja", "#/"],
+    ["swap", "Trocar de time", "act:switch"],
+    ["calendar", "Agenda da igreja", "#/agenda"],
+    ["megaphone", "Avisos", "#/avisos"],
+    ["users", "Ministérios e times", "#/times"],
+    ["gift", "Aniversariantes", "#/aniversariantes"],
+    ["calendar", "Minhas escalas", "#/calendario/meu"],
+    ["userOff", "Indisponibilidades", "#/bloqueios"],
     ["play", "Tutoriais", "#/ajuda"],
     ...(asks ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
   ];

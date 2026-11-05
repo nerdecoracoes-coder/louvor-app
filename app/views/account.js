@@ -192,23 +192,25 @@ async function profileView(_, el) {
 const KIND_ICON = { schedule_published: "calendar", schedule_changed: "calendar", announcement: "megaphone", message: "chat", team_joined: "users", invite_accepted: "link", leader: "crown", admin: "shield" };
 async function notificationsView(_, el) {
   el.innerHTML = spinner();
-  const rows = await must(sb.from("notifications").select("*").eq("user_id", state.user.id).order("created_at", { ascending: false }).limit(100));
+  // só as não lidas: ao abrir uma notificação ela sai da lista
+  const rows = await must(sb.from("notifications").select("*").eq("user_id", state.user.id).is("read_at", "null").order("created_at", { ascending: false }).limit(100));
   const orgName = (id) => state.orgs.find((o) => o.org_id === id)?.organizations.name;
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Notificações</h1>${rows.some((r) => !r.read_at) ? `<button class="btn ghost sm" id="all">Marcar todas como lidas</button>` : ""}</div>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Notificações</h1>${rows.length > 1 ? `<button class="btn ghost sm" id="all">Marcar todas como lidas</button>` : ""}</div>
     ${rows.length ? `<div class="list">${rows.map((n) => `<button class="li" data-n="${n.id}" style="${n.read_at ? "opacity:.6" : ""}"><span class="cover" style="width:42px;height:42px">${icon(KIND_ICON[n.kind] || "bell")}</span>
       <span class="grow" style="min-width:0"><span class="t">${esc(n.title)}</span><span class="s">${esc(n.body || "")}${n.org_id && n.org_id !== state.org?.id && orgName(n.org_id) ? ` · ${esc(orgName(n.org_id))}` : ""}</span></span>
       <span class="col" style="align-items:flex-end;gap:4px"><span class="tiny muted">${fRel(n.created_at)}</span>${n.read_at ? "" : `<span style="width:8px;height:8px;border-radius:8px;background:var(--accent)"></span>`}</span></button>`).join("")}</div>`
-      : `<div class="card">${empty("bell", "Nenhuma notificação", "Convites, escalas, avisos e mensagens aparecem aqui.")}</div>`}`;
+      : `<div class="card">${empty("bell", "Tudo em dia", "Convites, escalas, avisos e mensagens novos aparecem aqui.")}</div>`}`;
   el.querySelector("#all")?.addEventListener("click", async () => {
     await sb.from("notifications").update({ read_at: new Date().toISOString() }).eq("user_id", state.user.id).is("read_at", "null");
     document.dispatchEvent(new Event("badges")); notificationsView(_, el);
   });
   on(el, "click", "[data-n]", async (e, b) => {
     const n = rows.find((x) => x.id === b.dataset.n);
-    if (!n.read_at) await sb.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id);
-    document.dispatchEvent(new Event("badges"));
+    b.remove(); // sai da lista na hora
+    sb.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id).then(() => document.dispatchEvent(new Event("badges")));
     if (n.org_id && n.org_id !== state.org?.id && state.orgs.some((o) => o.org_id === n.org_id)) await selectOrg(n.org_id);
-    if (n.link) location.hash = n.link.replace(/^#/, "");
+    if (n.link) go(n.link.replace(/^#/, ""));
+    else notificationsView(_, el);
   });
 }
 

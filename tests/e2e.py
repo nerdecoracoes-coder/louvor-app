@@ -369,6 +369,11 @@ with sync_playwright() as pw:
     toast_has(ana, "Pedido pronto")
     carla.goto(BASE + "/#/notificacoes"); carla.reload()
     expect(carla.get_by_text("Pedido pronto: Vídeo de abertura do retiro")).to_be_visible(timeout=10000)
+    carla.get_by_text("Pedido pronto: Vídeo de abertura do retiro").click()  # abre o pedido e a notificação sai da lista
+    expect(carla.locator("h1", has_text="Vídeo de abertura do retiro")).to_be_visible(timeout=10000)
+    carla.goto(BASE + "/#/notificacoes"); carla.reload()
+    expect(carla.get_by_text("Pedido pronto: Vídeo de abertura do retiro")).to_have_count(0, timeout=10000)
+    ok("notificação abre o pedido e some da lista")
     # ------------------------------------------------------------------ Letras para a mídia (Multimídia vê as letras do Louvor)
     ana.goto(f"{BASE}/#/times/{jovens_id}/letras")
     expect(ana.locator("#ll .li", has_text="Emaús")).to_be_visible(timeout=10000)
@@ -453,6 +458,11 @@ with sync_playwright() as pw:
     toast_has(ana, "Aviso publicado")
     bruno.goto(BASE + "/#/igreja"); bruno.reload(); expect(bruno.locator(".notice", has_text="Ensaio Geral")).to_be_visible(timeout=10000)  # avisos gerais ficam na área da igreja
     shot(bruno, "17-inicio-lider"); ok("aviso da organização publicado e exibido")
+    expect(bruno.get_by_text("Agenda da igreja").first).to_be_visible(); expect(bruno.get_by_text("Minhas próximas escalas")).to_have_count(0)
+    ana.goto(BASE + "/#/agenda"); ana.locator("#newev").click(); ana.fill(".sheet input[name=title]", "Culto de celebração"); ana.locator("#esave").click()
+    expect(ana.locator(".evt", has_text="Culto de celebração")).to_be_visible(timeout=10000)
+    ok("agenda da igreja: evento criado")
+    ok("página da igreja: avisos, agenda, liderança e ministérios (sem escalas de time)")
     cd, desk = ctx(br, 1440, 900)
     desk.goto(BASE + "/")
     desk.fill("input[name=email]", f"bruno.{STAMP}@teste.local"); desk.fill("input[name=password]", "senha-forte-123"); desk.locator("#go").click()
