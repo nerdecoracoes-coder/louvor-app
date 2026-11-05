@@ -271,6 +271,15 @@ export function cueEditor(s, team, cues, done) {
 export const CHECK_TEMPLATE = ["Projetor / TV ligados e testados", "Letras e slides conferidos", "Câmeras posicionadas, com bateria e cartão", "Mesa de corte funcionando",
   "Transmissão testada (imagem e som)", "Iluminação conferida", "Internet estável no local"];
 
+export const CHECK_TEMPLATES = {
+  multimidia: CHECK_TEMPLATE,
+  diaconal: ["Templo aberto, limpo e arejado", "Luzes, ventiladores e ar-condicionado ligados", "Cadeiras e corredores organizados", "Lugares reservados (idosos, gestantes, cadeirantes)",
+    "Equipe da porta posicionada para receber", "Estacionamento sinalizado e com alguém responsável", "Elementos da Santa Ceia preparados (quando houver)", "Sacolas ou envelopes de oferta prontos",
+    "Banheiros conferidos", "Kit de primeiros socorros no lugar"],
+  infantil: ["Sala limpa, arejada e organizada", "Materiais da aula separados", "Lanche conferido (atenção a alergias)", "Lista de presença e check-in prontos", "Etiquetas e pulseiras de identificação",
+    "Brinquedos e tapetes higienizados", "Voluntários com crachá", "Berçário preparado", "Autorizações e contatos dos responsáveis à mão", "Kit de primeiros socorros no lugar"],
+};
+
 function checklist(s, team) {
   return async function draw(box) {
     const [items, checks, ppl] = await Promise.all([
@@ -307,6 +316,6 @@ export async function checklistEditor(team, box) {
     checklistEditor(team, box);
   };
   box.querySelector("#cf").onsubmit = (e) => { e.preventDefault(); const v = e.target.label.value.trim(); if (v) add([v]); };
-  box.querySelector("#sug")?.addEventListener("click", () => add(CHECK_TEMPLATE));
+  box.querySelector("#sug")?.addEventListener("click", () => add(CHECK_TEMPLATES[team.team_type] || CHECK_TEMPLATE));
   box.querySelectorAll("[data-del]").forEach((b) => (b.onclick = async () => { const r = await sb.from("team_checklist_items").delete().eq("id", b.dataset.del); if (r.error) return toast(errMsg(r.error), "err"); checklistEditor(team, box); }));
 }
