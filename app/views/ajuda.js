@@ -1,5 +1,9 @@
 // Tutoriais em vídeo: gravação da tela com legendas e narração pela voz do próprio aparelho (gratuita).
-import { esc, icon, empty, on } from "../core.js";
+import { esc, icon, empty, on, state } from "../core.js";
+
+// Em um time só aparecem os tutoriais daquele tipo de time; na visão da igreja, todos.
+const GRUPO_TIPOS = { "Escalas": null, "Multimídia": ["multimidia"], "Ministério Infantil": ["infantil"], "Diáconos": ["diaconal"] };
+const visiveis = () => { const tp = state.space?.team_type; return TUTORIAIS.filter((t) => t.pronto !== false && (!tp || !GRUPO_TIPOS[t.grupo] || GRUPO_TIPOS[t.grupo].includes(tp))); };
 
 export const TUTORIAIS = [
   { grupo: "Escalas", slug: "criar-escala", title: "Como criar uma escala", about: "Escolher data, participantes e músicas, e avisar a equipe." },
@@ -23,7 +27,7 @@ export function register(route) {
 function list(el) {
   el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><h1>Tutoriais</h1></div>
     <p class="muted small">Vídeos curtos mostrando o aplicativo passo a passo. A narração é lida em voz alta pelo seu aparelho.</p>
-    ${[...new Set(TUTORIAIS.filter((t) => t.pronto !== false).map((t) => t.grupo))].map((g) => `<div class="sec"><h2>${esc(g)}</h2></div><div class="list">${TUTORIAIS.filter((t) => t.pronto !== false && t.grupo === g).map((t) => `<a class="li" href="#/ajuda/${t.slug}"><span class="cover">${icon("play")}</span><span class="grow"><span class="t">${esc(t.title)}</span><span class="s">${esc(t.about)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`).join("")}`;
+    ${[...new Set(visiveis().map((t) => t.grupo))].map((g) => `<div class="sec"><h2>${esc(g)}</h2></div><div class="list">${visiveis().filter((t) => t.grupo === g).map((t) => `<a class="li" href="#/ajuda/${t.slug}"><span class="cover">${icon("play")}</span><span class="grow"><span class="t">${esc(t.title)}</span><span class="s">${esc(t.about)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`).join("")}`;
 }
 
 async function watch(slug, el, alive) {
