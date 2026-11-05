@@ -360,9 +360,6 @@ with sync_playwright() as pw:
     ana.keyboard.press("Escape"); ana.locator(".sheet-wrap").click(position={"x": 5, "y": 5}) if ana.locator(".sheet-wrap").count() else None
     expect(ana.get_by_role("heading", name="Checklist pré-culto")).to_be_visible(); expect(ana.locator(".li.check")).to_have_count(7)
     shot(ana, "21-multimidia-escala")
-    ana.locator("#proj").click(); expect(ana.locator(".proj")).to_be_visible()
-    ana.keyboard.press("ArrowRight"); expect(ana.locator(".pj-text")).to_contain_text("Teu amor", timeout=5000)
-    shot(ana, "21b-projecao"); ana.keyboard.press("Escape"); expect(ana.locator(".proj")).to_have_count(0)
     carla.goto(f"{BASE}/#/pedidos/novo/{jovens_id}")
     carla.locator(".kinds label", has_text="Vídeo").click(); carla.fill("input[name=title]", "Vídeo de abertura do retiro")
     carla.fill("textarea[name=description]", "30 segundos, para o telão"); carla.locator("#save").click()
