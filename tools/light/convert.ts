@@ -43,7 +43,7 @@ export async function convertOne(d: Deps, it: QueueItem, work: string) {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 }
 
-export async function run(d: Deps, { minutes = 40, parallel = 3, log = console.log } = {}) {
+export async function run(d: Deps, { minutes = 40, parallel = 6, log = console.log } = {}) {
   const until = Date.now() + minutes * 60_000;
   const work = mkdtempSync(join(tmpdir(), "somos-light-"));
   let ok = 0, fail = 0, inBytes = 0, outBytes = 0;

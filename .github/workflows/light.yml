@@ -1,11 +1,11 @@
 # Gera a versão leve (Opus) das faixas importadas do Google Drive e envia ao Cloudflare R2.
-# Roda sozinho a cada 15 minutos (e pode ser iniciado em Actions → "Gerar versão leve" → Run workflow).
+# Roda sozinho a cada 5 minutos (e pode ser iniciado em Actions → "Gerar versão leve" → Run workflow).
 # Enquanto uma faixa não tem versão leve, o player continua usando o WAV do Drive.
 # Secrets: SUPABASE_PROJECT_REF, CRON_SECRET, GOOGLE_SERVICE_ACCOUNT, R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY
 name: Gerar versão leve
 on:
   schedule:
-    - cron: "7,22,37,52 * * * *"
+    - cron: "2-59/5 * * * *"
   workflow_dispatch:
     inputs:
       minutes:
