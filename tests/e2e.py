@@ -179,14 +179,14 @@ with sync_playwright() as pw:
     shot(bruno, "08-escala-editor")
     bruno.locator("#savebtn").click()
     expect(bruno.locator(".pagehead h1", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
-    expect(bruno.get_by_text("Emaús")).to_be_visible()
+    bruno.locator("[data-dtab=mus]").click(); expect(bruno.get_by_text("Emaús")).to_be_visible()
     sched_url = bruno.url
     ok("escala criada com sugestão, música do repertório e publicada")
 
     # ------------------------------------------------------------------ Carla vê, confirma; calendário
     carla.goto(BASE + "/#/"); carla.reload()
     expect(carla.locator("#ups .scard", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
-    expect(carla.locator("#ups .scard")).to_contain_text("Vocal feminino")
+    expect(carla.locator("#ups .scard").first).to_contain_text("Pendente"); expect(carla.locator("#ups .scard .ov").first).to_be_visible()
     expect(carla.locator('a[href="#/notificacoes"] .dot')).to_be_visible()
     shot(carla, "09-inicio-integrante"); ok("integrante vê a escala no início e recebe notificação")
     carla.locator("#ups .scard").first.click()
@@ -194,6 +194,7 @@ with sync_playwright() as pw:
     expect(carla.get_by_text("Você confirmou que viu esta escala")).to_be_visible(timeout=10000)
     ok("confirmação de visualização")
     bruno.goto(sched_url); bruno.reload()
+    bruno.locator("[data-dtab=par]").click()
     expect(bruno.locator(".li", has_text="Carla Dias")).to_contain_text("Visto")
     carla.goto(BASE + "/#/calendario/geral"); expect(carla.locator(".sched", has_text="Culto de Celebração").first).to_be_visible(timeout=10000)
     carla.goto(f"{BASE}/#/calendario/time:{louvor_id}"); expect(carla.locator(".sched", has_text="Culto de Celebração").first).to_be_visible(timeout=10000)
@@ -349,6 +350,7 @@ with sync_playwright() as pw:
     ana.fill("input[name=title]", "Culto de Celebração")
     ana.fill("input[name=date]", nxt); ana.locator("input[name=date]").dispatch_event("change"); ana.fill("input[name=time]", "18:30")
     ana.locator("#savebtn").click()
+    expect(ana.locator("[data-dtab=rot]")).to_be_visible(timeout=10000); ana.locator("[data-dtab=rot]").click()
     expect(ana.get_by_role("heading", name="Roteiro do culto")).to_be_visible(timeout=10000)
     ana.locator("#cedit").click(); ana.locator(".sheet #tpl").click(); ana.locator(".sheet #ok").click()
     toast_has(ana, "Roteiro salvo")

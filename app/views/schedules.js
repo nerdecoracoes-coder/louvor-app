@@ -138,8 +138,8 @@ async function editor(el, scheduleId, teamId) {
     return `<form class="card" id="f">
       ${askTeam ? `<fieldset class="of"><legend>Time</legend><select name="team">${teams.map((t) => `<option value="${t.id}" ${t.id === f.team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></fieldset>` : ""}
       <fieldset class="of"><legend>Nome ou tipo do evento *</legend><input name="title" list="types" required maxlength="140" value="${attr(f.title)}" placeholder="Ex.: Culto de Celebração"><datalist id="types">${EVENT_TYPES.map((t) => `<option value="${t}">`).join("")}</datalist></fieldset>
-      <fieldset class="of"><legend>Data *</legend><input type="date" name="date" required value="${f.date}"></fieldset>
-      <div class="two"><fieldset class="of"><legend>Início *</legend><input type="time" name="time" required value="${f.time}"></fieldset>
+      <div class="dt3"><fieldset class="of"><legend>Data *</legend><input type="date" name="date" required value="${f.date}"></fieldset>
+        <fieldset class="of"><legend>Início *</legend><input type="time" name="time" required value="${f.time}"></fieldset>
         <fieldset class="of"><legend>Término</legend><input type="time" name="end" value="${f.end}"></fieldset></div>
       ${scheduleId ? "" : `<div class="two"><fieldset class="of"><legend>Repetir</legend><select name="repeat">${REPEATS.map(([k, l]) => `<option value="${k}" ${f.repeat === k ? "selected" : ""}>${l}</option>`).join("")}</select></fieldset>
         ${f.repeat !== "none" ? `<fieldset class="of"><legend>Até</legend><input type="date" name="until" value="${f.until}" min="${f.date}"></fieldset>` : ""}</div>
@@ -377,52 +377,73 @@ export function songPicker(selected, done, { title = "Adicionar músicas", multi
 }
 
 // ---------------------------------------------------------------- detalhe
-async function detail(el, id) {
+async function detail(el, id, tab = "det") {
   el.innerHTML = spinner();
   const s = await must(sb.from("schedules").select("*,teams(*)").eq("id", id).maybeSingle());
   if (!s) { el.innerHTML = empty("alert", "Escala não encontrada", "Ela pode ter sido excluída ou ainda é um rascunho."); return; }
-  const [assigns, songs, ppl] = await Promise.all([
+  const showCues = !!(s.teams && teamHas(s.teams, "roteiro"));
+  const [assigns, songs, ppl, cues] = await Promise.all([
     must(sb.from("schedule_assignments").select("*").eq("schedule_id", id)),
     must(sb.from("schedule_songs").select("*,songs(id,status,current_project_id,cover_url,youtube_url,chords_url,bpm,duration_sec)").eq("schedule_id", id).order("position")),
     people(),
+    showCues ? sb.from("schedule_cues").select("id").eq("schedule_id", id).then((r) => r.data || []) : Promise.resolve([]),
   ]);
   const manage = canManageTeam(s.team_id);
   const mine = assigns.filter((a) => a.user_id === state.user.id);
   const askConf = s.ask_confirmation !== false;
   const unseen = askConf && s.status === "published" && mine.some((a) => !a.seen_at);
+  const uniq = [...new Set(assigns.map((a) => a.user_id))];
+  const seenN = new Set(assigns.filter((a) => a.seen_at).map((a) => a.user_id)).size;
   const byRole = new Map();
   for (const a of assigns) { const k = a.role_name || "Sem função"; if (!byRole.has(k)) byRole.set(k, []); byRole.get(k).push(a); }
-  el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><div class="grow"><h1 style="font-size:24px">${esc(s.title)}</h1>
-      <span class="small muted">${esc(s.teams?.name || "")}</span></div>${s.status === "draft" ? `<span class="tag gray">Rascunho</span>` : ""}</div>
-    <div class="sched" style="pointer-events:none"><div class="date">${fDow(s.starts_at)}<b>${fDay(s.starts_at)}</b>${fMon(s.starts_at)}</div>
-      <div class="info"><h3>${esc(cap(fDateLong(s.starts_at)))}</h3><div class="meta"><span>${icon("clock")}${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""}</span>${s.location ? `<span>${icon("pin")}${esc(s.location)}</span>` : ""}</div></div><div></div></div>
-    ${unseen ? `<button class="btn primary block" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length ? `<p class="small ok row gap-s">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
-    ${s.notes ? `<div class="card mt"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}
-    ${(s.palettes || []).length ? `<div class="sec">${icon("shirt")}<h2>Vestimentas</h2></div><div class="card">${s.palettes.map((p) => `<div class="palview">${p.desc ? `<b class="small">${esc(p.desc)}</b>` : ""}<div class="pcolors">${(p.colors || []).map((c) => `<span class="pcol big" style="background:${attr(c)}" title="${attr(c)}"></span>`).join("")}</div></div>`).join("")}</div>` : ""}
-    ${teamHasRepertoire(s.teams) || songs.length ? `<div class="sec">${icon("music")}<h2>Repertório</h2></div>
-    <div class="list">${songs.length ? songs.map((x, i) => {
+  const showSongs = teamHasRepertoire(s.teams) || songs.length;
+  const tabs = [["det", "Detalhes", null], ...(showSongs ? [["mus", "Músicas", songs.length]] : []),
+    ["par", "Participantes", askConf && s.status === "published" ? `${seenN}/${uniq.length}` : uniq.length], ...(showCues ? [["rot", "Roteiro", cues.length]] : [])];
+  if (!tabs.some((t) => t[0] === tab)) tab = "det";
+  const today = ymd(s.starts_at) === ymd(new Date());
+  const pending = askConf && s.status === "published" && uniq.length > 0 && seenN < uniq.length;
+  const row = (ic, label, value, go2) => `<${go2 ? `button type="button" data-goto="${go2}"` : "div"} class="menurow">${icon(ic)}<span class="grow">${label}</span><span class="muted small">${value}</span>${go2 ? icon("chevronRight") : ""}</${go2 ? "button" : "div"}>`;
+  const panes = {
+    det: () => `<div class="list">${askConf && s.status === "published" ? row("check", "Confirmados", `${seenN} de ${uniq.length}`, "par") : ""}
+        ${showCues ? row("list", "Roteiro", `${cues.length} ${cues.length === 1 ? "item" : "itens"}`, "rot") : ""}${row("users", "Participantes", String(uniq.length), "par")}</div>
+      ${unseen ? `<button class="btn primary block mt" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length && askConf ? `<p class="small ok row gap-s mt">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
+      ${s.notes ? `<div class="sec">${icon("edit")}<h2>Observações</h2></div><div class="card"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}
+      ${(s.palettes || []).length ? `<div class="sec">${icon("shirt")}<h2>Vestimentas</h2></div><div class="card">${s.palettes.map((p) => `<div class="palview">${p.desc ? `<b class="small">${esc(p.desc)}</b>` : ""}<div class="pcolors">${(p.colors || []).map((c) => `<span class="pcol big" style="background:${attr(c)}" title="${attr(c)}"></span>`).join("")}</div></div>`).join("")}</div>` : ""}
+      ${manage ? `<div class="row gap mt wrap"><a class="btn ghost grow" href="#/escala/${id}/editar">${icon("edit")} Editar</a>
+        ${s.status === "draft" ? `<button class="btn primary grow" id="pub">${icon("check")} Publicar</button>` : ""}<button class="btn danger" id="del">${icon("trash")}</button></div>` : ""}`,
+    mus: () => `<div class="list">${songs.length ? songs.map((x, i) => {
       const live = x.songs && x.songs.status !== "removed";
       return `<div class="song"><span class="cover">${x.songs?.cover_url ? `<img src="${attr(x.songs.cover_url)}" alt="">` : `<b style="font-size:18px">${i + 1}</b>`}</span>
         <a class="grow" style="color:inherit;min-width:0" ${live ? `href="#/musica/${x.song_id}"` : ""}><div class="t ellipsis">${esc(x.title_snapshot)}</div>
           <div class="s">${esc(x.artist_snapshot || "")}${x.song_key ? `<span>Tom ${esc(x.song_key)}</span>` : ""}${x.songs?.bpm ? `<span>${Number(x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
         ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
-    }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>` : ""}
-    <div id="extras"></div>
-    <div class="sec">${icon("users")}<h2>Escalados</h2></div>
-    <div class="list">${[...byRole.entries()].map(([role, list]) => list.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(role)}</span></span>
-      ${s.status === "published" && askConf ? (a.seen_at ? `<span class="tiny ok row gap-s">${icon("check")} Visto</span>` : `<span class="tiny muted">Não visto</span>`) : ""}</div>`).join("")).join("") || `<div class="li muted small">Ninguém escalado ainda.</div>`}</div>
-    ${manage ? `<div class="row gap mt wrap"><a class="btn ghost grow" href="#/escala/${id}/editar">${icon("edit")} Editar</a>
-      ${s.status === "draft" ? `<button class="btn primary grow" id="pub">${icon("check")} Publicar</button>` : ""}<button class="btn danger" id="del">${icon("trash")}</button></div>` : ""}`;
-  scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
+    }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>`,
+    par: () => `<div class="list">${[...byRole.entries()].map(([role, list]) => list.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(role)}</span></span>
+      ${s.status === "published" && askConf ? (a.seen_at ? `<span class="tiny ok row gap-s">${icon("check")} Visto</span>` : `<span class="tiny muted">Não visto</span>`) : ""}</div>`).join("")).join("") || `<div class="li muted small">Ninguém escalado ainda.</div>`}</div>`,
+    rot: () => `<div id="extras"></div>`,
+  };
+  el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><div class="grow"><h1 class="dtitle">${esc(s.title)}</h1>
+      <span class="small muted">${esc(s.teams?.name || "")}</span></div>${s.status === "draft" ? `<span class="tag gray">Rascunho</span>` : ""}</div>
+    <p class="dwhen">${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""} · ${esc(cap(fDow(s.starts_at)).replace(/\.$/, ""))} · ${esc(new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Sao_Paulo" }).format(new Date(s.starts_at)))}${today ? ` <span class="tag soft">Hoje</span>` : ""}</p>
+    <div class="chips dchips">${pending ? `<span class="chip warnchip">${icon("clock")} Confirmação pendente</span>` : ""}<button class="chip" id="share" type="button">${icon("share")} Compartilhar</button></div>
+    <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-dtab="${k}" class="${tab === k ? "on" : ""}">${l}${n != null ? ` <i class="cnt">${n}</i>` : ""}</button>`).join("")}</div>
+    <div id="pane">${panes[tab]()}</div>`;
+  if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
+  el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
+  el.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.goto)));
+  el.querySelector("#share")?.addEventListener("click", async () => {
+    const data = { title: s.title, text: `${s.title} — ${fDateLong(s.starts_at)} às ${fTime(s.starts_at)}`, url: location.href };
+    try { if (navigator.share) await navigator.share(data); else { await navigator.clipboard.writeText(data.url); toast("Link copiado"); } } catch { /* cancelado */ }
+  });
   el.querySelector("#seen")?.addEventListener("click", async (e) => {
     busy(e.target); const r = await sb.rpc("mark_schedule_seen", { p_schedule: id });
     if (r.error) { busy(e.target, false); return toast(errMsg(r.error), "err"); }
-    toast("Confirmado"); detail(el, id);
+    toast("Confirmado"); detail(el, id, tab);
   });
   el.querySelector("#pub")?.addEventListener("click", async () => {
     const r = await sb.from("schedules").update({ status: "published" }).eq("id", id);
     if (r.error) return toast(errMsg(r.error), "err");
-    toast("Escala publicada"); detail(el, id);
+    toast("Escala publicada"); detail(el, id, tab);
   });
   el.querySelector("#del")?.addEventListener("click", async () => {
     if (!(await confirmDialog("Excluir esta escala?", "Excluir", true))) return;

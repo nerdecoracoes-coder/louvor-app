@@ -542,16 +542,23 @@ input[type=range].fader::-moz-range-thumb { width: 15px; height: 15px; border-ra
 /* ------------------------------------------------------------- início: escalas em cartões que se arrastam */
 .scards { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -20px; padding: 2px 20px 6px; }
 .scards::-webkit-scrollbar { display: none; }
-.scard { flex: none; width: min(78vw, 300px); scroll-snap-align: start; border-radius: var(--r-lg); padding: 18px; color: #fff; display: flex; flex-direction: column; gap: 10px; min-width: 0;
-  background: linear-gradient(145deg, rgba(var(--accent-rgb), .9), rgba(var(--accent-rgb), .45)); box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .16); }
+.scard { flex: none; width: min(82vw, 320px); scroll-snap-align: start; border-radius: var(--r-lg); padding: 16px; color: var(--text); display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  background: var(--raised); box-shadow: inset 0 0 0 1px var(--line-2); border-left: 3px solid var(--accent); }
 .scard.past { opacity: .75; }
-.scard .when { display: flex; align-items: baseline; gap: 8px; font-size: 13px; color: rgba(255, 255, 255, .8); }
-.scard .when b { font: 700 30px/1 var(--serif); color: #fff; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
-.scard .when .tag { margin-left: auto; align-self: center; }
-.scard h3 { font: 600 19px/1.2 var(--serif); letter-spacing: -.02em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-.scard .meta { font-size: 13.5px; color: rgba(255, 255, 255, .8); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.scard .pill { background: rgba(0, 0, 0, .22); color: #fff; }
-.scard .side { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; }
+.scard .sc-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.scard .sc-when { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); font-weight: 600; }
+.scard .sc-when svg { width: 16px; height: 16px; }
+.scard h3 { font: 600 18px/1.25 var(--serif); letter-spacing: -.02em; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.scard .sc-sub { display: flex; gap: 8px; align-items: center; min-height: 0; }
+.scard .sc-sub:empty { display: none; }
+.scard .sc-faces { display: flex; align-items: center; min-height: 30px; }
+.scard .ov { margin-left: -8px; border-radius: 50%; box-shadow: 0 0 0 2px var(--raised); display: inline-flex; }
+.scard .ov:first-child { margin-left: 0; }
+.scard .more { margin-left: 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+.scard .sc-foot { display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 10px; margin-top: auto; }
+.scard .sc-foot .tag { gap: 4px; } .scard .sc-foot .tag svg { width: 13px; height: 13px; }
+.scard .sc-counts { display: inline-flex; gap: 12px; color: var(--muted); font-size: 13px; }
+.scard .sc-counts span { display: inline-flex; align-items: center; gap: 5px; } .scard .sc-counts svg { width: 16px; height: 16px; }
 .bdaymonth .bday .when { white-space: nowrap; }
 
 /* ------------------------------------------------------------- páginas de lista (Time, Panorama) */
@@ -755,3 +762,19 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .pcard.pslot .chev { color: var(--muted); }
 .addslot { align-self: flex-start; font-size: 12.5px; color: var(--muted); padding: 2px 6px; display: inline-flex; align-items: center; gap: 4px; }
 .addslot .ic { width: 13px; height: 13px; }
+
+/* data + início + término lado a lado, sem cortar */
+.dt3 { display: grid; grid-template-columns: 1.55fr 1fr 1fr; gap: 8px; }
+.dt3 > * { min-width: 0; }
+.dt3 fieldset.of { padding: 0 8px 2px; }
+.dt3 fieldset.of input { font-size: 15px; padding: 0; min-width: 0; text-align: left; }
+.dt3 input::-webkit-calendar-picker-indicator { display: none; }
+.dt3 input::-webkit-date-and-time-value { text-align: left; margin: 0; }
+.dt3 input::-webkit-datetime-edit { padding: 0; }
+
+/* detalhe da escala */
+.dtitle { font-size: 24px; color: var(--accent); }
+.dwhen { margin: -2px 0 12px; color: var(--muted); font-size: 14px; display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.dchips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.chip.warnchip { color: var(--warn); background: rgba(229, 180, 90, .12); }
+.chip svg { width: 15px; height: 15px; }

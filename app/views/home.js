@@ -51,13 +51,39 @@ const relDay = (iso) => {
   const d = ymd(iso), today = ymd(new Date()), tomorrow = ymd(new Date(Date.now() + 864e5));
   return d === today ? "Hoje" : d === tomorrow ? "Amanhã" : cap(fDow(iso)).replace(/\.$/, "");
 };
-export function schedCard(s, { showTeam = true } = {}) {
-  const roles = s.roles || [];
-  const where = [s.location, showTeam && s.teams ? s.teams.name : null].filter(Boolean).join(" · ");
-  const status = s.ask_confirmation === false ? "" : s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="tag soft">${icon("check")} Visto</span>` : "";
-  return `<a class="scard" href="#/escala/${s.id}"><div class="when"><b>${fDay(s.starts_at)}</b><span>${esc(fMon(s.starts_at))}</span>${status}</div>
-    <h3>${esc(s.title)}</h3><div class="meta">${esc(relDay(s.starts_at))} · ${fTime(s.starts_at)}${where ? ` · ${esc(where)}` : ""}</div>
-    ${roles.length ? `<div class="side">${roles.map((r) => `<span class="pill">${esc(r)}</span>`).join("")}</div>` : ""}</a>`;
+// Junta a cada escala: quem está escalado (fotos), confirmações e quantidade de músicas
+export async function enrichSchedules(list) {
+  const ids = [...new Set(list.map((s) => s.id))];
+  if (!ids.length) return list;
+  const [as, ss] = await Promise.all([
+    must(sb.from("schedule_assignments").select("schedule_id,user_id,seen_at").in("schedule_id", ids)),
+    must(sb.from("schedule_songs").select("schedule_id").in("schedule_id", ids)),
+  ]);
+  for (const s of list) {
+    const mine = as.filter((a) => a.schedule_id === s.id);
+    s.people = [...new Set(mine.map((a) => a.user_id))];
+    s.seenCount = new Set(mine.filter((a) => a.seen_at).map((a) => a.user_id)).size;
+    s.songCount = ss.filter((x) => x.schedule_id === s.id).length;
+  }
+  return list;
+}
+const MONTHS = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+export function schedCard(s, { showTeam = true, ppl } = {}) {
+  const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date(s.starts_at)));
+  const day = Number(fDay(s.starts_at)), month = MONTHS[Number(ymd(s.starts_at).slice(5, 7)) - 1];
+  const dow = cap(fDow(s.starts_at)).replace(/\.$/, "");
+  const ids = s.people || [], total = ids.length;
+  const asks = s.ask_confirmation !== false && total > 0;
+  const status = !asks ? "" : s.seenCount >= total ? `<span class="tag ok">${icon("check")} Confirmada</span>` : `<span class="tag warn">${icon("clock")} Pendente</span>`;
+  const faces = ids.slice(0, 5).map((id) => `<span class="ov">${avatar(ppl?.get(id) || { id, display_name: "?" }, 30, false)}</span>`).join("");
+  const rel = relDay(s.starts_at);
+  const today = rel === "Hoje" || rel === "Amanhã";
+  return `<a class="scard" href="#/escala/${s.id}">
+    <div class="sc-top"><span class="sc-when">${icon(hour >= 18 || hour < 5 ? "moon" : "sun")} ${esc(dow)}, ${fTime(s.starts_at)}</span><span class="sc-date">${day} ${month}</span></div>
+    <h3>${esc(s.title)}</h3>
+    <div class="sc-sub">${today ? `<span class="tag soft">${esc(rel.toLowerCase())}</span>` : ""}${showTeam && s.teams ? `<span class="muted small ellipsis">${esc(s.teams.name)}</span>` : ""}</div>
+    <div class="sc-faces">${faces}${total > 5 ? `<span class="more">+${total - 5}</span>` : ""}${total ? "" : `<span class="muted small">Ninguém escalado</span>`}</div>
+    <div class="sc-foot">${status || `<span></span>`}<span class="sc-counts">${total ? `<span>${icon("users")}${total}</span>` : ""}<span>${icon("music")}${s.songCount || 0}</span></span></div></a>`;
 }
 
 // Aniversariantes do mês (todos os dias do mês corrente, em ordem)
@@ -105,6 +131,8 @@ async function homeView(_, el, alive) {
     people(),
   ]);
   if (!alive()) return;
+  await enrichSchedules(ups).catch((e) => console.warn(e));
+  if (!alive()) return;
   const name = myName().split(" ")[0] || "você";
 
   const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date()));
@@ -120,7 +148,7 @@ async function homeView(_, el, alive) {
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/calendario/meu">Agenda ${icon("chevronRight")}</a></div>
-  <div id="ups">${ups.length ? `<div class="scards">${ups.map((s) => schedCard(s)).join("")}</div>` : empty("calendar", "Nenhuma escala por enquanto", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>
+  <div id="ups">${ups.length ? `<div class="scards">${ups.map((s) => schedCard(s, { ppl })).join("")}</div>` : empty("calendar", "Nenhuma escala por enquanto", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>
 
   <div class="sec"><h2>Avisos</h2><a href="#/avisos">Todos ${icon("chevronRight")}</a></div>
   ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>
@@ -167,6 +195,8 @@ async function teamHome(team, el, alive) {
   const myUps = mine.filter((s) => s.team_id === team.id).slice(0, 12);
   const mineIds = new Set(myUps.map((s) => s.id));
   const others = next.filter((s) => !mineIds.has(s.id)).slice(0, 3);
+  await enrichSchedules([...myUps, ...others]).catch((e) => console.warn(e));
+  if (!alive()) return;
   const roleNames = roles.map((r) => r.music_roles).filter(Boolean).sort((a, b) => a.sort - b.sort).map((r) => r.name);
   const memberIds = new Set(members.map((m) => m.user_id));
   const name = myName().split(" ")[0] || "você";
@@ -183,8 +213,8 @@ async function teamHome(team, el, alive) {
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/times/${team.id}/escalas">Ver todas ${icon("chevronRight")}</a></div>
-  <div id="ups">${myUps.length ? `<div class="scards">${myUps.map((s) => schedCard(s, { showTeam: false })).join("")}</div>` : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
-  ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div>${others.map((s) => schedRow(s, { showTeam: false })).join("")}` : ""}
+  <div id="ups">${myUps.length ? `<div class="scards">${myUps.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
+  ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div><div class="scards">${others.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : ""}
 
   <div id="reqs"></div>
   <div class="sec"><h2>Avisos do time</h2>${manage ? `<a href="#/times/${team.id}/aviso">Novo ${icon("plus")}</a>` : `<a href="#/times/${team.id}/avisos">Todos ${icon("chevronRight")}</a>`}</div>
