@@ -1,6 +1,7 @@
 // Player multitrack: abas Faixas, Mix e Letra, linha do tempo com marcadores/regiões e transporte.
 import { sb, state, must, esc, attr, icon, toast, errMsg, isRepertoireStaff as isStaff, fDur } from "../core.js";
-import { Engine, gainToDb } from "./engine.js";
+import { Engine, gainToDb, warmOpus } from "./engine.js";
+import { manifest, isCached } from "./warm.js";
 
 // Cores salvas no REAPER (PEAKCOL das faixas e cor de marcadores/regiões): só valem com o bit 0x1000000 ligado;
 // o valor vem no formato do Windows (0x00BBGGRR).
@@ -35,6 +36,10 @@ export async function openPlayer(songId) {
     const song = await must(sb.from("songs").select("*").eq("id", songId).maybeSingle());
     if (!song) throw new Error("Música não encontrada.");
     if (!song.current_project_id || song.status !== "ready") throw new Error(song.status === "removed" ? "Esta música saiu do repertório." : "Esta música ainda não tem projeto multitrack pronto.");
+    const T0 = performance.now(), marks = {};
+    warmOpus();                                  // compila o decodificador enquanto o resto carrega
+    const reused = isCached(song.current_project_id);
+    const manifestP = manifest(song.current_project_id);   // links das versões leves, em paralelo com as consultas
     const [project, tracks, markers, media, preset] = await Promise.all([
       must(sb.from("multitrack_projects").select("*").eq("id", song.current_project_id).single()),
       must(sb.from("project_tracks").select("*").eq("project_id", song.current_project_id).order("idx")),
@@ -44,7 +49,11 @@ export async function openPlayer(songId) {
     ]);
     if (current !== ctrl) return;
     // versão leve (Opus no Cloudflare R2), quando já convertida; senão o motor lê o WAV pelo servidor
-    const light = await sb.functions.invoke("drive-media", { project_id: project.id }).then((r) => r.data?.files || {}).catch(() => ({}));
+    marks.dados = Math.round(performance.now() - T0);
+    let light = await manifestP;
+    // a cópia guardada pode ser anterior à conversão de mais faixas: se falta alguma, pergunta de novo
+    if (reused && new Set(media.map((m) => m.drive_file_id)).size > Object.keys(light).length) light = await manifest(project.id, { maxAge: 0 });
+    marks.versaoLeve = Math.round(performance.now() - T0);
     for (const m of media) if (light[m.drive_file_id]) m.light = light[m.drive_file_id];
     if (current !== ctrl) return;
     const mediaBase = sb.functions.url("drive-media");
@@ -54,7 +63,10 @@ export async function openPlayer(songId) {
       mediaUrl: (id) => `${mediaBase}?file=${encodeURIComponent(id)}`, token: () => sb.auth.token(), anonKey: sb.anonKey,
     });
     await engine.init();
+    engine.timings = marks; engine.t0open = T0;
     window.__player = engine;
+    const nLight = media.filter((m) => m.light).length;
+    if (media.length && nLight < media.length) toast(`${media.length - nLight} de ${media.length} faixas ainda estão sendo otimizadas; esta música pode abrir mais devagar.`);
     build(root, song, project, engine);
   } catch (e) {
     root.innerHTML = `<div class="backdrop"></div><div class="ph"><button class="back" data-x>${icon("chevronDown")}</button></div><div class="empty">${icon("alert")}<b>Não foi possível abrir o player</b><p>${esc(errMsg(e))}</p></div>`;
@@ -321,6 +333,8 @@ export async function openPlayer(songId) {
     };
     drawTab(); updateState(); loop();
     // carregamento inicial (primeiros segundos) e o restante em segundo plano
-    engine.preload(0, 1, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; }).then(() => engine.background()).catch((e) => toast(errMsg(e), "err"));
+    engine.preload(0, 1, (p) => { root.querySelector("#lb").style.width = `${Math.round(p * 100)}%`; })
+      .then(() => { if (engine.timings) { engine.timings.pronta = Math.round(performance.now() - engine.t0open); console.info("[player] tempos (ms)", engine.timings, `${Math.round(engine.bytesLoaded / 1024)} KB`); } })
+      .then(() => engine.background()).catch((e) => toast(errMsg(e), "err"));
   }
 }

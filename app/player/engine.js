@@ -31,6 +31,28 @@ function loadOpus() {
   return opusLib;
 }
 
+export const warmOpus = () => loadOpus().catch(() => {});
+
+// Baixa (ou lê do cache) um intervalo de bytes da versão leve. Usado pelo motor e pelo pré-aquecimento.
+export async function lightFetch(L, start, end) {
+  const key = `https://somos.cache/light/${L.key}?r=${start}-${end}`;
+  let cache = null;
+  try { cache = await caches.open(CACHE_NAME); const hit = await cache.match(key); if (hit) return new Uint8Array(await hit.arrayBuffer()); } catch { cache = null; }
+  let r;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    r = await fetch(L.url, { headers: { Range: `bytes=${start}-${end}` } }).catch(() => null);
+    if (r && (r.status === 206 || r.ok)) break;
+    if (r && r.status === 403) break; // link expirado: o pedaço volta a ser lido do WAV
+    await new Promise((res) => setTimeout(res, 300 * (attempt + 1)));
+  }
+  if (!r || !(r.ok || r.status === 206)) throw Object.assign(new Error(`Falha ao carregar áudio leve (${r?.status ?? "sem conexão"})`), { light: true });
+  let buf = new Uint8Array(await r.arrayBuffer());
+  if (r.status === 200 && buf.length > end - start + 1) buf = buf.subarray(start, end + 1); // servidor ignorou o Range
+  try { if (cache) await cache.put(key, new Response(buf)); } catch { /* cota cheia */ }
+  return buf;
+}
+export { byteRange };
+
 export class Engine extends EventTarget {
   constructor({ project, tracks, markers, media, mediaUrl, token, anonKey, mix }) {
     super();
@@ -211,21 +233,8 @@ export class Engine extends EventTarget {
     return run;
   }
   async fetchLight(m, start, end) {
-    const key = `https://somos.cache/light/${m.light.key}?r=${start}-${end}`;
-    let cache = null;
-    try { cache = await caches.open(CACHE_NAME); const hit = await cache.match(key); if (hit) return new Uint8Array(await hit.arrayBuffer()); } catch { cache = null; }
-    let r;
-    for (let attempt = 0; attempt < 3; attempt++) {
-      r = await fetch(m.light.url, { headers: { Range: `bytes=${start}-${end}` } }).catch(() => null);
-      if (r && (r.status === 206 || r.ok)) break;
-      if (r && r.status === 403) break; // link expirado: o pedaço volta a ser lido do WAV
-      await new Promise((res) => setTimeout(res, 300 * (attempt + 1)));
-    }
-    if (!r || !(r.ok || r.status === 206)) throw Object.assign(new Error(`Falha ao carregar áudio leve (${r?.status ?? "sem conexão"})`), { light: true });
-    let buf = new Uint8Array(await r.arrayBuffer());
-    if (r.status === 200 && buf.length > end - start + 1) buf = buf.subarray(start, end + 1); // servidor ignorou o Range
+    const buf = await lightFetch(m.light, start, end);
     this.bytesLoaded += buf.length;
-    try { if (cache) await cache.put(key, new Response(buf)); } catch { /* cota cheia */ }
     return buf;
   }
 
@@ -336,6 +345,7 @@ export class Engine extends EventTarget {
       const list = this.needed(c * CHUNK, (c + 1) * CHUNK).filter(([f, k]) => !this.isLoaded(f, k));
       for (const [f, k] of list) {
         if (this.destroyed) return;
+        while (this.buffering && !this.destroyed) await new Promise((r) => setTimeout(r, 150));   // a prioridade é tocar
         const m = this.media.get(f);
         const pk = m.peaks?.[Math.floor(k * CHUNK * PEAK_RATE) * 2];
         if (m.format?.codec === "decode") { await this.loadFull(m).catch(() => {}); continue; }

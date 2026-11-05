@@ -175,6 +175,8 @@ function startBadges() {
 }
 document.addEventListener("badges", refreshBadges);
 // Parabéns do dia: na primeira abertura do dia, uma janela avisa quem faz aniversário hoje
+// deixa as músicas das próximas escalas prontas no aparelho (primeiros segundos de cada faixa), sem atrapalhar
+function warmLater() { if (state.user && state.org) setTimeout(() => import("./player/warm.js").then((m) => m.warmUpcoming()).catch(() => {}), 6000); }
 function birthdayLater() { if (state.user && state.org) setTimeout(() => import("./views/home.js").then((m) => m.birthdayPopup()).catch(() => {}), 1200); }
 
 // ---------------------------------------------------------------- navegação
@@ -246,14 +248,14 @@ async function boot() {
   }
   if (state.user) { if (state.orgs.length) renderShell(); startBadges(); }
   render();
-  birthdayLater();
+  birthdayLater(); warmLater();
 }
 export async function afterLogin() {
   await loadSession();
   if (state.orgs.length) renderShell();
   startBadges();
   render();
-  birthdayLater();
+  birthdayLater(); warmLater();
 }
 window.addEventListener("louvor-login", afterLogin);
 
