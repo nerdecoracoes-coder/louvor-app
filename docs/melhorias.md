@@ -106,3 +106,6 @@ Referência: LouveApp. Cada time funciona como um aplicativo próprio.
 - Banco: `20261105000001_time_equipes.sql` (equipes e classificações). Arquivo para colar no SQL Editor: `supabase/setup/atualizacao-2026-11-05-time.sql`.
 
 Ficou para depois: auxiliares nomeados pelo líder, uso das classificações no cadastro e na lista de músicas, escalar uma equipe inteira de uma vez.
+
+### Menu lateral (05/11/2026)
+Visão geral da igreja, Trocar de time, Minhas escalas, Indisponibilidades, Panorama de escalas, Músicas tocadas (histórico das escalas publicadas), Aniversariantes (todos os meses), Metrônomo, Pedir arte ou vídeo (quando outro time atende pedidos), Configurações e Sair da conta. O `+` do cabeçalho foi removido: cada página tem o seu botão (Escalas, Músicas) e as ações da igreja ficam em Visão geral da igreja.

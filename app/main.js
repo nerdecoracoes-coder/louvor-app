@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as multimidia from "./views/multimidia.js";
 import * as teams from "./views/teams.js";
@@ -7,6 +7,7 @@ import * as schedules from "./views/schedules.js";
 import * as songs from "./views/songs.js";
 import * as chat from "./views/chat.js";
 import * as account from "./views/account.js";
+import * as extras from "./views/extras.js";
 import { openPlayer, closePlayer } from "./player/view.js";
 
 const app = document.getElementById("app");
@@ -16,7 +17,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); multimidia.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route);
+home.register(route); multimidia.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
 
@@ -108,24 +109,45 @@ function spaceSwitcher() {
   s.el.addEventListener("click", (e) => { if (e.target.closest("a")) s.close(); });
 }
 
-// Menu lateral: perfil, visão geral da igreja, indisponibilidades, panorama de escalas e configurações.
+// Menu lateral: perfil, o que é da igreja, da pessoa e do time, e ferramentas.
 function openMenu() {
   const t = state.space;
   const cfg = t ? (canManageTeam(t.id) ? `#/times/${t.id}/config` : "#/perfil") : (isAdmin() ? "#/org" : "#/perfil");
-  const items = [["org", "Visão geral da igreja", "#/igreja"], ["userOff", "Indisponibilidades", "#/bloqueios"], ["bars", "Panorama de escalas", "#/panorama"]];
-  // quem não está no time que atende pedidos (ex.: Multimídia) ainda consegue pedir arte, vídeo ou slides
-  if (!isGuest() && state.orgTeams.some((x) => teamHas(x, "pedidos") && x.id !== t?.id)) items.splice(1, 0, ["inbox", "Pedir arte ou vídeo", "#/pedidos"]);
+  const rep = t ? teamHasRepertoire(t) : hasRepertoire();
+  const asks = !isGuest() && state.orgTeams.some((x) => teamHas(x, "pedidos") && x.id !== t?.id);
+  // [ícone, texto, link ou ação]
+  const items = [
+    ["org", "Visão geral da igreja", "#/igreja"],
+    ["swap", "Trocar de time", "act:switch"],
+    ["calendar", "Minhas escalas", "#/calendario/meu"],
+    ["userOff", "Indisponibilidades", "#/bloqueios"],
+    ["bars", "Panorama de escalas", "#/panorama"],
+    ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"]] : []),
+    ["gift", "Aniversariantes", "#/aniversariantes"],
+    ["clock", "Metrônomo", "#/metronomo"],
+    ...(asks ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
+  ];
+  const entry = ([ic, l, h]) => h.startsWith("act:") ? `<button data-menuact="${h.slice(4)}">${icon(ic)}<span>${l}</span></button>` : `<a href="${h}">${icon(ic)}<span>${l}</span></a>`;
   const wrap = document.createElement("div");
   wrap.className = "drawer-wrap";
   wrap.innerHTML = `<aside class="drawer" role="dialog" aria-modal="true" aria-label="Menu">
     <a class="dprofile" href="#/perfil">${avatar({ ...state.profile, display_name: myName() }, 52, false)}<span class="grow"><b class="ellipsis">${esc(myName())}</b><small class="ellipsis">${esc(state.user?.email || "")}</small></span>${icon("chevronRight", "chev")}</a>
-    <nav class="dmenu">${items.map(([ic, l, h]) => `<a href="${h}">${icon(ic)}<span>${l}</span></a>`).join("")}</nav>
-    <div class="dfoot"><a href="${cfg}">${icon("settings")}<span>Configurações</span></a></div></aside>`;
+    <nav class="dmenu">${items.map(entry).join("")}</nav>
+    <div class="dfoot"><a href="${cfg}">${icon("settings")}<span>Configurações</span></a><button data-menuact="logout">${icon("logout")}<span>Sair da conta</span></button></div></aside>`;
   document.body.appendChild(wrap);
   document.body.classList.add("noscroll");
   const close = () => { wrap.classList.add("out"); document.body.classList.remove("noscroll"); setTimeout(() => wrap.remove(), 200); window.removeEventListener("hashchange", close); document.removeEventListener("keydown", esc2); };
   const esc2 = (e) => { if (e.key === "Escape") close(); };
-  wrap.addEventListener("click", (e) => { if (e.target === wrap || e.target.closest("a")) close(); });
+  wrap.addEventListener("click", async (e) => {
+    const act = e.target.closest("[data-menuact]")?.dataset.menuact;
+    if (act === "switch") { close(); return spaceSwitcher(); }
+    if (act === "logout") {
+      close();
+      if (await confirmDialog("Sair da conta neste aparelho?", "Sair")) { await sb.auth.signOut(); location.hash = "/"; }
+      return;
+    }
+    if (e.target === wrap || e.target.closest("a")) close();
+  });
   window.addEventListener("hashchange", close);
   document.addEventListener("keydown", esc2);
   wrap.querySelector("a")?.focus({ preventScroll: true });

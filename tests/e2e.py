@@ -411,6 +411,16 @@ with sync_playwright() as pw:
         expect(carla.locator(".drawer").get_by_text(t, exact=True)).to_be_visible()
     assert carla.locator(".drawer").get_by_text("Avisos", exact=True).count() == 0
     shot(carla, "21-menu-lateral")
+    for t in ["Trocar de time", "Minhas escalas", "Músicas tocadas", "Aniversariantes", "Metrônomo", "Sair da conta"]:
+        expect(carla.locator(".drawer").get_by_text(t, exact=True)).to_be_visible()
+    carla.locator(".drawer [data-menuact=switch]").click()
+    expect(carla.locator(".sheet", has_text="Meus times")).to_be_visible(); carla.keyboard.press("Escape"); carla.goto(BASE + "/#/"); carla.wait_for_timeout(300)
+    for r_, h1 in [("/#/calendario/meu", "Minhas escalas"), ("/#/aniversariantes", "Aniversariantes"), ("/#/musicas/tocadas", "Músicas tocadas"), ("/#/metronomo", "Metrônomo")]:
+        carla.goto(BASE + r_); expect(carla.locator(".pagehead h1")).to_have_text(h1, timeout=10000)
+    carla.goto(BASE + "/#/musicas/tocadas"); carla.locator("[data-tab=nunca]").click(); expect(carla.locator(".song", has_text="Emaús")).to_be_visible(timeout=10000)
+    carla.goto(BASE + "/#/metronomo"); carla.locator("[data-d='5']").click(); expect(carla.locator("#bpm")).to_have_text("95")
+    carla.locator("#go").click(); expect(carla.locator("#go")).to_contain_text("Parar"); carla.locator("#go").click()
+    carla.goto(BASE + "/#/"); carla.locator(".menubtn").click()
     carla.locator(".drawer a", has_text="Panorama de escalas").click()
     expect(carla.locator(".pagehead h1")).to_have_text("Panorama de escalas", timeout=10000)
     expect(carla.locator(".pano")).to_contain_text("Carla Dias", timeout=10000)

@@ -533,10 +533,10 @@ input[type=range].fader::-moz-range-thumb { width: 15px; height: 15px; border-ra
 .dprofile { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 18px; background: rgba(var(--accent-rgb), .22); box-shadow: inset 0 0 0 1px rgba(var(--accent-rgb), .45); color: var(--text); min-width: 0; }
 .dprofile b { display: block; font-size: 16px; font-weight: 600; } .dprofile small { display: block; color: var(--muted); font-size: 12.5px; margin-top: 2px; }
 .dprofile .grow { min-width: 0; } .dprofile .chev { color: var(--muted); }
-.dmenu { display: flex; flex-direction: column; margin-top: 14px; flex: 1; }
-.dmenu a, .dfoot a { display: flex; align-items: center; gap: 18px; padding: 16px 12px; border-radius: 14px; color: var(--text); font-size: 16px; font-weight: 500; }
-.dmenu a:hover, .dfoot a:hover { background: var(--glass); }
-.dmenu .ic, .dfoot .ic { width: 24px; height: 24px; color: var(--accent); stroke-width: 1.6; }
+.dmenu { display: flex; flex-direction: column; margin-top: 10px; flex: 1; overflow-y: auto; min-height: 0; }
+.dmenu a, .dfoot a, .dmenu button, .dfoot button { width: 100%; text-align: left; display: flex; align-items: center; gap: 18px; padding: 13px 12px; border-radius: 14px; color: var(--text); font-size: 16px; font-weight: 500; }
+.dmenu a:hover, .dfoot a:hover, .dmenu button:hover, .dfoot button:hover { background: var(--glass); }
+.dmenu .ic, .dfoot .ic { flex: none; width: 24px; height: 24px; color: var(--accent); stroke-width: 1.6; }
 .dfoot { border-top: 1px solid var(--line); padding-top: 8px; }
 
 /* ------------------------------------------------------------- início: escalas em cartões que se arrastam */
@@ -593,3 +593,14 @@ input[type=range].fader::-moz-range-thumb { width: 15px; height: 15px; border-ra
   .topbar .brand { gap: 8px; }
   .brand .chev { display: none; }
 }
+
+/* metrônomo */
+.metro { display: flex; flex-direction: column; gap: 22px; align-items: stretch; padding-top: 8px; }
+.metro .bpmrow { display: flex; align-items: center; justify-content: space-between; }
+.metro .bpm { text-align: center; } .metro .bpm b { display: block; font: 700 76px/1 var(--serif); letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.metro .bpm span { color: var(--muted); font-size: 14px; }
+.metro input[type=range] { width: 100%; accent-color: var(--accent); }
+.dots2 { display: flex; gap: 14px; justify-content: center; min-height: 26px; }
+.dots2 i { width: 22px; height: 22px; border-radius: 50%; background: var(--raised-2); box-shadow: inset 0 0 0 1px var(--line-2); transition: background .06s; }
+.dots2 i.ac { box-shadow: inset 0 0 0 2px var(--accent); }
+.dots2 i.on { background: var(--accent); }

@@ -6,6 +6,7 @@ const onlyRep = (fn) => (p, el, a) => hasRepertoire() ? fn(p, el, a)
 export function register(route) {
   route("/musicas", onlyRep(library));
   route("/musicas/nova", onlyRep((p, el) => songForm(el, null)));
+  route("/musicas/tocadas", onlyRep(playedPage));
   route("/musica/:id", onlyRep((p, el) => songDetail(el, p.id)));
   route("/musica/:id/editar", onlyRep((p, el) => songForm(el, p.id)));
   route("/musica/:id/letra", onlyRep((p, el) => lyricsEditor(el, p.id)));
@@ -86,6 +87,38 @@ async function library(_, el, alive) {
   on(el, "click", "[data-tab]", (e, b) => { tab = b.dataset.tab; artist = null; el.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("on", x === b)); draw(); });
   on(el, "click", "[data-art]", (e, b) => { artist = b.dataset.art; draw(); });
   on(el, "click", "#allart", () => { artist = null; draw(); });
+}
+
+// ---------------------------------------------------------------- músicas tocadas (histórico das escalas publicadas)
+async function playedPage(_, el, alive) {
+  el.innerHTML = spinner();
+  let q = sb.from("schedule_songs").select("song_id,schedules!inner(starts_at,status,team_id)").eq("org_id", state.org.id)
+    .eq("schedules.status", "published").lt("schedules.starts_at", new Date().toISOString()).limit(5000);
+  if (state.space) q = q.eq("schedules.team_id", state.space.id);
+  const [rows, songs] = await Promise.all([must(q), must(sb.from("songs").select("id,title,artist,cover_url").eq("org_id", state.org.id).eq("status", "ready").order("title"))]);
+  if (!alive()) return;
+  const by = new Map();
+  for (const r of rows) {
+    if (!r.song_id) continue;
+    const x = by.get(r.song_id) || { n: 0, last: "" };
+    x.n++; if (r.schedules.starts_at > x.last) x.last = r.schedules.starts_at; by.set(r.song_id, x);
+  }
+  let tab = "mais";
+  const row = (sg) => { const x = by.get(sg.id); return `<a class="song" href="#/musica/${sg.id}"><span class="cover">${sg.cover_url ? `<img src="${attr(sg.cover_url)}" alt="" loading="lazy">` : icon("music")}</span>
+    <span class="grow" style="min-width:0"><div class="t ellipsis">${esc(sg.title)}</div><div class="s">${sg.artist ? `<span>${esc(sg.artist)}</span>` : ""}<span>${x ? `${x.n} ${x.n === 1 ? "vez" : "vezes"} · última em ${fDate(x.last)}` : "Nunca tocada"}</span></div></span>${icon("chevronRight", "chev")}</a>`; };
+  const draw = () => {
+    let list = songs.filter((sg) => (tab === "nunca" ? !by.has(sg.id) : by.has(sg.id)));
+    if (tab === "mais") list.sort((a, b) => by.get(b.id).n - by.get(a.id).n || by.get(b.id).last.localeCompare(by.get(a.id).last));
+    if (tab === "antigas") list.sort((a, b) => by.get(a.id).last.localeCompare(by.get(b.id).last));
+    el.querySelector("#list").innerHTML = list.length ? list.map(row).join("") : `<div style="padding:10px">${empty("music", tab === "nunca" ? "Todas as músicas já foram tocadas" : "Nenhuma música tocada ainda", tab === "nunca" ? "" : "Quando houver escalas publicadas com músicas, o histórico aparece aqui.")}</div>`;
+    el.querySelector("#count").textContent = `${list.length} música${list.length === 1 ? "" : "s"}`;
+  };
+  el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()" aria-label="Voltar">${icon("chevronLeft")}</a><h1>Músicas tocadas</h1></div>
+    <p class="subhead">${state.space ? esc(state.space.name) : esc(state.org.name)}, só escalas publicadas que já aconteceram.</p>
+    <div class="tabsbar"><button class="on" data-tab="mais">Mais tocadas</button><button data-tab="antigas">Há mais tempo</button><button data-tab="nunca">Nunca tocadas</button></div>
+    <div class="small muted" id="count"></div><div class="list mt-s" id="list"></div>`;
+  draw();
+  on(el, "click", "[data-tab]", (e, b) => { tab = b.dataset.tab; el.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("on", x === b)); draw(); });
 }
 
 // ---------------------------------------------------------------- busca de informações (iTunes, sem chave)
