@@ -485,6 +485,10 @@ with sync_playwright() as pw:
     bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click(); bruno.locator(".sheet [data-ok]").click()   # confirmar: entra nas duas
     bruno.locator(".sheet #ok").click()
     expect(bruno.locator("[data-etab=participantes] .cnt")).to_have_text("2")
+    assert bruno.locator(".addslot").count() == 0
+    n0 = bruno.locator(".pcard.pslot").count()
+    bruno.locator("#addrole").click(); bruno.locator(".sheet [data-ar]", has_text="Ministro").click()           # acrescenta outra vaga de Ministro
+    assert bruno.locator(".pcard.pslot").count() == n0 + 1
     bruno.locator("[data-etab=detalhes]").click()
     # paleta de cores das vestimentas: monta uma e adiciona uma sugestão
     bruno.locator("#openpal").click(); bruno.locator("#padd").click()

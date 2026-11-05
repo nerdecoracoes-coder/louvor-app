@@ -164,9 +164,9 @@ async function editor(el, scheduleId, teamId) {
       const empties = Array.from({ length: n - picked.length }, () => `<div class="pcard pslot" data-pick="${r.id}" role="button" tabindex="0"><span class="cover" style="width:46px;height:46px">${icon(roleIcon(r.name))}</span>
           <span class="grow"><b style="display:block">${esc(r.name)}</b><small>Toque para escolher</small></span>
           ${n > 1 ? `<button type="button" class="iconbtn" data-slot="${r.id}" data-d="-1" aria-label="Tirar uma vaga de ${attr(r.name)}">${icon("minus")}</button>` : ""}${icon("chevronRight", "chev")}</div>`);
-      return `<div class="rolegrp">${filled.join("")}${empties.join("")}<button type="button" class="addslot" data-slot="${r.id}" data-d="1">${icon("plus")} Vaga de ${esc(r.name)}</button></div>`;
+      return `<div class="rolegrp">${filled.join("")}${empties.join("")}</div>`;
     };
-    return `<div class="sec">${icon("users")}<h2>Participantes</h2><button class="more" id="suggest">${icon("sparkle")} Sugerir escala</button></div>
+    return `<div class="sec">${icon("users")}<h2>Participantes</h2><button class="more" id="addrole" title="Acrescentar função" aria-label="Acrescentar função">${icon("plus")} Função</button><button class="more" id="suggest">${icon("sparkle")} Sugerir escala</button></div>
     ${teamRoles.length ? `<div class="rolelist">${teamRoles.map(cards).join("")}</div>` : `<div class="card">${empty("users", "Nenhum integrante com função neste time", `Defina as funções musicais dos integrantes em <a class="link" href="#/times/${f.team}/integrantes">Integrantes</a>.`)}</div>`}`;
   }
   function tabSongs() {
@@ -226,9 +226,18 @@ async function editor(el, scheduleId, teamId) {
     if (t.dataset.slot) { e.stopPropagation(); const v = Math.max(1, Math.min(8, (f.slots.get(t.dataset.slot) ?? 1) + Number(t.dataset.d))); f.slots.set(t.dataset.slot, v); return draw(); }
     if (t.dataset.unpick) { const [rid, uid] = t.dataset.unpick.split(":"); f.picks.set(rid, (f.picks.get(rid) || []).filter((x) => x !== uid)); return draw(); }
     if (t.dataset.pick) { readForm(); return memberPicker(t.dataset.pick); }
+    if (t.id === "addrole") return roleSheet();
     if (t.id === "suggest") { readForm(); if (!f.date || !f.time) return toast("Informe data e horário primeiro.", "err"); await loadCandidates(); suggest(); return draw(); }
     if (t.dataset.save) { readForm(); return save(f.publish ? "published" : "draft", t); }
   });
+
+  // acrescenta mais uma vaga de uma função (ou repete uma que já existe)
+  function roleSheet() {
+    const sh = sheet(`<h3>Acrescentar função</h3><p class="small muted" style="margin-top:-6px">Escolha a função. Se ela já existir, é criada mais uma vaga igual.</p>
+      <div class="list" style="max-height:60vh;overflow:auto">${teamRoles.map((r) => `<button class="li" data-ar="${r.id}"><span class="cover" style="width:40px;height:40px">${icon(roleIcon(r.name))}</span>
+        <span class="grow"><span class="t">${esc(r.name)}</span></span>${icon("plus", "chev")}</button>`).join("")}</div>`, { wide: true });
+    on(sh.el, "click", "[data-ar]", (e, b) => { const id = b.dataset.ar; f.slots.set(id, Math.min(8, Math.max(f.slots.get(id) ?? 1, (f.picks.get(id) || []).length) + 1)); sh.close(); draw(); });
+  }
 
   function memberPicker(roleId) {
     const role = teamRoles.find((r) => r.id === roleId);
