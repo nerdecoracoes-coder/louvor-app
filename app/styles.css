@@ -732,7 +732,3 @@ fieldset.of textarea { height: auto; min-height: 40px; max-height: 40vh; padding
 fieldset.of .ncount { display: block; text-align: right; font-size: 11px; color: var(--muted); padding: 0 0 6px; }
 fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(--dim, #6b7686); }
 .three fieldset.of, .two fieldset.of { margin-bottom: 14px; }
-.three { gap: 8px; }
-.three fieldset.of input::-webkit-calendar-picker-indicator { display: none; }
-.three fieldset.of input { font-size: 15px; padding: 0; min-width: 0; }
-.three { grid-template-columns: 1.35fr 1fr 1fr; }

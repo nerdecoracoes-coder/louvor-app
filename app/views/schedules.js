@@ -83,12 +83,16 @@ async function editor(el, scheduleId, teamId) {
   await loadTeam();
   await loadCandidates();
 
+  // funções em que a pessoa já está escalada nesta escala
+  const rolesOf = (uid) => [...f.picks].filter(([, users]) => users.includes(uid)).map(([rid]) => rid);
   const candInfo = (uid, roleId) => candidates?.find((c) => c.user_id === uid && c.role_id === roleId) || candidates?.find((c) => c.user_id === uid);
   const warnFor = (uid, roleId) => {
     const c = candInfo(uid, roleId); const w = [];
     if (c && !c.available) w.push(`Indisponível${c.unavailable_note ? ": " + c.unavailable_note : ""}`);
     if (c && c.monthly_limit != null && c.month_count >= c.monthly_limit) w.push(`Limite do mês (${c.month_count}/${c.monthly_limit})`);
     if (c && c.same_day_count > 0) w.push("Já escalado(a) neste dia");
+    const also = rolesOf(uid).filter((rid) => rid !== roleId).map((rid) => teamRoles.find((r) => r.id === rid)?.name).filter(Boolean);
+    if (also.length) w.push(`Também escalado(a) como ${also.join(", ")}`);
     const others = [...f.picks.values()].flat().filter((x) => x !== uid);
     const tm = teamMembers.find((m) => m.user_id === uid);
     const clash = others.filter((o) => (tm?.avoid_with || []).includes(o) || (teamMembers.find((m) => m.user_id === o)?.avoid_with || []).includes(uid));
@@ -134,8 +138,8 @@ async function editor(el, scheduleId, teamId) {
     return `<form class="card" id="f">
       ${askTeam ? `<fieldset class="of"><legend>Time</legend><select name="team">${teams.map((t) => `<option value="${t.id}" ${t.id === f.team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></fieldset>` : ""}
       <fieldset class="of"><legend>Nome ou tipo do evento *</legend><input name="title" list="types" required maxlength="140" value="${attr(f.title)}" placeholder="Ex.: Culto de Celebração"><datalist id="types">${EVENT_TYPES.map((t) => `<option value="${t}">`).join("")}</datalist></fieldset>
-      <div class="three"><fieldset class="of"><legend>Data *</legend><input type="date" name="date" required value="${f.date}"></fieldset>
-        <fieldset class="of"><legend>Início *</legend><input type="time" name="time" required value="${f.time}"></fieldset>
+      <fieldset class="of"><legend>Data *</legend><input type="date" name="date" required value="${f.date}"></fieldset>
+      <div class="two"><fieldset class="of"><legend>Início *</legend><input type="time" name="time" required value="${f.time}"></fieldset>
         <fieldset class="of"><legend>Término</legend><input type="time" name="end" value="${f.end}"></fieldset></div>
       ${scheduleId ? "" : `<div class="two"><fieldset class="of"><legend>Repetir</legend><select name="repeat">${REPEATS.map(([k, l]) => `<option value="${k}" ${f.repeat === k ? "selected" : ""}>${l}</option>`).join("")}</select></fieldset>
         ${f.repeat !== "none" ? `<fieldset class="of"><legend>Até</legend><input type="date" name="until" value="${f.until}" min="${f.date}"></fieldset>` : ""}</div>
@@ -231,7 +235,16 @@ async function editor(el, scheduleId, teamId) {
         ${w.map((x) => `<span class="tiny ${/Indispon/.test(x) ? "danger-t" : "warn"}" style="display:block">${esc(x)}</span>`).join("")}</span>
         <span class="selbox ${sel.has(u) ? "on" : ""}">${icon("check")}</span></button>`; }).join("")}</div>
       <button class="btn primary block mt" id="ok">Confirmar</button>`);
-    on(s.el, "click", "[data-u]", (e, b) => { const u = b.dataset.u; sel.has(u) ? sel.delete(u) : sel.add(u); b.querySelector(".selbox").classList.toggle("on", sel.has(u)); });
+    on(s.el, "click", "[data-u]", async (e, b) => {
+      const u = b.dataset.u;
+      if (!sel.has(u)) {
+        // regra: a mesma pessoa em mais de uma função precisa de confirmação de quem está escalando
+        const other = rolesOf(u).filter((rid) => rid !== roleId).map((rid) => teamRoles.find((r) => r.id === rid)?.name).filter(Boolean);
+        if (other.length && !(await confirmDialog(`${personName(ppl, u)} já está escalado(a) como ${other.join(" e ")}. Escalar também como ${role.name}?`, "Escalar nas duas funções"))) return;
+        sel.add(u);
+      } else sel.delete(u);
+      b.querySelector(".selbox").classList.toggle("on", sel.has(u));
+    });
     s.el.querySelector("#ok").onclick = () => { f.picks.set(roleId, [...sel]); s.close(); draw(); };
   }
 
@@ -244,7 +257,7 @@ async function editor(el, scheduleId, teamId) {
       const cur = f.picks.get(r.id) || [];
       const need = (f.slots.get(r.id) ?? 1) - cur.length;
       for (let k = 0; k < need; k++) {
-        const pool = (candidates || []).filter((c) => c.role_id === r.id && !cur.includes(c.user_id));
+        const pool = (candidates || []).filter((c) => c.role_id === r.id && !cur.includes(c.user_id) && !chosen.has(c.user_id));   // a sugestão não escala a mesma pessoa em duas funções
         if (!pool.length) break;
         const score = (c) => {
           let s = 0;

@@ -473,6 +473,19 @@ with sync_playwright() as pw:
     assert bruno.locator("select[name=team], input[name=location]").count() == 0   # sem escolher time nem local: a escala é do time atual
     assert bruno.locator("textarea[name=notes]").get_attribute("maxlength") == "500"
     shot(bruno, "08b-escala-repetir")
+    # a mesma pessoa em duas funções pede confirmação de quem escala
+    bruno.locator("[data-etab=participantes]").click()
+    def pick(role):
+        bruno.locator(".list .li", has_text=role).locator("[data-pick]").first.click()
+    pick("Ministro"); bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click(); bruno.locator(".sheet #ok").click()
+    pick("Guitarra"); bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click()
+    expect(bruno.locator(".sheet", has_text="Escalar também como Guitarra")).to_be_visible(timeout=5000)
+    bruno.locator(".sheet [data-close]").last.click()                                  # cancelar: não entra
+    expect(bruno.locator(".sheet [data-u] .selbox.on")).to_have_count(0)
+    bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click(); bruno.locator(".sheet [data-ok]").click()   # confirmar: entra nas duas
+    bruno.locator(".sheet #ok").click()
+    expect(bruno.locator("[data-etab=participantes] .cnt")).to_have_text("2")
+    bruno.locator("[data-etab=detalhes]").click()
     # paleta de cores das vestimentas: monta uma e adiciona uma sugestão
     bruno.locator("#openpal").click(); bruno.locator("#padd").click()
     bruno.fill("[data-pdesc='0']", "Tons de azul"); bruno.locator("[data-pcolor='0']").click()
