@@ -175,7 +175,7 @@ with sync_playwright() as pw:
     bruno.locator("[data-etab=participantes]").click()
     bruno.locator("#suggest").click()
     toast_has(bruno, "sugest")
-    expect(bruno.locator(".chip.on", has_text="Carla Dias")).to_be_visible()
+    expect(bruno.locator(".pcard", has_text="Carla Dias")).to_be_visible()
     shot(bruno, "08-escala-editor")
     bruno.locator("#savebtn").click()
     expect(bruno.locator(".pagehead h1", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
@@ -476,7 +476,7 @@ with sync_playwright() as pw:
     # a mesma pessoa em duas funções pede confirmação de quem escala
     bruno.locator("[data-etab=participantes]").click()
     def pick(role):
-        bruno.locator(".list .li", has_text=role).locator("[data-pick]").first.click()
+        bruno.locator(".rolebox", has_text=role).locator("[data-pick]").first.click()
     pick("Ministro"); bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click(); bruno.locator(".sheet #ok").click()
     pick("Guitarra"); bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click()
     expect(bruno.locator(".sheet", has_text="Escalar também como Guitarra")).to_be_visible(timeout=5000)

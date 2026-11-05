@@ -732,3 +732,16 @@ fieldset.of textarea { height: auto; min-height: 40px; max-height: 40vh; padding
 fieldset.of .ncount { display: block; text-align: right; font-size: 11px; color: var(--muted); padding: 0 0 6px; }
 fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(--dim, #6b7686); }
 .three fieldset.of, .two fieldset.of { margin-bottom: 14px; }
+
+/* participantes escolhidos: cartão com foto, nome e função */
+.pcards { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; align-items: flex-start; }
+.pcard { width: 100%; display: flex; align-items: center; gap: 12px; padding: 10px 10px 10px 12px; border-radius: 16px; background: var(--raised); box-shadow: inset 0 0 0 1px var(--line); }
+.pcard b { font-size: 15px; font-weight: 600; } .pcard small { color: var(--muted); font-size: 13px; }
+.pcard small.warn { color: #e2a03f; font-size: 12px; } .pcard small.danger-t { font-size: 12px; }
+.pcard small .ic { width: 12px; height: 12px; vertical-align: -1px; }
+.pcard.warned { box-shadow: inset 0 0 0 1px rgba(226, 160, 63, .45); }
+
+.rolelist { display: flex; flex-direction: column; gap: 12px; }
+.rolebox { padding: 12px; border-radius: 18px; background: var(--glass); border: 1px solid var(--line-2); }
+.rolehead { display: flex; align-items: center; gap: 12px; }
+.rolehead .t { font-weight: 600; font-size: 15px; }

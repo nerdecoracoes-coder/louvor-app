@@ -154,14 +154,15 @@ async function editor(el, scheduleId, teamId) {
   }
   function tabPeople() {
     return `<div class="sec">${icon("users")}<h2>Participantes</h2><button class="more" id="suggest">${icon("sparkle")} Sugerir escala</button></div>
-    ${teamRoles.length ? `<div class="list">${teamRoles.map((r) => {
+    ${teamRoles.length ? `<div class="rolelist">${teamRoles.map((r) => {
       const picked = f.picks.get(r.id) || [];
-      return `<div class="li" style="align-items:flex-start"><span class="cover" style="width:40px;height:40px">${icon(roleIcon(r.name))}</span>
-        <div class="grow" style="min-width:0"><div class="row between"><span class="t">${esc(r.name)}</span>
+      return `<div class="rolebox"><div class="rolehead"><span class="cover" style="width:38px;height:38px">${icon(roleIcon(r.name))}</span><span class="t grow">${esc(r.name)}</span>
           <span class="row gap-s small muted">vagas <button class="chip" style="height:28px;padding:0 9px" data-slot="${r.id}" data-d="-1">−</button><b>${f.slots.get(r.id) ?? 1}</b><button class="chip" style="height:28px;padding:0 9px" data-slot="${r.id}" data-d="1">+</button></span></div>
-          <div class="row wrap gap-s mt-s">${picked.map((u) => { const w = warnFor(u, r.id); return `<button class="chip on" data-unpick="${r.id}:${u}" title="${attr(w.join(" · "))}">${w.length ? `<span class="warn">${icon("alert")}</span>` : ""}${esc(personName(ppl, u))} ${icon("x")}</button>`; }).join("")}
-            <button class="chip" data-pick="${r.id}">${icon("plus")} Escolher</button></div>
-          ${picked.flatMap((u) => warnFor(u, r.id).map((w) => `<div class="tiny warn mt-s">${esc(personName(ppl, u))}: ${esc(w)}</div>`)).join("")}</div></div>`;
+          <div class="pcards">${picked.map((u) => { const w = warnFor(u, r.id); return `<div class="pcard${w.length ? " warned" : ""}">${avatar(ppl.get(u), 46, false)}
+              <span class="grow" style="min-width:0"><b class="ellipsis" style="display:block">${esc(personName(ppl, u))}</b><small>${esc(r.name)}</small>
+                ${w.map((x) => `<small class="${/Indispon/.test(x) ? "danger-t" : "warn"}" style="display:block">${icon("alert")} ${esc(x)}</small>`).join("")}</span>
+              <button type="button" class="iconbtn" data-unpick="${r.id}:${u}" aria-label="Tirar ${attr(personName(ppl, u))} desta função">${icon("x")}</button></div>`; }).join("")}
+            <button class="chip" data-pick="${r.id}">${icon("plus")} ${picked.length ? "Escolher mais" : "Escolher"}</button></div></div>`;
     }).join("")}</div>` : `<div class="card">${empty("users", "Nenhum integrante com função neste time", `Defina as funções musicais dos integrantes em <a class="link" href="#/times/${f.team}/integrantes">Integrantes</a>.`)}</div>`}`;
   }
   function tabSongs() {
