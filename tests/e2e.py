@@ -360,6 +360,9 @@ with sync_playwright() as pw:
     ana.keyboard.press("Escape"); ana.locator(".sheet-wrap").click(position={"x": 5, "y": 5}) if ana.locator(".sheet-wrap").count() else None
     expect(ana.get_by_role("heading", name="Checklist pré-culto")).to_be_visible(); expect(ana.locator(".li.check")).to_have_count(7)
     shot(ana, "21-multimidia-escala")
+    ana.locator("#proj").click(); expect(ana.locator(".proj")).to_be_visible()
+    ana.keyboard.press("ArrowRight"); expect(ana.locator(".pj-text")).to_contain_text("Teu amor", timeout=5000)
+    shot(ana, "21b-projecao"); ana.keyboard.press("Escape"); expect(ana.locator(".proj")).to_have_count(0)
     carla.goto(f"{BASE}/#/pedidos/novo/{jovens_id}")
     carla.locator(".kinds label", has_text="Vídeo").click(); carla.fill("input[name=title]", "Vídeo de abertura do retiro")
     carla.fill("textarea[name=description]", "30 segundos, para o telão"); carla.locator("#save").click()
@@ -369,6 +372,27 @@ with sync_playwright() as pw:
     toast_has(ana, "Pedido pronto")
     carla.goto(BASE + "/#/notificacoes"); carla.reload()
     expect(carla.get_by_text("Pedido pronto: Vídeo de abertura do retiro")).to_be_visible(timeout=10000)
+    # ------------------------------------------------------------------ Infantil e Diáconos
+    for typ, nome in [("infantil", "Kids"), ("diaconal", "Diaconal")]:
+        ana.goto(BASE + "/#/times/novo"); ana.fill("input[name=name]", nome); ana.select_option("select[name=team_type]", typ)
+        assert ana.locator("input[name=feat_criancas]").is_checked() == (typ == "infantil"), typ
+        assert ana.locator("input[name=feat_visitantes]").is_checked() == (typ == "diaconal"), typ
+        ana.locator("#save").click(); ana.wait_for_url(re.compile(r"/integrantes$"), timeout=10000)
+        tid = re.search(r"/times/([0-9a-f-]{36})", ana.url).group(1)
+        if typ == "infantil":
+            ana.goto(f"{BASE}/#/times/{tid}/criancas"); ana.locator("#addkid").click()
+            ana.fill(".sheet input[name=name]", "Lia Souza"); ana.fill(".sheet input[name=guardian_name]", "Marta Souza"); ana.fill(".sheet input[name=allergies]", "amendoim")
+            ana.locator(".sheet button.primary").click(); expect(ana.locator(".kid", has_text="Lia Souza")).to_be_visible(timeout=10000)
+            ana.locator("[data-in]").first.click(); expect(ana.locator(".kcode")).to_be_visible(timeout=10000)
+            code = ana.locator(".kcode").inner_text().strip(); ana.locator(".sheet [data-close]").click()
+            expect(ana.locator("[data-out]")).to_be_visible(); shot(ana, "21c-infantil")
+            ana.locator("[data-out]").click(); ana.fill("#kc", code); ana.locator("#kok").click()
+            toast_has(ana, "Saída registrada"); expect(ana.locator("[data-in]")).to_be_visible()
+        else:
+            ana.goto(f"{BASE}/#/times/{tid}/visitantes"); ana.locator("#addv").click()
+            ana.fill(".sheet input[name=name]", "Paulo Lima"); ana.locator(".sheet button.primary").click()
+            expect(ana.locator(".li", has_text="Paulo Lima")).to_contain_text("Novo", timeout=10000); shot(ana, "21d-visitantes")
+    ok("Infantil: cadastro, entrada com código e saída; Diáconos: registro de visitantes")
     ok("Multimídia: recursos do tipo, checklist sugerido, roteiro com as músicas e letras do louvor, pedido de mídia até a entrega")
 
     # ------------------------------------------------------------------ integrantes de teste

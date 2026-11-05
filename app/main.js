@@ -2,6 +2,7 @@
 import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as multimidia from "./views/multimidia.js";
+import * as ministerios from "./views/ministerios.js";
 import * as teams from "./views/teams.js";
 import * as schedules from "./views/schedules.js";
 import * as songs from "./views/songs.js";
@@ -17,7 +18,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); multimidia.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
+home.register(route); multimidia.register(route); ministerios.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
 
@@ -30,6 +31,8 @@ function navItems() {
     ["escalas", "calendar", "Escalas", `#/times/${t.id}/escalas`],
     ...(teamHasRepertoire(t) ? [["musicas", "music", "Músicas", "#/musicas"]] : []),
     ...(teamHas(t, "pedidos") ? [["pedidos", "inbox", "Pedidos", `#/times/${t.id}/pedidos`]] : []),
+    ...(teamHas(t, "criancas") ? [["criancas", "users", "Crianças", `#/times/${t.id}/criancas`]] : []),
+    ...(teamHas(t, "visitantes") ? [["visitantes", "users", "Visitantes", `#/times/${t.id}/visitantes`]] : []),
     ["chat", "chat", "Chat", `#/chat/${t.id}`],
     ["time", "users", "Time", `#/times/${t.id}`],
   ];
@@ -46,6 +49,8 @@ function navActive(path) {
   if (path === "/" || path === "/inicio" || path === "") return "inicio";
   if (path.startsWith("/musica")) return "musicas";
   if (path.startsWith("/chat")) return "chat";
+  if (t && path.startsWith(`/times/${t.id}/criancas`)) return "criancas";
+  if (t && path.startsWith(`/times/${t.id}/visitantes`)) return "visitantes";
   if (t && (path.startsWith(`/times/${t.id}/pedidos`) || path.startsWith("/pedido"))) return "pedidos";
   if (t) {
     if (path.startsWith(`/times/${t.id}/escalas`) || path.startsWith("/escala") || path.startsWith("/calendario") || path === "/panorama") return "escalas";

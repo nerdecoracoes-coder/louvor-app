@@ -233,10 +233,29 @@ async function editor(el, scheduleId, teamId) {
 
   // acrescenta mais uma vaga de uma função (ou repete uma que já existe)
   function roleSheet() {
+    const team = teams.find((t) => t.id === f.team);
     const sh = sheet(`<h3>Acrescentar função</h3><p class="small muted" style="margin-top:-6px">Escolha a função. Se ela já existir, é criada mais uma vaga igual.</p>
-      <div class="list" style="max-height:60vh;overflow:auto">${teamRoles.map((r) => `<button class="li" data-ar="${r.id}"><span class="cover" style="width:40px;height:40px">${icon(roleIcon(r.name))}</span>
+      <button class="li" id="newrole"><span class="cover" style="width:40px;height:40px">${icon("plus")}</span><span class="grow"><span class="t">Criar nova função</span><span class="s">Ex.: Portaria, Recepção, Violão</span></span></button>
+      <div class="list" style="max-height:55vh;overflow:auto">${teamRoles.map((r) => `<button class="li" data-ar="${r.id}"><span class="cover" style="width:40px;height:40px">${icon(roleIcon(r.name))}</span>
         <span class="grow"><span class="t">${esc(r.name)}</span></span>${icon("plus", "chev")}</button>`).join("")}</div>`, { wide: true });
     on(sh.el, "click", "[data-ar]", (e, b) => { const id = b.dataset.ar; f.slots.set(id, Math.min(8, Math.max(f.slots.get(id) ?? 1, (f.picks.get(id) || []).length) + 1)); sh.close(); draw(); });
+    sh.el.querySelector("#newrole").onclick = () => {
+      sh.close();
+      const s2 = sheet(`<h3>Nova função</h3><form id="nf"><label class="field"><span>Nome da função *</span><input class="input" name="name" required maxlength="60" autofocus></label><button class="btn primary block mt">Criar e acrescentar</button></form>`);
+      s2.el.querySelector("#nf").onsubmit = async (e) => {
+        e.preventDefault(); const name = e.target.name.value.trim(); if (!name) return;
+        const btn = e.target.querySelector("button"); busy(btn);
+        const ex = teamRoles.find((r) => r.name.toLowerCase() === name.toLowerCase());
+        let role = ex;
+        if (!role) {
+          const r = await sb.from("music_roles").insert({ org_id: state.org.id, name, sort: 100 + teamRoles.length, team_type: team?.team_type || null }).select("id,name,sort").single();
+          if (r.error) { busy(btn, false); return toast(errMsg(r.error), "err"); }
+          role = r.data; teamRoles = [...teamRoles, role];
+        }
+        f.slots.set(role.id, Math.min(8, Math.max(f.slots.get(role.id) ?? 0, (f.picks.get(role.id) || []).length) + 1));
+        s2.close(); draw();
+      };
+    };
   }
 
   function memberPicker(roleId) {

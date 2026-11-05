@@ -48,8 +48,10 @@ export const FEATURES = [
   ["roteiro", "Roteiro do culto", "Ordem do culto nas escalas, com as músicas do louvor e as letras"],
   ["pedidos", "Pedidos de mídia", "A igreja pede artes, vídeos e slides; o time acompanha e entrega"],
   ["checklist", "Checklist pré-culto", "Itens a conferir antes de cada culto"],
+  ["criancas", "Crianças", "Cadastro, entrada e saída com código, alergias e responsáveis"],
+  ["visitantes", "Visitantes", "Registro de quem visita a igreja e acompanhamento"],
 ];
-const PRESETS = { louvor: ["repertorio"], multimidia: ["checklist", "pedidos", "roteiro"], diaconal: ["checklist", "roteiro"], infantil: ["checklist"] }; // igual ao banco: team_feature_preset
+const PRESETS = { louvor: ["repertorio"], multimidia: ["checklist", "pedidos", "roteiro"], diaconal: ["checklist", "roteiro", "visitantes"], infantil: ["checklist", "criancas"] }; // igual ao banco: team_feature_preset
 export const featurePreset = (type) => PRESETS[type] || [];
 export const teamHas = (t, f) => (Array.isArray(t?.features) ? t.features.includes(f) : featurePreset(t?.team_type).includes(f));
 export const teamHasRepertoire = (t) => (Array.isArray(t?.features) ? t.features.includes("repertorio") : REPERTOIRE_TYPES.includes(t?.team_type));
@@ -97,6 +99,7 @@ export const fDur = (sec) => { if (sec == null) return ""; const s = Math.max(0,
 
 // ---------------------------------------------------------------- ícones (traço fino, minimalistas)
 const P = {
+  phone: '<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2z"/>',
   hand: '<path d="M9 11V5a1.6 1.6 0 0 1 3.2 0v5l4.3.9a2 2 0 0 1 1.5 2.3l-.8 4.3a3 3 0 0 1-2.9 2.5H11a3 3 0 0 1-2.3-1L5 14.5a1.6 1.6 0 0 1 2.4-2z"/>',
   moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z"/>', sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.3 5.3l1.4 1.4M17.3 17.3l1.4 1.4M5.3 18.7l1.4-1.4M17.3 6.7l1.4-1.4"/>',
   home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V21h14V9.5"/><path d="M10 21v-6h4v6"/>',

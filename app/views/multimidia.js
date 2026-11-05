@@ -1,5 +1,6 @@
 // Multimídia: pedidos de mídia, roteiro do culto (com as músicas e letras do louvor) e checklist pré-culto.
 // Cada parte só aparece em times com o recurso correspondente (roteiro, pedidos, checklist).
+import { openProjection } from "./projecao.js";
 import { sb, state, must, esc, attr, icon, avatar, people, personName, canManageTeam, isAdmin, isGuest, teamHas, teamBadge, sheet, toast, errMsg, busy,
   on, go, empty, spinner, fDate, fTime, ymd, confirmDialog, linkify, safeUrl, pickFile } from "../core.js";
 
@@ -199,7 +200,7 @@ function roteiro(s, team) {
         <p class="tiny muted" style="margin:6px 0 0">Da escala "${esc(songs[0].schedule_title)}" do ${esc(songs[0].team_name)} (${fTime(songs[0].starts_at)}). Toque para ver a letra.</p>`
       : `<p class="tiny muted" style="margin:6px 0 0">As músicas aparecem aqui quando o time de louvor publicar a escala deste culto.</p>`;
     const hasLouvor = cues.some((c) => c.kind === "louvor");
-    box.innerHTML = `<div class="sec">${icon("list")}<h2>Roteiro do culto</h2>${manage ? `<button class="more" id="cedit">${icon("edit")} ${cues.length ? "Editar" : "Montar"}</button>` : ""}</div>
+    box.innerHTML = `<div class="sec">${icon("list")}<h2>Roteiro do culto</h2>${songs.length ? `<button class="more" id="proj">${icon("play")} Projetar letras</button>` : ""}${manage ? `<button class="more" id="cedit">${icon("edit")} ${cues.length ? "Editar" : "Montar"}</button>` : ""}</div>
       ${cues.length ? `<div class="cues">${cues.map((c) => `<div class="cue k-${c.kind}"><span class="ct">${hhmm(c.at_time) || "—"}</span>
           <div class="grow" style="min-width:0"><div class="row gap-s"><b class="ellipsis">${esc(c.title)}</b>${c.duration_min ? `<span class="tiny muted">${c.duration_min} min</span>` : ""}</div>
             ${c.responsible ? `<div class="tiny muted">${esc(c.responsible)}</div>` : ""}${c.notes ? `<div class="small" style="margin-top:4px">${linkify(c.notes)}</div>` : ""}
@@ -207,6 +208,7 @@ function roteiro(s, team) {
         : `<div class="card small muted">${manage ? "Monte a ordem do culto (abertura, louvor, avisos, pregação...). Use o modelo e ajuste." : "O roteiro deste culto ainda não foi montado."}</div>`}
       ${!hasLouvor && songs.length ? `<div class="card mt-s"><b class="small">Músicas do louvor</b>${songsHtml}</div>` : ""}`;
     box.querySelectorAll("[data-song]").forEach((b) => (b.onclick = () => lyricsSheet(songs[Number(b.dataset.song)])));
+    box.querySelector("#proj")?.addEventListener("click", () => openProjection(songs));
     box.querySelector("#cedit")?.addEventListener("click", () => cueEditor(s, team, cues, () => draw(box)));
   };
 }
