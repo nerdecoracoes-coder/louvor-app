@@ -720,3 +720,19 @@ input[type=range].fader::-moz-range-thumb { width: 15px; height: 15px; border-ra
 .cat i { width: 46px; height: 46px; border-radius: 13px; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .3); display: block; }
 .cat small { font-size: 11px; color: var(--muted); text-align: center; }
 .cat.on i { box-shadow: 0 0 0 2px var(--ink), 0 0 0 4px #fff; } .cat.on small { color: var(--text); }
+
+/* campos com o título sobre o contorno (como no LouveApp) */
+fieldset.of { border: 1px solid var(--line-2); border-radius: 14px; margin: 0 0 14px; padding: 0 12px 2px; min-width: 0; background: rgba(255, 255, 255, .02); transition: border-color .15s; }
+fieldset.of:focus-within { border-color: rgba(var(--accent-rgb), .8); }
+fieldset.of legend { font-size: 12px; font-weight: 500; color: var(--muted); padding: 0 6px; margin-left: -4px; }
+fieldset.of:focus-within legend { color: var(--accent); }
+fieldset.of input, fieldset.of select, fieldset.of textarea { width: 100%; height: 40px; border: 0; background: transparent; padding: 0 2px; outline: 0; font-size: 16px; color: var(--text); -webkit-appearance: none; appearance: none; }
+fieldset.of select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238a95a7' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 2px center; padding-right: 22px; }
+fieldset.of textarea { height: auto; min-height: 40px; max-height: 40vh; padding: 9px 2px; resize: none; line-height: 1.45; overflow: hidden; }
+fieldset.of .ncount { display: block; text-align: right; font-size: 11px; color: var(--muted); padding: 0 0 6px; }
+fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(--dim, #6b7686); }
+.three fieldset.of, .two fieldset.of { margin-bottom: 14px; }
+.three { gap: 8px; }
+.three fieldset.of input::-webkit-calendar-picker-indicator { display: none; }
+.three fieldset.of input { font-size: 15px; padding: 0; min-width: 0; }
+.three { grid-template-columns: 1.35fr 1fr 1fr; }

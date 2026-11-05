@@ -36,6 +36,9 @@ async function editor(el, scheduleId, teamId) {
       .map((s) => ({ song_id: s.song_id, title: s.songs?.title || s.title_snapshot, artist: s.songs?.artist || s.artist_snapshot, song_key: s.song_key, notes: s.notes, removed: !s.song_id || s.songs?.status === "removed" }));
   }
   if (!teams.length) { el.innerHTML = empty("lock", "Somente líderes e administradores criam escalas."); return; }
+  // a escala é criada dentro de um time: usa o time da rota ou o time em que a pessoa está; só pergunta quando não há nenhum
+  if (!teamId && state.space && teams.some((t) => t.id === state.space.id)) teamId = state.space.id;
+  const askTeam = !scheduleId && !teamId && teams.length > 1;
   teamId = teamId || teams[0].id;
   const ppl = await people();
 
@@ -129,16 +132,15 @@ async function editor(el, scheduleId, teamId) {
 
   function tabDetails(team) {
     return `<form class="card" id="f">
-      <label class="field"><span>Time</span><select name="team" ${scheduleId ? "disabled" : ""}>${teams.map((t) => `<option value="${t.id}" ${t.id === f.team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
-      <label class="field"><span>Nome ou tipo do evento *</span><input name="title" list="types" required maxlength="140" value="${attr(f.title)}" placeholder="Ex.: Culto de Celebração"><datalist id="types">${EVENT_TYPES.map((t) => `<option value="${t}">`).join("")}</datalist></label>
-      <div class="three"><label class="field"><span>Data *</span><input type="date" name="date" required value="${f.date}"></label>
-        <label class="field"><span>Início *</span><input type="time" name="time" required value="${f.time}"></label>
-        <label class="field"><span>Término</span><input type="time" name="end" value="${f.end}"></label></div>
-      ${scheduleId ? "" : `<div class="two"><label class="field"><span>Repetir</span><select name="repeat">${REPEATS.map(([k, l]) => `<option value="${k}" ${f.repeat === k ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-        ${f.repeat !== "none" ? `<label class="field"><span>Até</span><input type="date" name="until" value="${f.until}" min="${f.date}"></label>` : ""}</div>
-        ${f.repeat !== "none" ? `<p class="tiny muted" style="margin:-6px 0 12px">${icon("calendar")} Cria uma escala para cada data, com os mesmos participantes e músicas (no máximo ${MAX_REPEAT}).</p>` : ""}`}
-      <label class="field"><span>Local</span><input name="location" maxlength="140" value="${attr(f.location)}" placeholder="Ex.: Templo principal"></label>
-      <label class="field"><span>Observações</span><textarea name="notes" maxlength="2000" placeholder="Roupa, horário de passagem de som, etc.">${esc(f.notes)}</textarea></label>
+      ${askTeam ? `<fieldset class="of"><legend>Time</legend><select name="team">${teams.map((t) => `<option value="${t.id}" ${t.id === f.team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></fieldset>` : ""}
+      <fieldset class="of"><legend>Nome ou tipo do evento *</legend><input name="title" list="types" required maxlength="140" value="${attr(f.title)}" placeholder="Ex.: Culto de Celebração"><datalist id="types">${EVENT_TYPES.map((t) => `<option value="${t}">`).join("")}</datalist></fieldset>
+      <div class="three"><fieldset class="of"><legend>Data *</legend><input type="date" name="date" required value="${f.date}"></fieldset>
+        <fieldset class="of"><legend>Início *</legend><input type="time" name="time" required value="${f.time}"></fieldset>
+        <fieldset class="of"><legend>Término</legend><input type="time" name="end" value="${f.end}"></fieldset></div>
+      ${scheduleId ? "" : `<div class="two"><fieldset class="of"><legend>Repetir</legend><select name="repeat">${REPEATS.map(([k, l]) => `<option value="${k}" ${f.repeat === k ? "selected" : ""}>${l}</option>`).join("")}</select></fieldset>
+        ${f.repeat !== "none" ? `<fieldset class="of"><legend>Até</legend><input type="date" name="until" value="${f.until}" min="${f.date}"></fieldset>` : ""}</div>
+        ${f.repeat !== "none" ? `<p class="tiny muted" style="margin:-4px 0 12px">${icon("calendar")} Cria uma escala para cada data, com os mesmos participantes e músicas (no máximo ${MAX_REPEAT}).</p>` : ""}`}
+      <fieldset class="of"><legend>Observações</legend><textarea name="notes" rows="1" maxlength="500" placeholder="Roupa, passagem de som…">${esc(f.notes)}</textarea><small class="ncount" id="ncount">${(f.notes || "").length}/500</small></fieldset>
       <div class="switchlist">
         ${switchRow("publish", f.publish, "Publicar escala", "Visível para todos os membros", "eye")}
         ${hasExt ? switchRow("ask", f.ask, "Pedir confirmação", "Participantes confirmam que viram a escala", "check") : ""}
@@ -189,7 +191,7 @@ async function editor(el, scheduleId, teamId) {
   }
   draw();
 
-  const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date, time: d.time, end: d.end, location: d.location, notes: d.notes, publish: d.publish === "on", repeat: d.repeat ?? f.repeat, until: d.until ?? f.until }); if (hasExt) f.ask = d.ask === "on"; if (d.team) f.team = d.team; };
+  const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date ?? f.date, time: d.time ?? f.time, end: d.end ?? f.end, location: d.location ?? f.location, notes: d.notes ?? f.notes, publish: d.publish === "on", repeat: d.repeat ?? f.repeat, until: d.until ?? f.until }); if (hasExt) f.ask = d.ask === "on"; if (d.team) f.team = d.team; };
   el.addEventListener("change", async (e) => {
     if (e.target.name === "team") { readForm(); f.picks.clear(); if (!teamHasRepertoire(teams.find((t) => t.id === e.target.value))) f.songs = []; await loadTeam(); await loadCandidates(); draw(); return; }
     if (["date", "time", "end"].includes(e.target.name)) { readForm(); await loadCandidates(); draw(); }
@@ -197,7 +199,7 @@ async function editor(el, scheduleId, teamId) {
     if (["publish", "ask", "until"].includes(e.target.name)) readForm();
     if (e.target.dataset.key !== undefined) f.songs[Number(e.target.dataset.key)].song_key = e.target.value.trim() || null;
   });
-  el.addEventListener("input", (e) => { if (["title", "location", "notes"].includes(e.target.name)) readForm(); if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
+  el.addEventListener("input", (e) => { if (["title", "location", "notes"].includes(e.target.name)) readForm(); if (e.target.name === "notes") { autosize(e.target); const c = el.querySelector("#ncount"); if (c) c.textContent = `${e.target.value.length}/500`; } if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
   el.addEventListener("click", async (e) => {
     const t = e.target.closest("button"); if (!t) return;
     if (t.dataset.etab) { readForm(); f.tab = t.dataset.etab; return draw(); }
@@ -310,6 +312,7 @@ async function editor(el, scheduleId, teamId) {
 }
 
 const MAX_REPEAT = 26;
+const autosize = (t) => { if (!t) return; t.style.height = "auto"; t.style.height = `${t.scrollHeight}px`; };
 const CATALOG = [["Branco", "#ffffff"], ["Off-white", "#f5efe6"], ["Bege", "#d9c3a0"], ["Areia", "#c8ad7f"], ["Caramelo", "#b7773e"], ["Marrom", "#6b4226"], ["Terracota", "#c4673d"], ["Mostarda", "#d9a521"],
   ["Amarelo", "#f2d03b"], ["Laranja", "#f08a24"], ["Vermelho", "#d1343b"], ["Vinho", "#7a1f35"], ["Rosé", "#e8b4b8"], ["Rosa", "#e0629b"], ["Lilás", "#b79ad6"], ["Roxo", "#6b3fa0"],
   ["Azul claro", "#9cc9f2"], ["Azul", "#2f6fd6"], ["Azul marinho", "#1b2a5c"], ["Turquesa", "#25a6a0"], ["Verde claro", "#a8cf6a"], ["Verde", "#3f9b5a"], ["Verde oliva", "#6b7a3a"], ["Verde escuro", "#1f4d3a"],

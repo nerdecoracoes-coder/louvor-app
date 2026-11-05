@@ -165,7 +165,7 @@ with sync_playwright() as pw:
     bruno.fill("input[name=title]", "Culto de Celebração")
     nxt = time.strftime("%Y-%m-%d", time.localtime(time.time() + 3 * 86400))
     bruno.fill("input[name=date]", nxt); bruno.locator("input[name=date]").dispatch_event("change")
-    bruno.fill("input[name=time]", "19:00"); bruno.fill("input[name=location]", "INVT Tijuca")
+    bruno.fill("input[name=time]", "19:00")
     # abas como no LouveApp: Detalhes, Participantes, Músicas (com contagem) e o botão Salvar flutuante
     expect(bruno.locator("[data-etab=detalhes]")).to_be_visible(); expect(bruno.locator("input[name=publish]")).to_be_checked()
     bruno.locator("[data-etab=musicas]").click()
@@ -470,6 +470,8 @@ with sync_playwright() as pw:
     bruno.fill("input[name=date]", d0); bruno.locator("input[name=date]").dispatch_event("change"); bruno.fill("input[name=time]", "20:00")
     bruno.select_option("select[name=repeat]", "weekly"); bruno.fill("input[name=until]", d1); bruno.locator("input[name=until]").dispatch_event("change")
     bruno.locator("input[name=ask]").evaluate("e => e.click()")
+    assert bruno.locator("select[name=team], input[name=location]").count() == 0   # sem escolher time nem local: a escala é do time atual
+    assert bruno.locator("textarea[name=notes]").get_attribute("maxlength") == "500"
     shot(bruno, "08b-escala-repetir")
     # paleta de cores das vestimentas: monta uma e adiciona uma sugestão
     bruno.locator("#openpal").click(); bruno.locator("#padd").click()
