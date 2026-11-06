@@ -1,0 +1,45 @@
+{
+ "slug": "letras-proprias",
+ "title": "Como criar a letra de uma música e definir o padrão da tela",
+ "about": "Criar letras no time de Multimídia e ajustar como elas aparecem no telão.",
+ "duration": 57.7,
+ "cues": [
+  {
+   "t": 2.85,
+   "text": "Neste vídeo, você vai aprender a criar uma letra e a definir como ela aparece no telão."
+  },
+  {
+   "t": 8.26,
+   "text": "No menu do time de Multimídia, toque em Letras."
+  },
+  {
+   "t": 12.95,
+   "text": "Toque em Nova letra, escreva o título da música e cole o texto."
+  },
+  {
+   "t": 25.23,
+   "text": "Para separar as partes, deixe uma linha em branco entre elas."
+  },
+  {
+   "t": 29.68,
+   "text": "Se o time de Louvor já cadastrou a letra, ela aparece aqui, e você só precisa ajustar."
+  },
+  {
+   "t": 35.55,
+   "text": "Para definir o padrão de toda a igreja, toque em Padrão da letra na tela."
+  },
+  {
+   "t": 40.34,
+   "text": "Ajuste o tamanho, a posição e a cor digitando os números. Todas as músicas passam a seguir esse padrão."
+  },
+  {
+   "t": 47.77,
+   "text": "Se uma música precisar ficar diferente, abra essa música e mude o layout só nela."
+  },
+  {
+   "t": 53.68,
+   "text": "Toque em Salvar. Pronto!"
+  }
+ ],
+ "voz": true
+}

@@ -1,0 +1,41 @@
+{
+ "slug": "devocional-semana",
+ "title": "Como postar o devocional da semana",
+ "about": "Gravar ou escolher o vídeo e postar para o time.",
+ "duration": 48.6,
+ "cues": [
+  {
+   "t": 2.83,
+   "text": "Neste vídeo, você vai aprender a postar o devocional da semana para o seu time."
+  },
+  {
+   "t": 7.74,
+   "text": "No menu do time, toque em Devocional."
+  },
+  {
+   "t": 12.39,
+   "text": "Toque em Postar."
+  },
+  {
+   "t": 14.97,
+   "text": "Escreva o título e uma mensagem curta."
+  },
+  {
+   "t": 24.69,
+   "text": "Toque em Gravar ou escolher vídeo. Para vídeos grandes, escolha pelo gerenciador de arquivos do celular."
+  },
+  {
+   "t": 31.76,
+   "text": "Se preferir, cole o link de um vídeo do YouTube ou do Drive."
+  },
+  {
+   "t": 36.23,
+   "text": "Toque em Postar para o time e espere o envio terminar, com a tela ligada."
+  },
+  {
+   "t": 41.16,
+   "text": "O devocional aparece na tela Início de todo o time, e todos recebem um aviso. Pronto!"
+  }
+ ],
+ "voz": true
+}

@@ -1,0 +1,33 @@
+{
+ "slug": "ferramentas-midia",
+ "title": "Como criar imagens, vídeos e legendas",
+ "about": "Editor de imagem, vídeos prontos e legendas no Estúdio de mídia.",
+ "duration": 40.2,
+ "cues": [
+  {
+   "t": 3.19,
+   "text": "Neste vídeo, você vai conhecer as ferramentas do Estúdio de mídia para criar imagens, vídeos e legendas."
+  },
+  {
+   "t": 9.89,
+   "text": "Abra o Estúdio de mídia e toque em Ferramentas."
+  },
+  {
+   "t": 14.58,
+   "text": "No editor de imagem, escolha uma foto, corte, ajuste e salve."
+  },
+  {
+   "t": 19.62,
+   "text": "Para criar um vídeo pronto, escolha o modelo, escreva o texto e toque em Gerar vídeo."
+  },
+  {
+   "t": 28.4,
+   "text": "Para as legendas, escreva o texto com os tempos e toque em Baixar legenda."
+  },
+  {
+   "t": 33.35,
+   "text": "Os arquivos ficam prontos para usar na transmissão ou na projeção. Pronto!"
+  }
+ ],
+ "voz": true
+}

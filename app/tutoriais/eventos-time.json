@@ -1,0 +1,41 @@
+{
+ "slug": "eventos-time",
+ "title": "Como marcar um evento do time",
+ "about": "Marcar reunião ou fraternização e confirmar presença.",
+ "duration": 44.1,
+ "cues": [
+  {
+   "t": 3.24,
+   "text": "Neste vídeo, você vai aprender a marcar uma reunião ou uma fraternização para o seu time."
+  },
+  {
+   "t": 8.82,
+   "text": "No menu do time, toque em Eventos do time."
+  },
+  {
+   "t": 13.59,
+   "text": "Toque em Marcar."
+  },
+  {
+   "t": 16.18,
+   "text": "Escolha o tipo: reunião, fraternização, ensaio, estudo ou outro."
+  },
+  {
+   "t": 19.99,
+   "text": "Escreva o título e escolha a data, a hora e o local."
+  },
+  {
+   "t": 28.9,
+   "text": "Toque em Salvar. Todo o time recebe um aviso."
+  },
+  {
+   "t": 32.99,
+   "text": "Quem recebe abre o evento e responde: Vou, Talvez ou Não vou."
+  },
+  {
+   "t": 37.75,
+   "text": "O líder acompanha, na mesma tela, quem já respondeu. Pronto!"
+  }
+ ],
+ "voz": true
+}

@@ -1,0 +1,41 @@
+{
+ "slug": "estudio-slides",
+ "title": "Como montar slides no Estúdio de mídia",
+ "about": "Criar a apresentação do culto, escolher os tipos de slide e baixar em PowerPoint.",
+ "duration": 70.4,
+ "cues": [
+  {
+   "t": 3.05,
+   "text": "Neste vídeo, você vai aprender a montar os slides do culto aqui no Somos."
+  },
+  {
+   "t": 7.81,
+   "text": "Abra o menu e toque em Estúdio de mídia."
+  },
+  {
+   "t": 12.57,
+   "text": "Toque em Novo, dê um nome para a apresentação e comece a montar."
+  },
+  {
+   "t": 22.33,
+   "text": "Para cada slide, escolha o tipo: letra, título, versículo, tópicos, aviso, contagem, imagem ou branco."
+  },
+  {
+   "t": 30.84,
+   "text": "Escreva o texto e confira a prévia logo acima."
+  },
+  {
+   "t": 43.82,
+   "text": "Para mudar o fundo, toque em Fundos e escolha uma imagem da biblioteca da igreja."
+  },
+  {
+   "t": 48.95,
+   "text": "Se precisar, arraste os slides para mudar a ordem."
+  },
+  {
+   "t": 62.2,
+   "text": "Quando terminar, toque em Baixar PowerPoint e leve a apresentação para o programa de projeção. Pronto!"
+  }
+ ],
+ "voz": true
+}

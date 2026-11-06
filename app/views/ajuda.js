@@ -2,13 +2,18 @@
 import { esc, icon, empty, on, state } from "../core.js";
 
 // Em um time só aparecem os tutoriais daquele tipo de time; na visão da igreja, todos.
-const GRUPO_TIPOS = { "Escalas": null, "Multimídia": ["multimidia"], "Ministério Infantil": ["infantil"], "Diáconos": ["diaconal"] };
+const GRUPO_TIPOS = { "Escalas": null, "Equipe": null, "Louvor": ["louvor"], "Multimídia": ["multimidia"], "Ministério Infantil": ["infantil"], "Diáconos": ["diaconal"] };
 const visiveis = () => { const tp = state.space?.team_type; return TUTORIAIS.filter((t) => t.pronto !== false && (!tp || !GRUPO_TIPOS[t.grupo] || GRUPO_TIPOS[t.grupo].includes(tp))); };
 
 export const TUTORIAIS = [
   { grupo: "Escalas", slug: "criar-escala", title: "Como criar uma escala", about: "Escolher data, participantes e músicas, e avisar a equipe." },
   { grupo: "Escalas", slug: "confirmar-escala", title: "Como confirmar que viu a escala", about: "Abrir a escala em que você foi escalado e confirmar." },
   { grupo: "Escalas", slug: "panorama", title: "Como ver o Panorama de escalas", about: "Ver quem serviu no mês e filtrar por dia e horário." },
+  { grupo: "Equipe", slug: "eventos-time", title: "Como marcar um evento do time", about: "Marcar reunião ou fraternização e confirmar presença." },
+  { grupo: "Louvor", slug: "devocional-semana", title: "Como postar o devocional da semana", about: "Gravar ou escolher o vídeo e postar para o time." },
+  { grupo: "Multimídia", slug: "estudio-slides", title: "Como montar slides no Estúdio de mídia", about: "Criar a apresentação do culto e baixar em PowerPoint." },
+  { grupo: "Multimídia", slug: "letras-proprias", title: "Como criar a letra e definir o padrão da tela", about: "Criar letras e ajustar como aparecem no telão." },
+  { grupo: "Multimídia", slug: "ferramentas-midia", title: "Como criar imagens, vídeos e legendas", about: "Editor de imagem, vídeos prontos e legendas." },
   { grupo: "Multimídia", slug: "letras-midia", title: "Como preparar as letras para a projeção", about: "Ajustar fonte, cores e partes e baixar em PowerPoint." },
   { grupo: "Multimídia", slug: "pacote-culto", title: "Como baixar o pacote do culto", about: "Letras e slides de todas as músicas do culto, de uma vez." },
   { grupo: "Multimídia", slug: "roteiro-culto", title: "Como montar o roteiro do culto", about: "Ordem do culto com horários e responsáveis." },
@@ -26,7 +31,7 @@ export function register(route) {
 
 function list(el) {
   el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><h1>Tutoriais</h1></div>
-    <p class="muted small">Vídeos curtos mostrando o aplicativo passo a passo. A narração é lida em voz alta pelo seu aparelho.</p>
+    <p class="muted small">Vídeos curtos mostrando o aplicativo passo a passo. Em alguns a narração está no próprio vídeo; nos outros, é lida em voz alta pelo seu aparelho.</p>
     ${[...new Set(visiveis().map((t) => t.grupo))].map((g) => `<div class="sec"><h2>${esc(g)}</h2></div><div class="list">${visiveis().filter((t) => t.grupo === g).map((t) => `<a class="li" href="#/ajuda/${t.slug}"><span class="cover">${icon("play")}</span><span class="grow"><span class="t">${esc(t.title)}</span><span class="s">${esc(t.about)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}</div>`).join("")}`;
 }
 
@@ -36,13 +41,13 @@ async function watch(slug, el, alive) {
   try { const r = await fetch(`app/tutoriais/${slug}.json`); if (r.ok) meta = await r.json(); } catch { /* sem rede */ }
   if (!alive()) return;
   if (!t || !meta) { el.innerHTML = empty("play", "Tutorial não encontrado", "Volte à lista e escolha outro."); return; }
-  const synth = "speechSynthesis" in window ? window.speechSynthesis : null;
+  const synth = !meta.voz && "speechSynthesis" in window ? window.speechSynthesis : null;   // com voz gravada no vídeo, não usa a voz do aparelho
   let narrate = !!synth, cur = -1, voice = null;
   const pickVoice = () => { const vs = synth?.getVoices() || []; voice = vs.find((v) => /pt[-_]BR/i.test(v.lang)) || vs.find((v) => /^pt/i.test(v.lang)) || null; };
   pickVoice(); if (synth) synth.onvoiceschanged = pickVoice;
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/ajuda">${icon("chevronLeft")}</a><h1 style="font-size:22px">${esc(t.title)}</h1></div>
     <div class="tvideo"><video id="tv" src="app/tutoriais/${slug}.mp4" playsinline controls preload="metadata"></video><div class="tcap" id="tc" aria-live="polite"></div></div>
-    ${synth ? `<label class="switchrow"><span class="grow"><b>Narração em voz alta</b><small>Usa a voz do seu aparelho. Aumente o volume do celular.</small></span><span class="switch"><input type="checkbox" id="tn" checked><i></i></span></label>` : `<p class="small muted">Seu aparelho não lê em voz alta. Siga pelas legendas.</p>`}
+    ${synth ? `<label class="switchrow"><span class="grow"><b>Narração em voz alta</b><small>Usa a voz do seu aparelho. Aumente o volume do celular.</small></span><span class="switch"><input type="checkbox" id="tn" checked><i></i></span></label>` : meta.voz ? `<p class="small muted">Este vídeo tem narração. Aumente o volume do celular.</p>` : `<p class="small muted">Seu aparelho não lê em voz alta. Siga pelas legendas.</p>`}
     <ol class="tsteps">${meta.cues.map((c, i) => `<li><button data-seek="${c.t}" data-i="${i}">${esc(c.text)}</button></li>`).join("")}</ol>`;
   const v = el.querySelector("#tv"), cap = el.querySelector("#tc");
   const speak = (text) => {
