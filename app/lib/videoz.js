@@ -21,7 +21,10 @@ const load = (url) => new Promise((res, rej) => {
   const v = document.createElement("video");
   v.preload = "auto"; v.playsInline = true; v.setAttribute("playsinline", ""); v.src = url;
   v.onloadedmetadata = () => res(v);
-  v.onerror = () => rej(new Error("Não consegui abrir este vídeo. Tente outro arquivo."));
+  v.onerror = () => {
+    const c = v.error?.code;
+    rej(new Error(c === 4 ? "O navegador não consegue ler este formato de vídeo (provavelmente 4K ou HEVC). Grave em HD com o formato mais compatível ou cole um link. [erro 4]" : `Não consegui abrir este vídeo. Tente outro arquivo. [erro ${c ?? "?"}]`));
+  };
 });
 const seek = (v, t) => new Promise((res) => { const f = () => { v.removeEventListener("seeked", f); res(); }; v.addEventListener("seeked", f); v.currentTime = t; });
 
