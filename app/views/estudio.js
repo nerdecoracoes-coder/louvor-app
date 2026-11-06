@@ -2,7 +2,7 @@
 // e exportação para PowerPoint. O que o programa de projeção da igreja abre (ProPresenter, Holyrics, PowerPoint).
 import { sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, go, empty, spinner, teamHas, canManageTeam, pickFile, fDate, fTime, confirmDialog } from "../core.js";
 import { buildPptx, RATIOS, ratioOf } from "../lib/pptx.js";
-import { slidesOf, DEFAULT_STYLE, FONTS } from "./letras.js";
+import { slidesOf, DEFAULT_STYLE, FONTS, loadLibrary } from "./letras.js";
 
 export function register(route) {
   route("/times/:id/estudio", (p, el, a) => home(p.id, el, a));
@@ -103,12 +103,12 @@ export const deckToText = (deck) => (deck.slides || []).map((s, i) => `--- Slide
 
 // letras da música como slides, com o estilo e as partes que a mídia já salvou
 async function songSlides(team, song, per) {
-  const saved = (await sb.from("lyric_slides").select("blocks,style").eq("team_id", team.id).eq("song_id", song.id).maybeSingle()).data;
+  const saved = song.own ? { blocks: song.lyrics?.blocks, style: song.style } : (await sb.from("lyric_slides").select("blocks,style").eq("team_id", team.id).eq("song_id", song.id).maybeSingle()).data;
   const blocks = saved?.blocks?.length ? saved.blocks : song.lyrics?.blocks || [];
   const footer = [song.title, song.artist].filter(Boolean).join(" · ");
   return slidesOf(blocks, saved?.style?.per || per).map((x) => ({ id: uid(), kind: "letra", label: x.label, text: x.text, footer, song: song.id }));
 }
-const loadLib = async (teamId) => { const r = await sb.rpc("lyrics_library", { p_team: teamId }); return r.error ? [] : r.data || []; };
+const loadLib = async (teamId) => loadLibrary(teamId).catch(() => []);
 
 // monta a apresentação do culto a partir da escala: músicas com letra, avisos e pregação do roteiro
 async function deckFromSchedule(team, s) {

@@ -394,6 +394,10 @@ with sync_playwright() as pw:
     assert any(n.endswith("00-ordem-do-culto.txt") for n in zn) and any(n.endswith("culto-completo.pptx") for n in zn) and any(n.endswith("-emaus.pptx") for n in zn), zn
     ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); ana.locator("#ratio").select_option("16:9"); toast_has(ana, "Tela da projeção atualizada")
     ok("Letras para a mídia: tela da projeção (4:3 no PowerPoint), partes, estilo, PowerPoint gerado e versão salva; pacote do culto em .zip")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); ana.locator("#newl").click(); ana.fill("#nt", "Música da mídia"); ana.fill("#nl", "[Verso 1]\nLinha um\nLinha dois\n\n[Refrão]\nCoro aqui"); ana.locator("#nok").click()
+    expect(ana.locator("#ltxt")).to_be_visible(timeout=10000); ana.locator("#save").click(); toast_has(ana, "Letra salva")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); expect(ana.locator("#ll .li", has_text="Música da mídia")).to_contain_text("Própria", timeout=10000)
+    ok("Multimídia cria a própria letra e ela aparece na biblioteca")
     # ------------------------------------------------------------------ Estúdio de mídia
     ana.goto(f"{BASE}/#/times/{jovens_id}/estudio/fundos"); ana.reload()
     with ana.expect_file_chooser() as fc: ana.locator("#up").click()

@@ -1,6 +1,6 @@
 // Letras para a mídia: as letras do repertório divididas em partes (Verso 1, Refrão...), com estilo
 // próprio do time e exportação para PowerPoint e texto. Serve ao Louvor e à Multimídia.
-import { sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, empty, spinner, teamHas, canManageTeam } from "../core.js";
+import { sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, empty, spinner, teamHas, canManageTeam, confirmDialog } from "../core.js";
 import { parseLyricsText, lyricsToText } from "./songs.js";
 import { buildPptx, zipStore, RATIOS, ratioOf } from "../lib/pptx.js";
 import { fDate, fTime } from "../core.js";
@@ -31,10 +31,13 @@ const textOf = (title, blocks) => `${title}\n\n${lyricsToText(blocks)}\n`;
 function download(blob, name) { const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }
 
 async function getTeam(id) { return state.orgTeams.find((t) => t.id === id) || (await must(sb.from("teams").select("*").eq("id", id).maybeSingle())); }
-async function loadLibrary(teamId) {
+export async function loadLibrary(teamId) {
   const r = await sb.rpc("lyrics_library", { p_team: teamId });
   if (r.error) throw r.error;
-  return r.data || [];
+  // letras criadas pela própria mídia (se a tabela ainda não existir, só as do repertório)
+  const own = await sb.from("media_lyrics").select("*").eq("team_id", teamId);
+  const mine = (own.error ? [] : own.data || []).map((x) => ({ id: x.id, title: x.title, artist: x.artist, song_key: null, lyrics: { blocks: x.blocks || [] }, own: true, style: x.style }));
+  return [...(r.data || []), ...mine].sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
 }
 
 // pergunta a medida da tela em pixels (ex.: 1920 x 1080) ou a proporção (ex.: 21:9)
@@ -69,10 +72,10 @@ async function library(teamId, el, alive) {
     const list = songs.filter((s) => !q || norm(s.title + " " + (s.artist || "")).includes(norm(q)));
     el.querySelector("#ll").innerHTML = list.map((s) => `<a class="li" href="#/times/${teamId}/letras/${s.id}"><span class="cover">${icon("lyrics")}</span>
       <span class="grow" style="min-width:0"><span class="t ellipsis">${esc(s.title)}</span><span class="s">${esc(s.artist || "")}${s.song_key ? ` · Tom ${esc(s.song_key)}` : ""} · ${(s.lyrics?.blocks || []).length} partes</span></span>
-      ${mine.has(s.id) ? `<span class="tag soft">Editada</span>` : ""}${icon("chevronRight", "chev")}</a>`).join("")
+      ${s.own ? `<span class="tag soft">Própria</span>` : mine.has(s.id) ? `<span class="tag soft">Editada</span>` : ""}${icon("chevronRight", "chev")}</a>`).join("")
       || `<div style="padding:10px">${empty("lyrics", songs.length ? "Nenhuma música encontrada" : "Nenhuma letra cadastrada", songs.length ? "Tente outro nome." : "Quando o Louvor cadastrar a letra das músicas, elas aparecem aqui já divididas em partes.")}</div>`;
   };
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}">${icon("chevronLeft")}</a><h1>Letras</h1></div>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}">${icon("chevronLeft")}</a><h1>Letras</h1><button class="btn primary sm" id="newl">${icon("plus")} Nova letra</button></div>
     <p class="muted small">Letras do repertório, já divididas em partes. Ajuste fonte e cores, edite o que precisar e baixe em PowerPoint ou texto para importar no programa de projeção. A letra original do Louvor não muda.</p>
     <div class="card ratiobox"><label class="field" style="margin:0"><span>Tela da projeção</span>
       <select id="ratio" ${canManageTeam(teamId) ? "" : "disabled"}>${Object.entries(RATIOS).map(([k, v]) => `<option value="${k}" ${k === (team.slide_ratio || "16:9") ? "selected" : ""}>${v}</option>`).join("")}${RATIOS[team.slide_ratio || "16:9"] ? "" : `<option selected value="${attr(team.slide_ratio)}">${esc(team.slide_ratio)}</option>`}<option value="custom">Outra medida…</option></select></label>
@@ -80,6 +83,21 @@ async function library(teamId, el, alive) {
     <label class="search srch" style="display:block">${icon("search")}<input class="input" id="lq" placeholder="Procurar música"></label>
     <div class="list mt" id="ll"></div>`;
   draw();
+  el.querySelector("#newl").onclick = () => {
+    const sh = sheet(`<h3>Nova letra</h3><p class="small muted">Para músicas que não estão no repertório do Louvor, ou qualquer texto que a mídia precise projetar.</p>
+      <label class="field"><span>Título *</span><input id="nt" maxlength="160" placeholder="Nome da música"></label>
+      <label class="field"><span>Artista ou autor</span><input id="na" maxlength="160"></label>
+      <label class="field"><span>Letra</span><textarea id="nl" rows="7" placeholder="[Verso 1]\nPrimeira linha...\n\n[Refrão]\n..."></textarea></label>
+      <button class="btn primary block" id="nok">Criar letra</button>`, { wide: true });
+    sh.el.querySelector("#nok").onclick = async (ev) => {
+      const title = sh.el.querySelector("#nt").value.trim(); if (!title) return toast("Escreva o título.", "err");
+      busy(ev.currentTarget);
+      const bl = parseLyricsText(sh.el.querySelector("#nl").value);
+      const r = await sb.from("media_lyrics").insert({ team_id: teamId, org_id: team.org_id, title, artist: sh.el.querySelector("#na").value.trim() || null, blocks: bl.length ? bl : null, created_by: state.user.id, updated_by: state.user.id }).select("id").single();
+      if (r.error) { busy(ev.currentTarget, false); return toast(missing(r.error) ? "Falta rodar a atualização do banco (letras próprias)." : errMsg(r.error), "err"); }
+      sh.close(); location.hash = `#/times/${teamId}/letras/${r.data.id}`;
+    };
+  };
   el.querySelector("#ratio")?.addEventListener("change", async (e) => {
     let v = e.target.value;
     if (v === "custom") {
@@ -102,6 +120,7 @@ async function editor(teamId, songId, el, alive) {
   try {
     song = (await loadLibrary(teamId)).find((s) => s.id === songId);
     saved = await must(sb.from("lyric_slides").select("*").eq("team_id", teamId).eq("song_id", songId).maybeSingle());
+    if (song?.own) saved = { blocks: song.lyrics?.blocks || [], style: song.style };
   } catch (e) { el.innerHTML = missing(e) ? SETUP : empty("alert", "Não foi possível carregar", errMsg(e)); return; }
   if (!alive()) return;
   if (!song) { el.innerHTML = empty("lyrics", "Letra não encontrada", "A música pode ter sido removida ou ainda não tem letra."); return; }
@@ -129,15 +148,16 @@ async function editor(teamId, songId, el, alive) {
       : `<div class="card small muted">Escreva a letra acima para ver os slides.</div>`;
   };
   const draw = () => {
-    el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras">${icon("chevronLeft")}</a><div class="grow"><h1 style="font-size:22px">${esc(song.title)}</h1><span class="small muted">${esc(song.artist || "")}${song.song_key ? ` · Tom ${esc(song.song_key)}` : ""}</span></div></div>
-      <div class="sec"><h2>Partes da letra</h2><button class="more" id="restore">Restaurar original</button></div>
+    el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras">${icon("chevronLeft")}</a><div class="grow">${song.own ? `<input class="input" id="otitle" value="${attr(song.title)}" maxlength="160" aria-label="Título" style="font-size:20px;font-weight:700"><input class="input" id="oartist" value="${attr(song.artist || "")}" maxlength="160" placeholder="Artista ou autor" aria-label="Artista" style="margin-top:6px">` : `<h1 style="font-size:22px">${esc(song.title)}</h1>`}<span class="small muted">${esc(song.artist || "")}${song.song_key ? ` · Tom ${esc(song.song_key)}` : ""}</span></div></div>
+      <div class="sec"><h2>Partes da letra</h2>${song.own ? "" : `<button class="more" id="restore">Restaurar original</button>`}</div>
       <p class="tiny muted" style="margin:0 0 8px">Separe as partes com uma linha em branco. Para nomear, escreva na primeira linha entre colchetes, como <b>[Refrão]</b>.</p>
       <label class="field"><textarea id="ltxt" style="min-height:240px;font-size:16px;line-height:1.5">${esc(text)}</textarea></label>
       <div class="sec"><h2>Estilo</h2></div>${controls()}
       <div class="sec"><h2>Slides <small class="muted">${slidesOf(blocks(), st.per).length}</small></h2></div><div id="pv">${preview()}</div>
       <div class="row gap mt wrap"><button class="btn primary grow" id="dpptx">${icon("download")} PowerPoint (.pptx)</button><button class="btn ghost grow" id="dtxt">${icon("file")} Texto (.txt)</button></div>
       <button class="btn ghost block mt-s" id="save">${icon("check")} Salvar minha versão</button>
-      <p class="tiny muted" style="margin-top:8px">${saved ? "Você já tem uma versão própria desta música." : "Ainda não salvou uma versão própria. A letra do Louvor não é alterada."}</p>`;
+      <p class="tiny muted" style="margin-top:8px">${song.own ? "Esta letra é da Multimídia." : saved ? "Você já tem uma versão própria desta música." : "Ainda não salvou uma versão própria. A letra do Louvor não é alterada."}</p>
+      ${song.own ? `<button class="btn ghost danger block mt-s" id="delown">${icon("trash")} Excluir esta letra</button>` : ""}`;
   };
   draw();
   const repaint = () => { el.querySelector("#pv").innerHTML = preview(); el.querySelector(".sec h2 small").textContent = slidesOf(blocks(), st.per).length; };
@@ -162,10 +182,20 @@ async function editor(teamId, songId, el, alive) {
   on(el, "click", "#save", async (e, b) => {
     busy(b);
     const bl = blocks();
+    if (song.own) {
+      song.title = el.querySelector("#otitle")?.value.trim() || song.title; song.artist = el.querySelector("#oartist")?.value.trim() || null;
+      const u = await sb.from("media_lyrics").update({ title: song.title, artist: song.artist, blocks: bl.length ? bl : null, style: st, updated_by: state.user.id, updated_at: new Date().toISOString() }).eq("id", songId);
+      busy(b, false); if (u.error) return toast(errMsg(u.error), "err"); saved = true; return toast("Letra salva");
+    }
     const r = await sb.from("lyric_slides").upsert({ team_id: teamId, song_id: songId, org_id: team.org_id, blocks: bl.length ? bl : null, style: st, updated_by: state.user.id, updated_at: new Date().toISOString() }, { onConflict: "team_id,song_id" });
     busy(b, false);
     if (r.error) return toast(errMsg(r.error), "err");
     saved = true; toast("Versão salva");
+  });
+  on(el, "click", "#delown", async () => {
+    if (!(await confirmDialog("Excluir esta letra?", "Excluir", true))) return;
+    const d = await sb.from("media_lyrics").delete().eq("id", songId); if (d.error) return toast(errMsg(d.error), "err");
+    toast("Letra excluída"); location.hash = `#/times/${teamId}/letras`;
   });
   void canManageTeam;
 }

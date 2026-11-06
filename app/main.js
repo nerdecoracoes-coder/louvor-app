@@ -124,6 +124,7 @@ function openMenu() {
   const t = state.space;
   const cfg = t ? (canManageTeam(t.id) ? `#/times/${t.id}/config` : "#/perfil") : (isAdmin() ? "#/org" : "#/perfil");
   const rep = t ? teamHasRepertoire(t) : hasRepertoire();
+  const estudio_ = t && teamHas(t, "estudio");
   const asks = !isGuest() && state.orgTeams.some((x) => teamHas(x, "pedidos") && x.id !== t?.id);
   // [ícone, texto, link ou ação]
   const items = t ? [
@@ -132,6 +133,7 @@ function openMenu() {
     ["calendar", "Minhas escalas", "#/calendario/meu"],
     ["userOff", "Indisponibilidades", "#/bloqueios"],
     ["bars", "Panorama de escalas", "#/panorama"],
+    ...(estudio_ ? [["layers", "Estúdio de mídia", `#/times/${t.id}/estudio`], ["lyrics", "Letras", `#/times/${t.id}/letras`]] : []),
     ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"], ["clock", "Metrônomo", "#/metronomo"]] : []),
     ["gift", "Aniversariantes", "#/aniversariantes"],
     ["play", "Tutoriais", "#/ajuda"],
