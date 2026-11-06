@@ -2,43 +2,48 @@
  "slug": "letras-midia",
  "title": "Como preparar as letras para a projeção",
  "about": "Ajustar fonte, cores e partes da letra e baixar em PowerPoint.",
- "duration": 51.3,
+ "duration": 52.9,
  "cues": [
   {
-   "t": 0.0,
+   "t": 2.73,
+   "text": "Neste vídeo, você vai aprender a preparar as letras para a projeção."
+  },
+  {
+   "t": 7.17,
    "text": "Para preparar as letras em casa, toque em Time, na barra de baixo."
   },
   {
-   "t": 5.5,
+   "t": 13.63,
    "text": "Toque em Letras para a mídia."
   },
   {
-   "t": 8.5,
+   "t": 16.7,
    "text": "Aqui estão as músicas que o Louvor cadastrou, já divididas em partes. Escolha uma."
   },
   {
-   "t": 15.34,
+   "t": 22.86,
    "text": "Você pode editar o texto de cada parte. Para separar, deixe uma linha em branco entre elas."
   },
   {
-   "t": 22.93,
+   "t": 28.9,
    "text": "Escolha a fonte da letra."
   },
   {
-   "t": 25.93,
+   "t": 31.97,
    "text": "Escolha a cor do fundo e a cor da letra."
   },
   {
-   "t": 30.99,
+   "t": 37.14,
    "text": "Defina quantas linhas aparecem em cada slide. Veja a prévia logo abaixo."
   },
   {
-   "t": 36.99,
+   "t": 42.28,
    "text": "Toque em PowerPoint para baixar o arquivo. Depois é só abrir no programa de projeção."
   },
   {
-   "t": 44.07,
-   "text": "Toque em Salvar minha versão. A letra original do Louvor continua igual."
+   "t": 47.51,
+   "text": "Toque em Salvar minha versão. A letra original do Louvor continua igual. Pronto!"
   }
- ]
+ ],
+ "voz": true
 }

@@ -2,35 +2,40 @@
  "slug": "visitantes",
  "title": "Como registrar visitantes",
  "about": "Registrar quem visita a igreja e acompanhar o contato.",
- "duration": 35.8,
+ "duration": 40.2,
  "cues": [
   {
-   "t": 0.0,
+   "t": 2.51,
+   "text": "Neste vídeo, você vai aprender a registrar os visitantes da igreja."
+  },
+  {
+   "t": 7.27,
    "text": "No time de Diáconos, toque em Visitantes, na barra de baixo."
   },
   {
-   "t": 5.0,
+   "t": 11.79,
    "text": "Toque em Registrar para anotar um visitante."
   },
   {
-   "t": 8.67,
+   "t": 14.98,
    "text": "Escreva o nome e o telefone."
   },
   {
-   "t": 16.14,
+   "t": 21.98,
    "text": "Escolha como ele conheceu a igreja."
   },
   {
-   "t": 19.17,
+   "t": 24.97,
    "text": "Toque em Salvar."
   },
   {
-   "t": 22.23,
+   "t": 28.26,
    "text": "Depois do culto, abra o visitante para ligar ou chamar no WhatsApp."
   },
   {
-   "t": 27.81,
-   "text": "Marque Contatado quando falar com ele, e Integrado quando ele passar a participar."
+   "t": 32.67,
+   "text": "Marque Contatado quando falar com ele, e Integrado quando ele passar a participar. Pronto!"
   }
- ]
+ ],
+ "voz": true
 }

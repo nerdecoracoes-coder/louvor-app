@@ -95,7 +95,8 @@ def main(slug, conta):
             import re
             fonte = open(os.path.join(os.path.dirname(__file__), "roteiros", f"{slug}.py"), encoding="utf-8").read()
             textos = re.findall(r'r\.say\("((?:[^"\\]|\\.)*)"', fonte)
-            segs = alinhar(os.path.join(os.path.dirname(__file__), "vozes", mod.AUDIO + ".mp3"), textos)
+            pj = os.path.join(os.path.dirname(__file__), "vozes", mod.AUDIO + ".json")   # trechos já calculados (áudio longo dividido)
+            segs = [tuple(x) for x in json.load(open(pj))] if os.path.exists(pj) else alinhar(os.path.join(os.path.dirname(__file__), "vozes", mod.AUDIO + ".mp3"), textos)
             print("trechos de voz:", [(round(a, 1), round(b, 1)) for a, b in segs])
         rec = Rec(page, segs); rec.t0 = time.time(); offset = rec.t0 - t_page
         mod.run(rec, page, allc, expect)

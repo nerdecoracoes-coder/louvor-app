@@ -2,27 +2,32 @@
  "slug": "roteiro-culto",
  "title": "Como montar o roteiro do culto",
  "about": "Montar a ordem do culto com horários, responsáveis e as músicas do Louvor.",
- "duration": 28.2,
+ "duration": 31.8,
  "cues": [
   {
-   "t": 0.0,
+   "t": 2.59,
+   "text": "Neste vídeo, você vai aprender a montar o roteiro do culto."
+  },
+  {
+   "t": 6.63,
    "text": "O roteiro mostra a ordem do culto para toda a equipe. Abra a escala da Multimídia."
   },
   {
-   "t": 6.84,
+   "t": 12.56,
    "text": "Toque na aba Roteiro."
   },
   {
-   "t": 9.84,
+   "t": 16.0,
    "text": "Toque em Montar."
   },
   {
-   "t": 12.84,
+   "t": 18.67,
    "text": "Use o modelo pronto e depois ajuste: abertura, louvor, avisos, oferta, pregação e encerramento."
   },
   {
-   "t": 20.76,
-   "text": "Toque em Salvar. As músicas do Louvor aparecem dentro do momento do louvor."
+   "t": 25.66,
+   "text": "Toque em Salvar. As músicas do Louvor aparecem dentro do momento do louvor. Pronto!"
   }
- ]
+ ],
+ "voz": true
 }
