@@ -140,7 +140,7 @@ async function editor(teamId, songId, el, alive) {
   const posCard = () => {
     const L = layoutOf(st.layout);
     const seg = (key, opts) => `<div class="segs">${opts.map(([v, t]) => `<button type="button" class="seg${L[key] === v ? " on" : ""}" data-lseg="${key}:${v}">${t}</button>`).join("")}</div>`;
-    const sl = (key, label, min, max, step = 1) => `<label class="field"><span>${label} (<b id="lv-${key}">${L[key]}</b>%)</span><input type="range" data-lk="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}"></label>`;
+    const sl = (key, label, min, max, step = 1) => `<div class="field"><span>${label} (%)</span><div class="numrow"><input type="range" data-lk="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}" aria-label="${label}"><input type="number" class="num" inputmode="decimal" data-lk="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}" aria-label="${label} em número"></div></div>`;
     return `<div class="card"><label class="check" style="padding-top:0"><input type="checkbox" id="lcustom" ${custom ? "checked" : ""}> Personalizar só para esta música</label>
       ${custom ? `${sl("mx", "Margem das laterais", 0, 25)}${sl("mt", "Margem de cima", 0, 40)}${sl("mb", "Margem de baixo", 0, 40)}${sl("spacing", "Espaço entre as linhas", 80, 200, 5)}
         <div class="field"><span>Alinhamento do texto</span>${seg("align", [["l", "Esquerda"], ["ctr", "Centro"], ["r", "Direita"]])}</div>
@@ -193,7 +193,11 @@ async function editor(teamId, songId, el, alive) {
     st.layout = custom ? layoutOf(st.layout) : layoutFor(team, null); draw();
   });
   on(el, "click", "[data-lseg]", (e, b) => { const [k, v] = b.dataset.lseg.split(":"); st.layout = { ...layoutOf(st.layout), [k]: v }; text = el.querySelector("#ltxt").value; draw(); });
-  el.addEventListener("input", (e) => { const k = e.target.dataset?.lk; if (!k) return; st.layout = { ...layoutOf(st.layout), [k]: +e.target.value }; el.querySelector(`#lv-${k}`).textContent = e.target.value; repaint(); });
+  el.addEventListener("input", (e) => {
+    const k = e.target.dataset?.lk; if (!k || e.target.value === "") return;
+    const v = Math.min(+e.target.max, Math.max(+e.target.min, +e.target.value)); st.layout = { ...layoutOf(st.layout), [k]: v };
+    el.querySelectorAll(`[data-lk="${k}"]`).forEach((n) => { if (n !== e.target) n.value = v; }); repaint();
+  });
   on(el, "click", "#scaps", () => { st.caps = !st.caps; text = el.querySelector("#ltxt").value; draw(); });
   on(el, "click", "#sfooter", () => { st.showFooter = !st.showFooter; text = el.querySelector("#ltxt").value; draw(); });
   on(el, "click", "#slabel", () => { st.showLabel = !st.showLabel; text = el.querySelector("#ltxt").value; draw(); });
@@ -273,7 +277,7 @@ async function layoutPage(teamId, el, alive) {
   let L = layoutOf(team.slide_layout), st = { ...DEFAULT_STYLE, ratio: team.slide_ratio || "16:9", showLabel: true };
   const sample = { label: "Refrão", text: "Tua graça me alcançou\nTeu amor me transformou" }, foot = "Nome da música · Artista";
   const seg = (key, opts) => `<div class="segs">${opts.map(([v, t]) => `<button type="button" class="seg${L[key] === v ? " on" : ""}" data-seg="${key}:${v}">${t}</button>`).join("")}</div>`;
-  const slider = (key, label, min, max, step = 1, unit = "%") => `<label class="field"><span>${label} (<b id="${key}v">${L[key]}</b>${unit})</span><input type="range" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}"></label>`;
+  const slider = (key, label, min, max, step = 1, unit = "%") => `<div class="field"><span>${label} (${unit})</span><div class="numrow"><input type="range" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}" aria-label="${label}"><input type="number" class="num" inputmode="decimal" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}" aria-label="${label} em número"></div></div>`;
   const draw = () => {
     el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras">${icon("chevronLeft")}</a><h1>Padrão da letra</h1></div>
       <p class="muted small">Cada igreja projeta de um jeito. Ajuste aqui onde o texto fica na tela. Vale para todas as letras e para os arquivos em PowerPoint. O tamanho da letra e as cores você muda em cada música.</p>
@@ -289,7 +293,11 @@ async function layoutPage(teamId, el, alive) {
   };
   draw();
   const repaint = () => { el.querySelector("#pv").innerHTML = thumbOf(letraBoxes({ ...sample, footer: L.footer !== "off" ? foot : "" }, { ...st, layout: L }), { bg: st.bg, color: st.color, font: st.font, ratio: st.ratio, big: true }); };
-  el.addEventListener("input", (e) => { const k = e.target.dataset?.k; if (!k) return; L[k] = +e.target.value; el.querySelector(`#${k}v`).textContent = e.target.value; repaint(); });
+  el.addEventListener("input", (e) => {
+    const k = e.target.dataset?.k; if (!k || e.target.value === "") return;
+    const v = Math.min(+e.target.max, Math.max(+e.target.min, +e.target.value)); L[k] = v;
+    el.querySelectorAll(`[data-k="${k}"]`).forEach((n) => { if (n !== e.target) n.value = v; }); repaint();
+  });
   on(el, "click", "[data-seg]", (e, b) => { const [k, v] = b.dataset.seg.split(":"); L[k] = v; draw(); });
   on(el, "click", "#reset", () => { L = { ...DEFAULT_LAYOUT }; draw(); });
   on(el, "click", "#ok", async (e, b) => {
