@@ -50,11 +50,13 @@ export const FEATURES = [
   ["checklist", "Checklist pré-culto", "Itens a conferir antes de cada culto"],
   ["letras", "Letras para a mídia", "Letras do repertório divididas em partes, com estilo e exportação para PowerPoint e texto"],
   ["estudio", "Estúdio de mídia", "Slides de música, pregação e aviso, fundos, contagem regressiva e ferramentas de imagem e vídeo"],
+  ["eventos", "Eventos do time", "Reuniões, fraternização e encontros do time, com confirmação de presença"],
+  ["devocional", "Devocional semanal", "Vídeo ou mensagem da semana postada para o time"],
   ["criancas", "Crianças", "Cadastro, entrada e saída com código, alergias e responsáveis"],
   ["visitantes", "Visitantes", "Registro de quem visita a igreja e acompanhamento"],
 ];
-const PRESETS = { louvor: ["repertorio", "letras"], multimidia: ["checklist", "estudio", "letras", "pedidos", "roteiro"], diaconal: ["checklist", "roteiro", "visitantes"], infantil: ["checklist", "criancas"] }; // igual ao banco: team_feature_preset
-export const featurePreset = (type) => PRESETS[type] || [];
+const PRESETS = { louvor: ["repertorio", "letras", "eventos", "devocional"], multimidia: ["checklist", "estudio", "letras", "pedidos", "roteiro", "eventos"], diaconal: ["checklist", "roteiro", "visitantes", "eventos"], infantil: ["checklist", "criancas", "eventos"] }; // igual ao banco: team_feature_preset
+export const featurePreset = (type) => PRESETS[type] || ["eventos"];
 export const teamHas = (t, f) => (Array.isArray(t?.features) ? t.features.includes(f) : featurePreset(t?.team_type).includes(f));
 export const teamHasRepertoire = (t) => (Array.isArray(t?.features) ? t.features.includes("repertorio") : REPERTOIRE_TYPES.includes(t?.team_type));
 export const hasRepertoire = () => isAdmin() || state.myTeams.some(teamHasRepertoire);

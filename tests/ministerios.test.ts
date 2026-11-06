@@ -20,8 +20,8 @@ beforeAll(async () => {
 
 describe("ambientes dos ministérios", () => {
   test("os tipos já vêm com recursos e funções", async () => {
-    expect((await admin.api.get(`/teams?id=eq.${infantil}&select=features`)).data[0].features).toEqual(["checklist", "criancas"]);
-    expect((await admin.api.get(`/teams?id=eq.${diaconal}&select=features`)).data[0].features).toEqual(["checklist", "roteiro", "visitantes"]);
+    expect((await admin.api.get(`/teams?id=eq.${infantil}&select=features`)).data[0].features).toEqual(["checklist", "criancas", "eventos"]);
+    expect((await admin.api.get(`/teams?id=eq.${diaconal}&select=features`)).data[0].features).toEqual(["checklist", "eventos", "roteiro", "visitantes"]);
     const d = (await admin.api.get(`/music_roles?org_id=eq.${org}&team_type=eq.diaconal`)).data.map((r: any) => r.name);
     for (const n of ["Portaria", "Ofertório", "Introdução", "Santa Ceia"]) expect(d).toContain(n);
   });

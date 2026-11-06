@@ -189,7 +189,7 @@ async function profileView(_, el) {
 }
 
 // ---------------------------------------------------------------- notificações
-const KIND_ICON = { schedule_published: "calendar", schedule_changed: "calendar", announcement: "megaphone", message: "chat", team_joined: "users", invite_accepted: "link", leader: "crown", admin: "shield" };
+const KIND_ICON = { evento: "calendar", devocional: "play", schedule_published: "calendar", schedule_changed: "calendar", announcement: "megaphone", message: "chat", team_joined: "users", invite_accepted: "link", leader: "crown", admin: "shield" };
 async function notificationsView(_, el) {
   el.innerHTML = spinner();
   // só as não lidas: ao abrir uma notificação ela sai da lista

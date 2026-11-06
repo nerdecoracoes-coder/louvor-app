@@ -405,6 +405,17 @@ with sync_playwright() as pw:
     ana.goto(f"{BASE}/#/times/{jovens_id}/letras/modelo"); ana.reload(); expect(ana.locator("[data-seg='align:l'].on")).to_be_visible(timeout=10000)
     ana.locator("#reset").click(); ana.locator("#ok").click(); toast_has(ana, "Padrão salvo")
     ok("Padrão da letra na tela editável (alinhamento, margens, rodapé) e salvo pelo time")
+    # ------------------------------------------------------------------ eventos do time e devocional
+    ana.goto(f"{BASE}/#/times/{louvor_id}/eventos"); ana.locator("#new").click(); ana.fill("#ef [name=title]", "Fraternização do louvor"); ana.fill("#ef [name=location]", "Casa do João")
+    ana.locator("#esave").click(); expect(ana.locator(".evt", has_text="Fraternização do louvor")).to_be_visible(timeout=10000)
+    ana.goto(f"{BASE}/#/times/{louvor_id}/devocional"); ana.locator("#post").click(); ana.fill("#dtl", "Devocional: perseverança"); ana.fill("#dlink", "https://example.com/video")
+    ana.locator("#dok").click(); expect(ana.locator(".li", has_text="Devocional: perseverança")).to_be_visible(timeout=10000)
+    carla.goto(BASE + "/#/"); carla.reload(); carla.locator("[data-act=space]").click(); carla.locator(f".sheet [data-space='{louvor_id}']").click()
+    expect(carla.locator(".devo", has_text="Devocional: perseverança")).to_be_visible(timeout=15000)
+    expect(carla.locator(".evt", has_text="Fraternização do louvor")).to_be_visible(timeout=15000)
+    carla.locator(".evt", has_text="Fraternização do louvor").click(); carla.locator("[data-ans=vou]").click(); toast_has(carla, "Resposta enviada")
+    expect(carla.locator(".chip", has_text="Carla")).to_be_visible(timeout=10000)
+    ok("Eventos do time (marcar, avisar, confirmar presença) e devocional semanal aparecem no início do time")
     # ------------------------------------------------------------------ Estúdio de mídia
     ana.goto(f"{BASE}/#/times/{jovens_id}/estudio/fundos"); ana.reload()
     with ana.expect_file_chooser() as fc: ana.locator("#up").click()

@@ -8,6 +8,7 @@ import * as ajuda from "./views/ajuda.js";
 import * as igreja from "./views/igreja.js";
 import * as estudio from "./views/estudio.js";
 import * as ferramentas from "./views/ferramentas.js";
+import * as eventos from "./views/eventos.js";
 import * as teams from "./views/teams.js";
 import * as schedules from "./views/schedules.js";
 import * as songs from "./views/songs.js";
@@ -23,7 +24,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
+home.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
 
@@ -133,6 +134,8 @@ function openMenu() {
     ["calendar", "Minhas escalas", "#/calendario/meu"],
     ["userOff", "Indisponibilidades", "#/bloqueios"],
     ["bars", "Panorama de escalas", "#/panorama"],
+    ...(teamHas(t, "eventos") ? [["calendar", "Eventos do time", `#/times/${t.id}/eventos`]] : []),
+    ...(teamHas(t, "devocional") ? [["play", "Devocional", `#/times/${t.id}/devocional`]] : []),
     ...(estudio_ ? [["layers", "Estúdio de mídia", `#/times/${t.id}/estudio`], ["lyrics", "Letras", `#/times/${t.id}/letras`]] : []),
     ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"], ["clock", "Metrônomo", "#/metronomo"]] : []),
     ["gift", "Aniversariantes", "#/aniversariantes"],

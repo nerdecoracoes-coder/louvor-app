@@ -4,6 +4,7 @@ import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDat
   teamBadge, teamHasRepertoire, teamTypeLabel, teamHas } from "../core.js";
 import { openRequestsCard } from "./multimidia.js";
 import { churchHome } from "./igreja.js";
+import { teamExtras } from "./eventos.js";
 
 export function register(route) {
   route("/", (p, el, a) => (state.space ? teamHome(state.space, el, a) : churchHome(el, a)));
@@ -216,6 +217,7 @@ async function teamHome(team, el, alive) {
   <div id="ups">${myUps.length ? `<div class="scards">${myUps.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
   ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div><div class="scards">${others.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : ""}
 
+  <div id="extras"></div>
   <div id="reqs"></div>
   <div class="sec"><h2>Avisos do time</h2>${manage ? `<a href="#/times/${team.id}/aviso">Novo ${icon("plus")}</a>` : `<a href="#/times/${team.id}/avisos">Todos ${icon("chevronRight")}</a>`}</div>
   ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>
@@ -240,6 +242,7 @@ async function teamHome(team, el, alive) {
     el.querySelectorAll("#ndots i").forEach((d, k) => d.classList.toggle("on", k === i));
   }, { passive: true });
   on(el, "click", "[data-notice]", (e, b) => openNotice(notices.find((n) => n.id === b.dataset.notice), ppl));
+  teamExtras(team).then((h) => { const b = el.querySelector("#extras"); if (b) b.innerHTML = h; }).catch(() => {});
   if (teamHas(team, "pedidos")) openRequestsCard(team).then((h) => { const b = el.querySelector("#reqs"); if (b) b.innerHTML = h; }).catch(() => {});
 }
 
