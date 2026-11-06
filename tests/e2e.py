@@ -398,6 +398,11 @@ with sync_playwright() as pw:
     expect(ana.locator("#ltxt")).to_be_visible(timeout=10000); ana.locator("#save").click(); toast_has(ana, "Letra salva")
     ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); expect(ana.locator("#ll .li", has_text="Música da mídia")).to_contain_text("Própria", timeout=10000)
     ok("Multimídia cria a própria letra e ela aparece na biblioteca")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras/modelo"); expect(ana.locator("#pv .thumb")).to_be_visible(timeout=10000)
+    ana.locator("[data-seg='align:l']").click(); ana.locator("#ok").click(); toast_has(ana, "Padrão salvo")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras/modelo"); ana.reload(); expect(ana.locator("[data-seg='align:l'].on")).to_be_visible(timeout=10000)
+    ana.locator("#reset").click(); ana.locator("#ok").click(); toast_has(ana, "Padrão salvo")
+    ok("Padrão da letra na tela editável (alinhamento, margens, rodapé) e salvo pelo time")
     # ------------------------------------------------------------------ Estúdio de mídia
     ana.goto(f"{BASE}/#/times/{jovens_id}/estudio/fundos"); ana.reload()
     with ana.expect_file_chooser() as fc: ana.locator("#up").click()

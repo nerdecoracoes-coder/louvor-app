@@ -2753,3 +2753,7 @@ create policy ml_select on public.media_lyrics for select to authenticated
 create policy ml_write on public.media_lyrics for all to authenticated
   using (public.is_team_member(team_id) or public.can_manage_team(team_id))
   with check ((public.is_team_member(team_id) or public.can_manage_team(team_id)) and public.team_org(team_id) = org_id and public.team_has_feature(team_id, 'letras'));
+
+-- >>> supabase/migrations/20261106000012_padrao_letra.sql
+-- Padrão da letra na tela (margens, alinhamento, posição do nome da parte e do rodapé), por time.
+alter table public.teams add column if not exists slide_layout jsonb;

@@ -875,3 +875,6 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .dbar button { flex: 1; }
 .cv { width: 100%; height: auto; display: block; border-radius: 12px; background: #000; box-shadow: inset 0 0 0 1px var(--line-2); }
 .tcard { margin-bottom: 10px; }
+.segs { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg { flex: 1 1 auto; min-height: 42px; padding: 0 12px; border-radius: 10px; border: 1px solid var(--line-2); background: var(--raised); color: var(--text); font: inherit; font-size: 14px; cursor: pointer; }
+.seg.on { background: color-mix(in srgb, var(--accent) 22%, transparent); border-color: var(--accent); font-weight: 700; }

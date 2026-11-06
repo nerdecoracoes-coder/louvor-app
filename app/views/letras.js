@@ -4,9 +4,11 @@ import { sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, empty
 import { parseLyricsText, lyricsToText } from "./songs.js";
 import { buildPptx, zipStore, RATIOS, ratioOf } from "../lib/pptx.js";
 import { fDate, fTime } from "../core.js";
+import { letraBoxes, titleBoxes, thumbOf, layoutOf, DEFAULT_LAYOUT } from "../lib/slidelayout.js";
 
 export function register(route) {
   route("/times/:id/letras", (p, el, a) => library(p.id, el, a));
+  route("/times/:id/letras/modelo", (p, el, a) => layoutPage(p.id, el, a));
   route("/times/:id/letras/:song", (p, el, a) => editor(p.id, p.song, el, a));
 }
 
@@ -16,6 +18,8 @@ const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toL
 export const FONTS = ["Arial", "Calibri", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Impact", "Montserrat", "Roboto", "Open Sans"];
 export const DEFAULT_STYLE = { font: "Arial", size: 54, color: "#FFFFFF", bg: "#000000", per: 2, caps: false, showLabel: true };
 const TEXT_COLORS = ["#FFFFFF", "#FFE066", "#9BD1FF", "#000000"], BG_COLORS = ["#000000", "#0B1F3A", "#1B1B1B", "#12301F", "#FFFFFF"];
+// slides do PowerPoint com o padrão de tela da igreja
+const pptxSlides = (title, artist, sl, st, footer) => [{ boxes: titleBoxes(title, artist, st), bg: st.bg, color: st.color }, ...sl.map((x) => ({ boxes: letraBoxes({ ...x, footer }, st), bg: st.bg, color: st.color }))];
 const aspect = (r) => ratioOf(r).join(" / ");
 const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "musica";
 
@@ -80,6 +84,7 @@ async function library(teamId, el, alive) {
     <div class="card ratiobox"><label class="field" style="margin:0"><span>Tela da projeção</span>
       <select id="ratio" ${canManageTeam(teamId) ? "" : "disabled"}>${Object.entries(RATIOS).map(([k, v]) => `<option value="${k}" ${k === (team.slide_ratio || "16:9") ? "selected" : ""}>${v}</option>`).join("")}${RATIOS[team.slide_ratio || "16:9"] ? "" : `<option selected value="${attr(team.slide_ratio)}">${esc(team.slide_ratio)}</option>`}<option value="custom">Outra medida…</option></select></label>
       <p class="tiny muted" style="margin:8px 0 0">Cada igreja tem uma tela diferente. Todos os slides e arquivos seguem esta proporção.${canManageTeam(teamId) ? "" : " Quem coordena o time pode mudar."}</p></div>
+    <a class="li" href="#/times/${teamId}/letras/modelo" style="margin-bottom:10px"><span class="cover">${icon("sliders")}</span><span class="grow"><span class="t">Padrão da letra na tela</span><span class="s">Margens, alinhamento, posição do nome da parte e do rodapé</span></span>${icon("chevronRight", "chev")}</a>
     <label class="search srch" style="display:block">${icon("search")}<input class="input" id="lq" placeholder="Procurar música"></label>
     <div class="list mt" id="ll"></div>`;
   draw();
@@ -126,7 +131,7 @@ async function editor(teamId, songId, el, alive) {
   if (!song) { el.innerHTML = empty("lyrics", "Letra não encontrada", "A música pode ter sido removida ou ainda não tem letra."); return; }
   const original = song.lyrics?.blocks || [];
   let text = lyricsToText(saved?.blocks?.length ? saved.blocks : original);
-  let st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9" };
+  let st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9", layout: team.slide_layout };
   const blocks = () => parseLyricsText(text);
 
   const swatches = (key, list) => `<div class="swatches">${list.map((c) => `<button type="button" class="sw${st[key].toLowerCase() === c.toLowerCase() ? " on" : ""}" data-sw="${key}:${c}" style="background:${c}" aria-label="${c}"></button>`).join("")}
@@ -139,12 +144,10 @@ async function editor(teamId, songId, el, alive) {
       <div class="field"><span>Cor da letra</span>${swatches("color", TEXT_COLORS)}</div>
       <div class="field"><span>Cor do fundo</span>${swatches("bg", BG_COLORS)}</div>
       <div class="two"><label class="field"><span>Linhas por slide</span><select id="sper">${[1, 2, 3, 4].map((n) => `<option value="${n}" ${st.per === n ? "selected" : ""}>${n}</option>`).join("")}</select></label>
-        <div class="field"><span>Opções</span><div class="row gap-s" style="flex-wrap:wrap"><button type="button" class="chip ${st.caps ? "on" : ""}" id="scaps">CAIXA ALTA</button><button type="button" class="chip ${st.showLabel ? "on" : ""}" id="slabel">Nome da parte</button></div></div></div></div>`;
+        <div class="field"><span>Opções</span><div class="row gap-s" style="flex-wrap:wrap"><button type="button" class="chip ${st.caps ? "on" : ""}" id="scaps">CAIXA ALTA</button><button type="button" class="chip ${st.showLabel ? "on" : ""}" id="slabel">Nome da parte</button><button type="button" class="chip ${st.showFooter ? "on" : ""}" id="sfooter">MÚSICA NO RODAPÉ</button></div></div></div></div>`;
   const preview = () => {
     const sl = slidesOf(blocks(), st.per);
-    const fs = (st.size / 960) * 100;
-    return sl.length ? `<div class="thumbs">${sl.map((s) => `<div class="thumb" style="aspect-ratio:${aspect(st.ratio)};background:${attr(st.bg)};color:${attr(st.color)};font-family:'${attr(st.font)}',sans-serif;font-size:${fs}cqw">
-      ${st.showLabel && s.label ? `<small>${esc(st.caps ? s.label.toUpperCase() : s.label)}</small>` : ""}<span>${esc(st.caps ? s.text.toUpperCase() : s.text)}</span></div>`).join("")}</div>`
+    return sl.length ? `<div class="thumbs">${sl.map((x) => thumbOf(letraBoxes({ ...x, footer: st.showFooter ? [song.title, song.artist].filter(Boolean).join(" · ") : "" }, st), { bg: st.bg, color: st.color, font: st.font, ratio: st.ratio })).join("")}</div>`
       : `<div class="card small muted">Escreva a letra acima para ver os slides.</div>`;
   };
   const draw = () => {
@@ -172,11 +175,12 @@ async function editor(teamId, songId, el, alive) {
   });
   on(el, "click", "[data-sw]", (e, b) => { const [k, c] = b.dataset.sw.split(":"); st[k] = c; const keep = el.querySelector("#ltxt").scrollTop; text = el.querySelector("#ltxt").value; draw(); el.querySelector("#ltxt").scrollTop = keep; });
   on(el, "click", "#scaps", () => { st.caps = !st.caps; text = el.querySelector("#ltxt").value; draw(); });
+  on(el, "click", "#sfooter", () => { st.showFooter = !st.showFooter; text = el.querySelector("#ltxt").value; draw(); });
   on(el, "click", "#slabel", () => { st.showLabel = !st.showLabel; text = el.querySelector("#ltxt").value; draw(); });
   on(el, "click", "#restore", () => { text = lyricsToText(original); draw(); toast("Letra original restaurada"); });
   on(el, "click", "#dpptx", () => {
     const sl = slidesOf(blocks(), st.per); if (!sl.length) return toast("Escreva a letra primeiro.", "err");
-    download(buildPptx([{ label: "", text: song.title + (song.artist ? "\n" + song.artist : "") }, ...sl], st), `${slug(song.title)}.pptx`); toast("PowerPoint gerado");
+    download(buildPptx(pptxSlides(song.title, song.artist, sl, st, st.showFooter ? [song.title, song.artist].filter(Boolean).join(" · ") : ""), st), `${slug(song.title)}.pptx`); toast("PowerPoint gerado");
   });
   on(el, "click", "#dtxt", () => { download(new Blob([textOf(song.title, blocks())], { type: "text/plain;charset=utf-8" }), `${slug(song.title)}.txt`); toast("Texto gerado"); });
   on(el, "click", "#save", async (e, b) => {
@@ -220,9 +224,9 @@ export async function downloadPackage(s) {
   const folder = slug(`${s.title} ${String(s.starts_at).slice(0, 10)}`), pad = (n) => String(n).padStart(2, "0");
   const files = [], all = [];
   list.forEach((m, i) => {
-    const saved = mine.get(m.id), blocks = saved?.blocks?.length ? saved.blocks : m.blocks, st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9" };
+    const saved = mine.get(m.id), blocks = saved?.blocks?.length ? saved.blocks : m.blocks, st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9", layout: team.slide_layout };
     const sl = slidesOf(blocks, st.per);
-    const slides = [{ label: "", text: m.title + (m.artist ? "\n" + m.artist : ""), style: st }, ...sl.map((x) => ({ ...x, style: st }))];
+    const slides = pptxSlides(m.title, m.artist, sl, st, st.showFooter ? [m.title, m.artist].filter(Boolean).join(" · ") : "");
     all.push(...slides);
     const base = `${folder}/${pad(i + 1)}-${slug(m.title)}`;
     if (sl.length) { files.push([`${base}.pptx`, new Uint8Array(0)]); files[files.length - 1][1] = buildPptx(slides, st); }
@@ -231,10 +235,48 @@ export async function downloadPackage(s) {
   const order = [`${s.title}`, `${fDate(s.starts_at)} às ${fTime(s.starts_at)}`, "", "MÚSICAS", ...list.map((m, i) => `${i + 1}. ${m.title}${m.artist ? " — " + m.artist : ""}${m.key ? ` (Tom ${m.key})` : ""}${m.blocks.length ? "" : "  [sem letra cadastrada]"}`),
     ...(cues.length ? ["", "ROTEIRO", ...cues.map((c) => `${c.at_time ? String(c.at_time).slice(0, 5) : "--:--"}  ${c.title}${c.duration_min ? ` (${c.duration_min} min)` : ""}${c.responsible ? ` — ${c.responsible}` : ""}`)] : [])].join("\n");
   files.unshift([`${folder}/00-ordem-do-culto.txt`, order + "\n"]);
-  if (all.length) files.splice(1, 0, [`${folder}/culto-completo.pptx`, buildPptx(all, { ...DEFAULT_STYLE, ratio: team.slide_ratio || "16:9" })]);
+  if (all.length) files.splice(1, 0, [`${folder}/culto-completo.pptx`, buildPptx(all, { ...DEFAULT_STYLE, ratio: team.slide_ratio || "16:9", layout: team.slide_layout })]);
   // os Blob dos PowerPoint viram bytes para entrar no zip
   const out = [];
   for (const [n, d] of files) out.push([n, d instanceof Blob ? new Uint8Array(await d.arrayBuffer()) : d]);
   download(zipStore(out), `${folder}.zip`);
   return list.length;
+}
+
+// ---------------------------------------------------------------- padrão da letra na tela
+async function layoutPage(teamId, el, alive) {
+  el.innerHTML = spinner();
+  const team = await getTeam(teamId);
+  if (!team || !teamHas(team, "letras")) { el.innerHTML = empty("lyrics", "Este time não usa letras para a mídia."); return; }
+  if (!alive()) return;
+  const can = canManageTeam(teamId);
+  let L = layoutOf(team.slide_layout), st = { ...DEFAULT_STYLE, ratio: team.slide_ratio || "16:9", showLabel: true };
+  const sample = { label: "Refrão", text: "Tua graça me alcançou\nTeu amor me transformou" }, foot = "Nome da música · Artista";
+  const seg = (key, opts) => `<div class="segs">${opts.map(([v, t]) => `<button type="button" class="seg${L[key] === v ? " on" : ""}" data-seg="${key}:${v}">${t}</button>`).join("")}</div>`;
+  const slider = (key, label, min, max, step = 1, unit = "%") => `<label class="field"><span>${label} (<b id="${key}v">${L[key]}</b>${unit})</span><input type="range" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}"></label>`;
+  const draw = () => {
+    el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras">${icon("chevronLeft")}</a><h1>Padrão da letra</h1></div>
+      <p class="muted small">Cada igreja projeta de um jeito. Ajuste aqui onde o texto fica na tela. Vale para todas as letras e para os arquivos em PowerPoint. O tamanho da letra e as cores você muda em cada música.</p>
+      <div id="pv" style="position:sticky;top:var(--hdr,56px);z-index:3">${thumbOf(letraBoxes({ ...sample, footer: L.footer !== "off" ? foot : "" }, { ...st, layout: L }), { bg: st.bg, color: st.color, font: st.font, ratio: st.ratio, big: true })}</div>
+      <div class="card mt">
+        ${slider("mx", "Margem das laterais", 0, 25)}${slider("mt", "Margem de cima", 0, 40)}${slider("mb", "Margem de baixo", 0, 40)}${slider("spacing", "Espaço entre as linhas", 80, 200, 5)}
+        <div class="field"><span>Alinhamento do texto</span>${seg("align", [["l", "Esquerda"], ["ctr", "Centro"], ["r", "Direita"]])}</div>
+        <div class="field"><span>Posição na altura</span>${seg("anchor", [["t", "Em cima"], ["ctr", "No meio"], ["b", "Embaixo"]])}</div>
+        <div class="field"><span>Nome da parte (Verso, Refrão)</span>${seg("label", [["tl", "Canto esquerdo"], ["tr", "Canto direito"], ["off", "Não mostrar"]])}</div>
+        <div class="field"><span>Nome da música e artista</span>${seg("footer", [["bottom", "Embaixo"], ["top", "Em cima"], ["off", "Não mostrar"]])}</div>
+      </div>
+      ${can ? `<button class="btn primary block mt" id="ok">${icon("check")} Salvar padrão</button><button class="btn ghost block mt-s" id="reset">Voltar ao padrão do Somos</button>` : `<p class="small muted">Quem coordena o time pode mudar.</p>`}`;
+  };
+  draw();
+  const repaint = () => { el.querySelector("#pv").innerHTML = thumbOf(letraBoxes({ ...sample, footer: L.footer !== "off" ? foot : "" }, { ...st, layout: L }), { bg: st.bg, color: st.color, font: st.font, ratio: st.ratio, big: true }); };
+  el.addEventListener("input", (e) => { const k = e.target.dataset?.k; if (!k) return; L[k] = +e.target.value; el.querySelector(`#${k}v`).textContent = e.target.value; repaint(); });
+  on(el, "click", "[data-seg]", (e, b) => { const [k, v] = b.dataset.seg.split(":"); L[k] = v; draw(); });
+  on(el, "click", "#reset", () => { L = { ...DEFAULT_LAYOUT }; draw(); });
+  on(el, "click", "#ok", async (e, b) => {
+    busy(b);
+    const r = await sb.from("teams").update({ slide_layout: L }).eq("id", teamId);
+    busy(b, false);
+    if (r.error) return toast(missing(r.error) ? "Falta rodar a atualização do banco (padrão da letra)." : errMsg(r.error), "err");
+    team.slide_layout = L; toast("Padrão salvo");
+  });
 }

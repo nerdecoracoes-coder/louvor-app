@@ -3,6 +3,7 @@
 import { sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, go, empty, spinner, teamHas, canManageTeam, pickFile, fDate, fTime, confirmDialog } from "../core.js";
 import { buildPptx, RATIOS, ratioOf } from "../lib/pptx.js";
 import { slidesOf, DEFAULT_STYLE, FONTS, loadLibrary } from "./letras.js";
+import { letraBoxes, thumbOf } from "../lib/slidelayout.js";
 
 export function register(route) {
   route("/times/:id/estudio", (p, el, a) => home(p.id, el, a));
@@ -40,12 +41,7 @@ const DEF = {
 export function boxesOf(s, st) {
   const k = s.kind || "letra", big = s.size || st.size || 54, cap = !!st.caps;
   const B = (o) => ({ caps: cap && o.caps !== false, ...o });
-  if (k === "letra") {
-    const out = [B({ text: s.text, size: big, y: 0.1, h: 0.8 })];
-    if (st.showLabel && s.label) out.push({ text: s.label, size: 18, x: 0.04, y: 0.03, w: 0.5, h: 0.08, align: "l", anchor: "t", alpha: 0.6, bold: false, caps: cap });
-    if (s.footer) out.push({ text: s.footer, size: 16, y: 0.92, h: 0.07, alpha: 0.65, bold: false, caps: false });
-    return out;
-  }
+  if (k === "letra") return letraBoxes(s, st);
   if (k === "titulo") return [B({ text: s.title, size: Math.min(big + 12, 72), y: 0.25, h: 0.3, anchor: "b" }), B({ text: s.text, size: 34, y: 0.58, h: 0.2, anchor: "t", alpha: 0.85, bold: false, caps: false })];
   if (k === "versiculo") return [B({ text: s.text, size: Math.min(big - 6, 46), y: 0.1, h: 0.68, caps: false }), B({ text: s.ref, size: 28, x: 0.04, y: 0.8, w: 0.92, h: 0.12, align: "r", anchor: "t", alpha: 0.85, caps: false })];
   if (k === "topicos") return [B({ text: s.title, size: 46, y: 0.06, h: 0.16 }), B({ text: String(s.bullets || "").split("\n").filter((l) => l.trim()).map((l) => "• " + l.trim()).join("\n"), size: 36, x: 0.08, y: 0.25, w: 0.84, h: 0.68, align: "l", anchor: "t", bold: false, caps: false })];
@@ -54,18 +50,12 @@ export function boxesOf(s, st) {
   return [];
 }
 
-export const styleOf = (deck) => ({ ...DEFAULT_STYLE, ...(deck.style || {}) });
+export const styleOf = (deck, team) => ({ ...DEFAULT_STYLE, ...(deck.style || {}), layout: team?.slide_layout || deck.style?.layout });
 const dimOf = (s) => (s.bg?.asset ? (s.dim ?? 0.35) : 0);
 
 // miniatura/visualização do slide, na mesma proporção da tela da projeção
 export function thumb(s, st, ratio, { big = false } = {}) {
-  const [a, b] = ratioOf(ratio), bgc = s.bg?.color || st.bg, img = s.bg?.asset;
-  const boxes = boxesOf(s, st).map((x) => {
-    const sz = (x.size || 54) / 9.6, al = { l: "left", r: "right" }[x.align] || "center", jc = { t: "flex-start", b: "flex-end" }[x.anchor] || "center";
-    return `<div class="tb" style="left:${(x.x ?? 0.04) * 100}%;top:${(x.y ?? 0.06) * 100}%;width:${(x.w ?? 0.92) * 100}%;height:${(x.h ?? 0.88) * 100}%;font-size:${sz}cqw;text-align:${al};justify-content:${jc};font-weight:${x.bold === false ? 400 : 700};opacity:${x.alpha ?? 1}"><span>${esc(x.caps ? String(x.text || "").toUpperCase() : x.text || "")}</span></div>`;
-  }).join("");
-  return `<div class="thumb st" style="aspect-ratio:${a} / ${b};background:${attr(bgc)};color:${attr(s.color || st.color)};font-family:'${attr(st.font)}',sans-serif${big ? ";width:100%" : ""}">
-    ${img ? `<img src="${attr(img)}" alt="" loading="lazy">` : ""}${dimOf(s) ? `<i class="dim" style="opacity:${dimOf(s)}"></i>` : ""}${boxes}</div>`;
+  return thumbOf(boxesOf(s, st).map((x) => ({ ...x, color: undefined })), { bg: s.bg?.color || st.bg, color: s.color || st.color, font: st.font, ratio, img: s.bg?.asset, dim: dimOf(s), big });
 }
 
 // ---------------------------------------------------------------- dados
@@ -86,8 +76,8 @@ async function imageBytes(url) {
   imgCache.set(url, v); return v;
 }
 
-export async function deckToPptx(deck, ratio) {
-  const st = { ...styleOf(deck), ratio };
+export async function deckToPptx(deck, ratio, team) {
+  const st = { ...styleOf(deck, team), ratio };
   const slides = [];
   for (const s of deck.slides || []) {
     const out = { boxes: boxesOf(s, st), bg: s.bg?.color || st.bg, color: s.color, dim: dimOf(s) || 0 };
@@ -248,7 +238,7 @@ async function deckEditor(teamId, deckId, el, alive) {
     if (msg) toast(msg);
   };
   const later = () => { dirty = true; clearTimeout(timer); timer = setTimeout(() => save(), 900); };
-  const st = () => styleOf(deck);
+  const st = () => styleOf(deck, team);
 
   const draw = () => {
     const slides = deck.slides || [];
@@ -280,7 +270,7 @@ async function deckEditor(teamId, deckId, el, alive) {
   on(el, "click", "#pptx", async (e, b) => {
     if (!deck.slides.length) return toast("Adicione ao menos um slide.", "err");
     busy(b);
-    try { download(await deckToPptx(deck, ratio), `${slug(deck.title)}.pptx`); toast("PowerPoint gerado"); } catch (err) { toast(errMsg(err), "err"); }
+    try { download(await deckToPptx(deck, ratio, team), `${slug(deck.title)}.pptx`); toast("PowerPoint gerado"); } catch (err) { toast(errMsg(err), "err"); }
     busy(b, false);
   });
   on(el, "click", "#del", async () => {
