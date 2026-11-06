@@ -377,19 +377,23 @@ with sync_playwright() as pw:
     # ------------------------------------------------------------------ Letras para a mídia (Multimídia vê as letras do Louvor)
     ana.goto(f"{BASE}/#/times/{jovens_id}/letras")
     expect(ana.locator("#ll .li", has_text="Emaús")).to_be_visible(timeout=10000)
+    ana.locator("#ratio").select_option("4:3"); toast_has(ana, "Tela da projeção atualizada")
+    expect(ana.locator("#ll .li", has_text="Emaús")).to_be_visible(timeout=10000)
     ana.locator("#ll .li", has_text="Emaús").click()
     expect(ana.locator(".thumb").first).to_be_visible(timeout=10000)
     n0 = ana.locator(".thumb").count()
     ana.locator("#sper").select_option("1"); assert ana.locator(".thumb").count() >= n0
     ana.locator("#scaps").click(); expect(ana.locator(".thumb span").first).to_contain_text("TEU AMOR")
     with ana.expect_download() as dl: ana.locator("#dpptx").click()
-    path = dl.value.path(); import zipfile; z = zipfile.ZipFile(path); assert "ppt/slides/slide2.xml" in z.namelist() and "TEU AMOR".encode() in z.read("ppt/slides/slide2.xml")
+    path = dl.value.path(); import zipfile; z = zipfile.ZipFile(path); assert b'cx="12192000" cy="9144000"' in z.read("ppt/presentation.xml"), "proporção 4:3 no PowerPoint"
+    z = zipfile.ZipFile(path); assert "ppt/slides/slide2.xml" in z.namelist() and "TEU AMOR".encode() in z.read("ppt/slides/slide2.xml")
     ana.locator("#save").click(); toast_has(ana, "Versão salva"); shot(ana, "21e-letras")
     ana.goto(sched_url); ana.reload()
     with ana.expect_download() as dl2: ana.locator("[data-goto=pkg]").click()
     zn = zipfile.ZipFile(dl2.value.path()).namelist()
     assert any(n.endswith("00-ordem-do-culto.txt") for n in zn) and any(n.endswith("culto-completo.pptx") for n in zn) and any(n.endswith("-emaus.pptx") for n in zn), zn
-    ok("Letras para a mídia: partes, estilo, PowerPoint gerado e versão salva; pacote do culto em .zip")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); ana.locator("#ratio").select_option("16:9"); toast_has(ana, "Tela da projeção atualizada")
+    ok("Letras para a mídia: tela da projeção (4:3 no PowerPoint), partes, estilo, PowerPoint gerado e versão salva; pacote do culto em .zip")
 
     # ------------------------------------------------------------------ Tutoriais em vídeo
     ana.goto(BASE + "/#/ajuda"); expect(ana.locator(".list .li", has_text="Como criar uma escala")).to_be_visible(timeout=10000)

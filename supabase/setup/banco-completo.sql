@@ -2625,3 +2625,7 @@ create policy ce_select on public.church_events for select to authenticated usin
 create policy ce_write on public.church_events for all to authenticated
   using (public.is_org_staff(org_id))
   with check (public.is_org_staff(org_id) and created_by = auth.uid());
+
+-- >>> supabase/migrations/20261105000009_tela_projecao.sql
+-- Tela da projeção (proporção dos slides) escolhida pela igreja, por time.
+alter table public.teams add column if not exists slide_ratio text check (slide_ratio is null or char_length(slide_ratio) <= 16);
