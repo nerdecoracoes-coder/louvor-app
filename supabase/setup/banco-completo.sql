@@ -2918,3 +2918,9 @@ begin
 end $$;
 drop trigger if exists t_notify_devotional on public.team_devotionals;
 create trigger t_notify_devotional after insert on public.team_devotionals for each row execute function public.notify_devotional();
+
+-- >>> supabase/migrations/20261106000014_devocional_leve.sql
+-- Devocional: miniatura, tamanho e prazo da cópia guardada no app (a cópia permanente irá para o Drive).
+alter table public.team_devotionals add column if not exists thumb text;
+alter table public.team_devotionals add column if not exists video_bytes bigint;
+alter table public.team_devotionals add column if not exists video_expires_at timestamptz;

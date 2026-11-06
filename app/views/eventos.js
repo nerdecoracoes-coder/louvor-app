@@ -1,4 +1,5 @@
 // Eventos do time (reuniões, fraternização...) com confirmação de presença, e devocional semanal em vídeo.
+import { compress, canCompress } from "../lib/videoz.js";
 import { sb, state, must, esc, attr, icon, avatar, sheet, toast, errMsg, busy, on, go, empty, spinner, teamHas, canManageTeam, pickFile, fDate, fTime, fDay, fMon, fDateLong, fromLocal, ymd, people, personName, confirmDialog } from "../core.js";
 
 export function register(route) {
@@ -8,6 +9,8 @@ export function register(route) {
   route("/times/:id/devocional/:did", (p, el, a) => devWatch(p.id, p.did, el, a));
 }
 
+const SKIP = 20 * 1024 * 1024;
+const WEEK = 7 * 24 * 3600e3;
 const SETUP = (n) => `<div class="card small">Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>${n}</b> no SQL Editor do Supabase.</div>`;
 const missing = (e) => /relation|does not exist|schema cache|42P01|PGRST|function/i.test(String(e?.message || e?.code || e));
 const KINDS = { reuniao: "Reunião", fraternizacao: "Fraternização", ensaio: "Ensaio", estudo: "Estudo", outro: "Outro" };
@@ -89,7 +92,7 @@ async function detail(teamId, eid, el, alive) {
 }
 
 // ---------------------------------------------------------------- devocional
-const devCard = (d, ppl, teamId) => `<a class="li" href="#/times/${teamId}/devocional/${d.id}"><span class="cover">${icon("play")}</span><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(d.title)}</span><span class="s">${esc(personName(ppl, d.author_id))} · ${fDate(d.created_at)}</span></span>${icon("chevronRight", "chev")}</a>`;
+const devCard = (d, ppl, teamId) => `<a class="li" href="#/times/${teamId}/devocional/${d.id}"><span class="cover">${d.thumb ? `<img src="${attr(d.thumb)}" alt="">` : icon("play")}</span><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(d.title)}</span><span class="s">${esc(personName(ppl, d.author_id))} · ${fDate(d.created_at)}</span></span>${icon("chevronRight", "chev")}</a>`;
 
 async function devList(teamId, el, alive) {
   el.innerHTML = spinner();
@@ -110,12 +113,12 @@ function postSheet(team, again) {
   const s = sheet(`<h3>Postar devocional</h3>
     <label class="field"><span>Título *</span><input id="dtl" maxlength="140" value="Devocional da semana ${week.slice(0, 5)}"></label>
     <label class="field"><span>Mensagem</span><textarea id="dds" maxlength="1500" placeholder="Versículo, resumo, pedido de oração..."></textarea></label>
-    <div class="field"><span>Vídeo</span><button type="button" class="btn ghost block" id="dpick">${icon("camera")} Gravar ou escolher vídeo</button><p class="tiny muted" id="dfile" style="margin:6px 0 0">Até 50 MB. Para vídeos maiores, cole o link abaixo.</p></div>
+    <div class="field"><span>Vídeo</span><button type="button" class="btn ghost block" id="dpick">${icon("camera")} Gravar ou escolher vídeo</button><p class="tiny muted" id="dfile" style="margin:6px 0 0">Vídeos grandes são comprimidos aqui no aparelho antes de enviar. Isso leva quase o tempo do vídeo, com a tela ligada.</p><div id="dprog" class="small muted" style="margin-top:6px"></div></div>
     <label class="field"><span>Ou link do vídeo (YouTube, Drive...)</span><input id="dlink" type="url" inputmode="url" placeholder="https://"></label>
     <button class="btn primary block" id="dok">Postar para o time</button>`, { wide: true });
   s.el.querySelector("#dpick").onclick = async () => {
     const f = await pickFile("video/*"); if (!f) return;
-    if (f.size > 50 * 1024 * 1024) return toast("Esse vídeo passa de 50 MB. Envie para o YouTube ou Drive e cole o link.", "err");
+    if (f.size > SKIP && !canCompress()) return toast("Este navegador não comprime vídeo. Use o Chrome ou cole o link.", "err");
     file = f; s.el.querySelector("#dfile").textContent = `${f.name} (${(f.size / 1048576).toFixed(1)} MB)`;
   };
   s.el.querySelector("#dok").onclick = async (ev) => {
@@ -125,12 +128,17 @@ function postSheet(team, again) {
     if (link && !/^https?:\/\//i.test(link)) return toast("O link precisa começar com https://", "err");
     busy(ev.currentTarget);
     try {
-      let path = null;
+      let path = null, thumb = null, bytes = null;
       if (file) {
-        path = `devotionals/${team.org_id}/${team.id}/${Date.now()}-${slug(file.name)}`;
-        const up = await sb.storage.from("private").upload(path, file, { upsert: false }); if (up.error) throw up.error;
+        const prog = s.el.querySelector("#dprog");
+        const r = await compress(file, (_, t) => { prog.textContent = t; });
+        prog.textContent = "Enviando…";
+        const base = slug(file.name).replace(/\.[a-z0-9]+$/, "");
+        path = `devotionals/${team.org_id}/${team.id}/${Date.now()}-${base}.${r.ext}`;
+        const up = await sb.storage.from("private").upload(path, r.blob, { upsert: false, contentType: r.mime }); if (up.error) throw up.error;
+        thumb = r.thumb; bytes = r.blob.size;
       }
-      await must(sb.from("team_devotionals").insert({ team_id: team.id, org_id: team.org_id, title, description: s.el.querySelector("#dds").value.trim() || null, video_path: path, video_url: link || null, author_id: state.user.id }));
+      await must(sb.from("team_devotionals").insert({ team_id: team.id, org_id: team.org_id, title, description: s.el.querySelector("#dds").value.trim() || null, video_path: path, video_url: link || null, author_id: state.user.id, thumb, video_bytes: bytes, video_expires_at: path ? new Date(Date.now() + WEEK).toISOString() : null }));
       s.close(); toast("Devocional postado. O time foi avisado."); again();
     } catch (err) { busy(ev.currentTarget, false); toast(missing(err) ? "Falta rodar a atualização do banco." : errMsg(err), "err"); }
   };
@@ -147,7 +155,7 @@ async function devWatch(teamId, did, el, alive) {
   const can = d.author_id === state.user.id || canManageTeam(teamId);
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/devocional">${icon("chevronLeft")}</a><h1 style="font-size:22px">${esc(d.title)}</h1></div>
     <p class="small muted">${esc(personName(ppl, d.author_id))} · ${esc(fDateLong(d.created_at))}</p>
-    ${src ? `<video id="vid" class="cv" src="${attr(src)}" controls playsinline preload="metadata"></video>` : ""}
+    ${src ? `<video id="vid" class="cv" src="${attr(src)}" poster="${attr(d.thumb || "")}" controls playsinline preload="metadata"></video>${d.video_expires_at ? `<p class="tiny muted">Disponível no app até ${esc(fDate(d.video_expires_at))}.</p>` : ""}` : ""}
     ${d.video_url ? `<a class="btn primary block mt" href="${attr(d.video_url)}" target="_blank" rel="noopener noreferrer">${icon("play")} Assistir o vídeo</a>` : ""}
     ${!src && d.video_path ? `<div class="card small">Não foi possível abrir o vídeo agora. Tente de novo.</div>` : ""}
     ${d.description ? `<div class="card mt"><p style="white-space:pre-line;margin:0">${esc(d.description)}</p></div>` : ""}
