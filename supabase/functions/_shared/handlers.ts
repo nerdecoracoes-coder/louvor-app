@@ -2,7 +2,7 @@
 import { Db, asUser } from "./db.ts";
 import { FOLDER_MIME, folderIdFromInput, type DriveClient } from "./drive.ts";
 import { syncOrg, type CoverStore } from "./sync.ts";
-import { presignGet, type R2Config } from "./r2.ts";
+import { presignGet, presignPut, remove as r2Remove, type R2Config } from "./r2.ts";
 import { createDemo, deleteDemo, cleanupDemo } from "./demo.ts";
 
 export interface Env {
@@ -208,6 +208,7 @@ export async function handleMedia(req: Request, env: Env): Promise<Response> {
     const jwt = bearer(req);
     if (!jwt) return json({ error: "unauthorized" }, 401);
     const body = await req.json().catch(() => ({}));
+    if (typeof body.action === "string" && body.action.startsWith("devo_")) return devotionalVideo(env, jwt, body);
     const pid = String(body.project_id ?? "");
     if (!/^[0-9a-f-]{36}$/.test(pid)) return json({ error: "projeto inválido" }, 400);
     if (!env.r2) return json({ files: {} });
@@ -240,4 +241,37 @@ export async function handleMedia(req: Request, env: Env): Promise<Response> {
   h.set("accept-ranges", "bytes");
   h.set("cache-control", "private, max-age=86400");
   return new Response(upstream.body, { status: upstream.status, headers: h });
+}
+
+// Vídeos do devocional guardados no Cloudflare R2 (original, sem comprimir). O envio e a leitura usam links
+// temporários; quem pode enviar/ver é decidido pelo banco (participação no time e RLS).
+async function devotionalVideo(env: Env, jwt: string, body: any): Promise<Response> {
+  if (!env.r2) return json({ error: "O armazenamento de vídeos (R2) ainda não foi configurado." }, 503);
+  const rest = env.rest, anon = env.anonKey;
+  const uuid = /^[0-9a-f-]{36}$/;
+  if (body.action === "devo_put") {
+    const team = String(body.team_id ?? "");
+    if (!uuid.test(team)) return json({ error: "time inválido" }, 400);
+    const ok = (await asUser(rest, anon, jwt, "is_team_member", { p_team: team })) === true || (await asUser(rest, anon, jwt, "can_manage_team", { p_team: team })) === true;
+    if (!ok) return json({ error: "forbidden" }, 403);
+    const slug = String(body.name ?? "video").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "").slice(-60) || "video";
+    const key = `devotionals/${team}/${Date.now()}-${slug}`;
+    return json({ key, url: await presignPut(env.r2, key, 3 * 3600), expires_in: 3 * 3600 });
+  }
+  // as demais ações partem de um devocional que o próprio usuário consegue ver (RLS)
+  const id = String(body.devotional_id ?? "");
+  if (!uuid.test(id)) return json({ error: "devocional inválido" }, 400);
+  const r = await fetch(`${rest}/team_devotionals?id=eq.${id}&select=r2_key,team_id,author_id`, { headers: { apikey: anon, Authorization: `Bearer ${jwt}` } });
+  if (!r.ok) return json({ error: "forbidden" }, 403);
+  const row = (await r.json())[0];
+  if (!row?.r2_key) return json({ error: "sem vídeo" }, 404);
+  if (body.action === "devo_get") return json({ url: await presignGet(env.r2, row.r2_key, 6 * 3600), expires_in: 6 * 3600 });
+  if (body.action === "devo_del") {
+    const u = await fetch(`${authBase(env)}/user`, { headers: { apikey: anon, Authorization: `Bearer ${jwt}` } }).then((x) => x.ok ? x.json() : null).catch(() => null);
+    const mine = u?.id && u.id === row.author_id;
+    if (!mine && (await asUser(rest, anon, jwt, "can_manage_team", { p_team: row.team_id })) !== true) return json({ error: "forbidden" }, 403);
+    await r2Remove(env.r2, row.r2_key);
+    return json({ ok: true });
+  }
+  return json({ error: "Ação desconhecida." }, 400);
 }

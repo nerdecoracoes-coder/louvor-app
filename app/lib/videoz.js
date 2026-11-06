@@ -92,3 +92,14 @@ export async function compress(file, onProgress = () => {}, cancel = { stop: fal
     URL.revokeObjectURL(url);
   }
 }
+
+// Só a miniatura (sem comprimir). Se o navegador não abrir o vídeo (4K/HEVC), devolve null: o envio continua sem miniatura.
+export async function thumbnail(file, ms = 8000) {
+  const url = URL.createObjectURL(file);
+  try {
+    return await Promise.race([
+      (async () => { const v = await load(url); await seek(v, Math.min(1, (v.duration || 2) / 2)); return frameThumb(v); })(),
+      new Promise((res) => setTimeout(() => res(null), ms)),
+    ]);
+  } catch { return null; } finally { URL.revokeObjectURL(url); }
+}

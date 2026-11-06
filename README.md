@@ -64,9 +64,10 @@ temporários gerados pelo servidor para quem tem acesso. Enquanto uma faixa não
 1. Cloudflare → **R2** → **Create bucket** → nome `somos-audio`.
 2. No bucket → **Settings → CORS policy** → cole:
    ```json
-   [{"AllowedOrigins":["https://somos-20g.pages.dev"],"AllowedMethods":["GET","HEAD"],"AllowedHeaders":["Range"],"ExposeHeaders":["Content-Range","Content-Length","Accept-Ranges"],"MaxAgeSeconds":86400}]
+   [{"AllowedOrigins":["https://somos-20g.pages.dev"],"AllowedMethods":["GET","HEAD","PUT"],"AllowedHeaders":["Range","Content-Type"],"ExposeHeaders":["Content-Range","Content-Length","Accept-Ranges"],"MaxAgeSeconds":86400}]
    ```
 3. R2 → **Manage API tokens** → **Create API token** → permissão **Object Read & Write**, só no bucket `somos-audio`.
+Os vídeos do devocional também ficam neste bucket (pasta `devotionals/`), enviados direto do celular por link temporário; por isso o CORS precisa liberar `PUT`.
 4. GitHub → Secrets: `R2_ACCOUNT_ID`, `R2_BUCKET` (`somos-audio`), `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`.
 5. Rode **Publicar no Supabase**. A conversão (**Gerar versão leve**) roda sozinha a cada 15 minutos.
 

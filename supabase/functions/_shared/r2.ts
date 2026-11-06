@@ -39,7 +39,7 @@ function target(cfg: R2Config, key: string) {
   return { origin: u.origin, host: u.host, path: uriEncode(path, true) };
 }
 
-export async function presignGet(cfg: R2Config, key: string, expiresSec = 6 * 3600, now = new Date(), opts: { host?: string; path?: string } = {}) {
+export async function presignGet(cfg: R2Config, key: string, expiresSec = 6 * 3600, now = new Date(), opts: { host?: string; path?: string; method?: string } = {}) {
   const t = target(cfg, key);
   const host = opts.host ?? t.host, path = opts.path ?? t.path;
   const region = cfg.region ?? "auto", ts = amzDate(now), day = ts.slice(0, 8);
@@ -49,7 +49,7 @@ export async function presignGet(cfg: R2Config, key: string, expiresSec = 6 * 36
     ["X-Amz-Expires", String(expiresSec)], ["X-Amz-SignedHeaders", "host"],
   ];
   const qs = q.map(([k, v]) => [uriEncode(k), uriEncode(v)]).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join("&");
-  const canonical = ["GET", path, qs, `host:${host}\n`, "host", "UNSIGNED-PAYLOAD"].join("\n");
+  const canonical = [opts.method ?? "GET", path, qs, `host:${host}\n`, "host", "UNSIGNED-PAYLOAD"].join("\n");
   const sts = ["AWS4-HMAC-SHA256", ts, scope, await sha256Hex(canonical)].join("\n");
   const sig = hex(await hmac(await signingKey(cfg.secretAccessKey, day, region, "s3"), sts));
   return `${t.origin}${path}?${qs}&X-Amz-Signature=${sig}`;
@@ -71,6 +71,16 @@ export async function signHeaders(cfg: R2Config, method: string, key: string, he
   const out = { ...all, Authorization: `AWS4-HMAC-SHA256 Credential=${cfg.accessKeyId}/${scope},SignedHeaders=${names.join(";")},Signature=${sig}` };
   delete (out as Record<string, string>).host;
   return out;
+}
+
+// Link temporário para ENVIAR um arquivo direto do celular ao R2 (o arquivo não passa pelo servidor do Somos).
+export const presignPut = (cfg: R2Config, key: string, expiresSec = 3 * 3600, now = new Date()) => presignGet(cfg, key, expiresSec, now, { method: "PUT" });
+
+export async function remove(cfg: R2Config, key: string) {
+  const t = target(cfg, key);
+  const h = await signHeaders(cfg, "DELETE", key, {}, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+  const r = await fetch(`${t.origin}${t.path}`, { method: "DELETE", headers: h });
+  if (!r.ok && r.status !== 404) throw new Error(`R2 ${r.status}`);
 }
 
 export async function put(cfg: R2Config, key: string, body: Uint8Array, contentType: string, tries = 4) {

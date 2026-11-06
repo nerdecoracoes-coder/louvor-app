@@ -1,3 +1,4 @@
+import re
 # Teste ponta a ponta no navegador (Chrome sem interface), contra o ambiente local:
 #   dev/stack.sh start && bun dev/serve.ts && python3 tests/e2e.py
 # Executa o fluxo real de várias pessoas: cadastro, organização, times, convites, funções, Drive, repertório,
@@ -416,6 +417,18 @@ with sync_playwright() as pw:
     carla.locator(".evt", has_text="Fraternização do louvor").click(); carla.locator("[data-ans=vou]").click(); toast_has(carla, "Resposta enviada")
     expect(carla.locator(".chip", has_text="Carla")).to_be_visible(timeout=10000)
     ok("Eventos do time (marcar, avisar, confirmar presença) e devocional semanal aparecem no início do time")
+    # vídeo grande (acima de 50 MB) enviado como foi gravado, pelo link temporário do R2, e tocado de volta
+    import os, subprocess
+    big = "/tmp/claude-0/devo-grande.mp4"
+    if not os.path.exists(big): subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25", "-t", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", big], check=True)
+    with open(big, "ab") as f: f.write(b"\0" * (52 * 1024 * 1024))   # passa de 50 MB sem estragar o início do vídeo
+    ana.goto(f"{BASE}/#/times/{louvor_id}/devocional"); ana.locator("#post").click(); ana.fill("#dtl", "Devocional: vídeo grande")
+    with ana.expect_file_chooser() as fc: ana.locator("#dpick").click()
+    fc.value.set_files(big)
+    ana.locator("#dok").click(); expect(ana.locator(".li", has_text="Devocional: vídeo grande")).to_be_visible(timeout=60000)
+    ana.locator(".li", has_text="Devocional: vídeo grande").click()
+    expect(ana.locator("video#vid")).to_have_attribute("src", re.compile("X-Amz-Signature"), timeout=15000)
+    ok("devocional: vídeo acima de 50 MB sobe inteiro pelo R2 e abre para o time")
     # ------------------------------------------------------------------ Estúdio de mídia
     ana.goto(f"{BASE}/#/times/{jovens_id}/estudio/fundos"); ana.reload()
     with ana.expect_file_chooser() as fc: ana.locator("#up").click()

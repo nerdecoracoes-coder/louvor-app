@@ -97,3 +97,34 @@ describe("drive-media", () => {
     expect(r.status).toBe(403);
   });
 });
+
+describe("drive-media: vídeo do devocional (R2)", () => {
+  const r2 = { endpoint: "http://r2.local", bucket: "somos", accessKeyId: "id", secretAccessKey: "segredo", region: "auto" };
+  const post = (body: unknown, jwt: string, e: Env = { ...env, r2 }) => handleMedia(new Request("http://x/drive-media", { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${jwt}` }, body: JSON.stringify(body) }), e);
+  let team = "", devo = "";
+  beforeAll(async () => {
+    team = (await admin.api.post("teams", { org_id: org, name: "Louvor Devo", team_type: "louvor" })).data[0].id;
+    const tok = (await admin.api.rpc("create_team_invite", { p_team: team })).data;
+    await member.api.rpc("accept_invite", { p_token: tok });
+    const ins = await member.api.post("team_devotionals", { team_id: team, org_id: org, title: "Teste", r2_key: `devotionals/${team}/x.mp4`, author_id: member.id });
+    devo = ins.data[0].id;
+  });
+  test("integrante do time recebe link de envio; fora do time, não", async () => {
+    const r = await post({ action: "devo_put", team_id: team, name: "Meu Vídeo.MP4" }, member.api.token);
+    expect(r.status).toBe(200);
+    const j = await r.json();
+    expect(j.key).toMatch(new RegExp(`^devotionals/${team}/\\d+-meu-video.mp4$`));
+    expect(j.url).toContain("X-Amz-Signature=");
+    expect((await post({ action: "devo_put", team_id: team, name: "a.mp4" }, outsider.api.token)).status).toBe(403);
+  });
+  test("sem R2 configurado: 503 com mensagem clara", async () => {
+    const r = await post({ action: "devo_put", team_id: team, name: "a.mp4" }, member.api.token, { ...env, r2: null });
+    expect(r.status).toBe(503);
+  });
+  test("leitura só para quem enxerga o devocional", async () => {
+    const ok = await post({ action: "devo_get", devotional_id: devo }, member.api.token);
+    expect(ok.status).toBe(200);
+    expect((await ok.json()).url).toContain(`devotionals/${team}/x.mp4`);
+    expect((await post({ action: "devo_get", devotional_id: devo }, outsider.api.token)).status).toBe(404);
+  });
+});
