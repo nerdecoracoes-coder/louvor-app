@@ -873,3 +873,5 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .bgp.on { border-color: var(--accent); } .bgp img { width: 100%; aspect-ratio: 16 / 9; object-fit: cover; display: block; }
 .dbar { flex-wrap: wrap; } .dbar .n { display: none; } .dbar .k { flex: 1 0 100%; order: -1; font-size: 12.5px; }
 .dbar button { flex: 1; }
+.cv { width: 100%; height: auto; display: block; border-radius: 12px; background: #000; box-shadow: inset 0 0 0 1px var(--line-2); }
+.tcard { margin-bottom: 10px; }

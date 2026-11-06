@@ -412,6 +412,19 @@ with sync_playwright() as pw:
     z3 = zipfile.ZipFile(dl3.value.path()); names = z3.namelist()
     assert "ppt/slides/slide4.xml" in names and any(n.startswith("ppt/media/") for n in names) and "Fé que move".encode() in z3.read("ppt/slides/slide1.xml"), names
     ok("Estúdio de mídia: apresentação de pregação, fundo em imagem, contagem e PowerPoint com imagem")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/estudio/imagem"); expect(ana.locator("#cv")).to_be_visible(timeout=10000)
+    ana.fill("textarea[data-k=text]", "Retiro 2027")
+    with ana.expect_download() as dl4: ana.locator("#png").click()
+    assert open(dl4.value.path(), "rb").read(8) == b"\x89PNG\r\n\x1a\n"
+    ana.goto(f"{BASE}/#/times/{jovens_id}/estudio/legendas"); ana.fill("#txt", "Primeira frase\nSegunda frase"); ana.locator("#build").click()
+    ana.locator("#mark").click(); ana.locator("#mark").click()
+    with ana.expect_download() as dl5: ana.locator("#srt").click()
+    srt = open(dl5.value.path(), encoding="utf-8").read(); assert "00:00:00,000 -->" in srt and "Segunda frase" in srt, srt
+    ana.goto(f"{BASE}/#/times/{jovens_id}/estudio/video"); expect(ana.locator("#cv")).to_be_visible(timeout=10000)
+    ana.fill("#title", "Bem-vindos ao culto"); ana.locator("#secs").fill("4")
+    with ana.expect_download(timeout=30000) as dl6: ana.locator("#gen").click()
+    assert dl6.value.path().__class__ and __import__("os").path.getsize(dl6.value.path()) > 2000
+    ok("Estúdio de mídia: editor de imagem (PNG), legendas (.srt) e vídeo de abertura gerado")
 
     # ------------------------------------------------------------------ Tutoriais em vídeo
     ana.goto(BASE + "/#/ajuda"); expect(ana.locator(".list .li", has_text="Como criar uma escala")).to_be_visible(timeout=10000)
