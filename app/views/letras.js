@@ -20,6 +20,7 @@ export const DEFAULT_STYLE = { font: "Arial", size: 54, color: "#FFFFFF", bg: "#
 const TEXT_COLORS = ["#FFFFFF", "#FFE066", "#9BD1FF", "#000000"], BG_COLORS = ["#000000", "#0B1F3A", "#1B1B1B", "#12301F", "#FFFFFF"];
 // slides do PowerPoint com o padrão de tela da igreja
 const pptxSlides = (title, artist, sl, st, footer) => [{ boxes: titleBoxes(title, artist, st), bg: st.bg, color: st.color }, ...sl.map((x) => ({ boxes: letraBoxes({ ...x, footer }, st), bg: st.bg, color: st.color }))];
+const layoutFor = (team, style) => ({ ...(team.slide_layout || {}), ...(style?.layout || {}) });
 const aspect = (r) => ratioOf(r).join(" / ");
 const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "musica";
 
@@ -131,11 +132,22 @@ async function editor(teamId, songId, el, alive) {
   if (!song) { el.innerHTML = empty("lyrics", "Letra não encontrada", "A música pode ter sido removida ou ainda não tem letra."); return; }
   const original = song.lyrics?.blocks || [];
   let text = lyricsToText(saved?.blocks?.length ? saved.blocks : original);
-  let st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9", layout: team.slide_layout };
+  let custom = !!saved?.style?.layout, st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9", layout: layoutFor(team, saved?.style) };
   const blocks = () => parseLyricsText(text);
 
   const swatches = (key, list) => `<div class="swatches">${list.map((c) => `<button type="button" class="sw${st[key].toLowerCase() === c.toLowerCase() ? " on" : ""}" data-sw="${key}:${c}" style="background:${c}" aria-label="${c}"></button>`).join("")}
     <label class="sw custom" title="Outra cor"><input type="color" data-color="${key}" value="${attr(st[key])}">${icon("plus")}</label></div>`;
+  const posCard = () => {
+    const L = layoutOf(st.layout);
+    const seg = (key, opts) => `<div class="segs">${opts.map(([v, t]) => `<button type="button" class="seg${L[key] === v ? " on" : ""}" data-lseg="${key}:${v}">${t}</button>`).join("")}</div>`;
+    const sl = (key, label, min, max, step = 1) => `<label class="field"><span>${label} (<b id="lv-${key}">${L[key]}</b>%)</span><input type="range" data-lk="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}"></label>`;
+    return `<div class="card"><label class="check" style="padding-top:0"><input type="checkbox" id="lcustom" ${custom ? "checked" : ""}> Personalizar só para esta música</label>
+      ${custom ? `${sl("mx", "Margem das laterais", 0, 25)}${sl("mt", "Margem de cima", 0, 40)}${sl("mb", "Margem de baixo", 0, 40)}${sl("spacing", "Espaço entre as linhas", 80, 200, 5)}
+        <div class="field"><span>Alinhamento do texto</span>${seg("align", [["l", "Esquerda"], ["ctr", "Centro"], ["r", "Direita"]])}</div>
+        <div class="field"><span>Posição na altura</span>${seg("anchor", [["t", "Em cima"], ["ctr", "No meio"], ["b", "Embaixo"]])}</div>
+        <p class="tiny muted">Só esta música usa estas medidas.</p>`
+        : `<p class="tiny muted" style="margin:0">Usando o padrão do time. <a class="link" href="#/times/${teamId}/letras/modelo">Editar o padrão</a></p>`}</div>`;
+  };
   const controls = () => `
     <div class="card"><div class="two">
       <label class="field"><span>Fonte</span><select id="sfont">${FONTS.map((f) => `<option ${st.font === f ? "selected" : ""}>${f}</option>`).join("")}</select></label>
@@ -145,6 +157,7 @@ async function editor(teamId, songId, el, alive) {
       <div class="field"><span>Cor do fundo</span>${swatches("bg", BG_COLORS)}</div>
       <div class="two"><label class="field"><span>Linhas por slide</span><select id="sper">${[1, 2, 3, 4].map((n) => `<option value="${n}" ${st.per === n ? "selected" : ""}>${n}</option>`).join("")}</select></label>
         <div class="field"><span>Opções</span><div class="row gap-s" style="flex-wrap:wrap"><button type="button" class="chip ${st.caps ? "on" : ""}" id="scaps">CAIXA ALTA</button><button type="button" class="chip ${st.showLabel ? "on" : ""}" id="slabel">Nome da parte</button><button type="button" class="chip ${st.showFooter ? "on" : ""}" id="sfooter">MÚSICA NO RODAPÉ</button></div></div></div></div>`;
+  const styleToSave = () => { const o = { ...st }; delete o.ratio; if (!custom) delete o.layout; return o; };
   const preview = () => {
     const sl = slidesOf(blocks(), st.per);
     return sl.length ? `<div class="thumbs">${sl.map((x) => thumbOf(letraBoxes({ ...x, footer: st.showFooter ? [song.title, song.artist].filter(Boolean).join(" · ") : "" }, st), { bg: st.bg, color: st.color, font: st.font, ratio: st.ratio })).join("")}</div>`
@@ -156,6 +169,7 @@ async function editor(teamId, songId, el, alive) {
       <p class="tiny muted" style="margin:0 0 8px">Separe as partes com uma linha em branco. Para nomear, escreva na primeira linha entre colchetes, como <b>[Refrão]</b>.</p>
       <label class="field"><textarea id="ltxt" style="min-height:240px;font-size:16px;line-height:1.5">${esc(text)}</textarea></label>
       <div class="sec"><h2>Estilo</h2></div>${controls()}
+      <div class="sec"><h2>Posição na tela</h2></div>${posCard()}
       <div class="sec"><h2>Slides <small class="muted">${slidesOf(blocks(), st.per).length}</small></h2></div><div id="pv">${preview()}</div>
       <div class="row gap mt wrap"><button class="btn primary grow" id="dpptx">${icon("download")} PowerPoint (.pptx)</button><button class="btn ghost grow" id="dtxt">${icon("file")} Texto (.txt)</button></div>
       <button class="btn ghost block mt-s" id="save">${icon("check")} Salvar minha versão</button>
@@ -174,6 +188,12 @@ async function editor(teamId, songId, el, alive) {
     else if (e.target.id === "sper") { st.per = Number(e.target.value); repaint(); }
   });
   on(el, "click", "[data-sw]", (e, b) => { const [k, c] = b.dataset.sw.split(":"); st[k] = c; const keep = el.querySelector("#ltxt").scrollTop; text = el.querySelector("#ltxt").value; draw(); el.querySelector("#ltxt").scrollTop = keep; });
+  on(el, "change", "#lcustom", (e) => {
+    custom = e.target.checked; text = el.querySelector("#ltxt").value;
+    st.layout = custom ? layoutOf(st.layout) : layoutFor(team, null); draw();
+  });
+  on(el, "click", "[data-lseg]", (e, b) => { const [k, v] = b.dataset.lseg.split(":"); st.layout = { ...layoutOf(st.layout), [k]: v }; text = el.querySelector("#ltxt").value; draw(); });
+  el.addEventListener("input", (e) => { const k = e.target.dataset?.lk; if (!k) return; st.layout = { ...layoutOf(st.layout), [k]: +e.target.value }; el.querySelector(`#lv-${k}`).textContent = e.target.value; repaint(); });
   on(el, "click", "#scaps", () => { st.caps = !st.caps; text = el.querySelector("#ltxt").value; draw(); });
   on(el, "click", "#sfooter", () => { st.showFooter = !st.showFooter; text = el.querySelector("#ltxt").value; draw(); });
   on(el, "click", "#slabel", () => { st.showLabel = !st.showLabel; text = el.querySelector("#ltxt").value; draw(); });
@@ -188,10 +208,10 @@ async function editor(teamId, songId, el, alive) {
     const bl = blocks();
     if (song.own) {
       song.title = el.querySelector("#otitle")?.value.trim() || song.title; song.artist = el.querySelector("#oartist")?.value.trim() || null;
-      const u = await sb.from("media_lyrics").update({ title: song.title, artist: song.artist, blocks: bl.length ? bl : null, style: st, updated_by: state.user.id, updated_at: new Date().toISOString() }).eq("id", songId);
+      const u = await sb.from("media_lyrics").update({ title: song.title, artist: song.artist, blocks: bl.length ? bl : null, style: styleToSave(), updated_by: state.user.id, updated_at: new Date().toISOString() }).eq("id", songId);
       busy(b, false); if (u.error) return toast(errMsg(u.error), "err"); saved = true; return toast("Letra salva");
     }
-    const r = await sb.from("lyric_slides").upsert({ team_id: teamId, song_id: songId, org_id: team.org_id, blocks: bl.length ? bl : null, style: st, updated_by: state.user.id, updated_at: new Date().toISOString() }, { onConflict: "team_id,song_id" });
+    const r = await sb.from("lyric_slides").upsert({ team_id: teamId, song_id: songId, org_id: team.org_id, blocks: bl.length ? bl : null, style: styleToSave(), updated_by: state.user.id, updated_at: new Date().toISOString() }, { onConflict: "team_id,song_id" });
     busy(b, false);
     if (r.error) return toast(errMsg(r.error), "err");
     saved = true; toast("Versão salva");
@@ -224,7 +244,7 @@ export async function downloadPackage(s) {
   const folder = slug(`${s.title} ${String(s.starts_at).slice(0, 10)}`), pad = (n) => String(n).padStart(2, "0");
   const files = [], all = [];
   list.forEach((m, i) => {
-    const saved = mine.get(m.id), blocks = saved?.blocks?.length ? saved.blocks : m.blocks, st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9", layout: team.slide_layout };
+    const saved = mine.get(m.id), blocks = saved?.blocks?.length ? saved.blocks : m.blocks, st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9", layout: layoutFor(team, saved?.style) };
     const sl = slidesOf(blocks, st.per);
     const slides = pptxSlides(m.title, m.artist, sl, st, st.showFooter ? [m.title, m.artist].filter(Boolean).join(" · ") : "");
     all.push(...slides);

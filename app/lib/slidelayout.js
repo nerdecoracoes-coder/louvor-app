@@ -7,7 +7,7 @@ export const DEFAULT_LAYOUT = { mx: 4, mt: 10, mb: 10, align: "ctr", anchor: "ct
 export const layoutOf = (l) => ({ ...DEFAULT_LAYOUT, ...(l || {}) });
 
 export function letraBoxes(s, st) {
-  const L = layoutOf(st.layout), cap = !!st.caps, big = s.size || st.size || 54;
+  const L = layoutOf({ ...(st.layout || {}), ...(s.layout || {}) }), cap = !!st.caps, big = s.size || st.size || 54;
   const out = [{ text: s.text, size: big, caps: cap, x: L.mx / 100, y: L.mt / 100, w: 1 - (2 * L.mx) / 100, h: Math.max(0.1, 1 - (L.mt + L.mb) / 100), align: L.align, anchor: L.anchor, line: L.spacing / 100 }];
   if (st.showLabel && s.label && L.label !== "off") out.push({ text: s.label, size: L.labelSize, x: 0.03, y: 0.03, w: 0.94, h: 0.09, align: L.label === "tr" ? "r" : "l", anchor: "t", alpha: 0.6, bold: false, caps: cap });
   if (s.footer && L.footer !== "off") out.push({ text: s.footer, size: L.footerSize, x: 0.03, y: L.footer === "top" ? 0.02 : 0.9, w: 0.94, h: 0.08, anchor: L.footer === "top" ? "t" : "b", alpha: 0.65, bold: false, caps: false });

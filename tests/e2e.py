@@ -387,7 +387,9 @@ with sync_playwright() as pw:
     with ana.expect_download() as dl: ana.locator("#dpptx").click()
     path = dl.value.path(); import zipfile; z = zipfile.ZipFile(path); assert b'cx="12192000" cy="9144000"' in z.read("ppt/presentation.xml"), "proporção 4:3 no PowerPoint"
     z = zipfile.ZipFile(path); assert "ppt/slides/slide2.xml" in z.namelist() and "TEU AMOR".encode() in z.read("ppt/slides/slide2.xml")
+    ana.locator("#lcustom").check(); ana.locator("[data-lseg='align:r']").click(); expect(ana.locator(".thumb .tb").first).to_have_css("text-align", "right")
     ana.locator("#save").click(); toast_has(ana, "Versão salva"); shot(ana, "21e-letras")
+    ana.reload(); expect(ana.locator("#lcustom")).to_be_checked(timeout=10000); expect(ana.locator("[data-lseg='align:r'].on")).to_be_visible()
     ana.goto(sched_url); ana.reload()
     with ana.expect_download() as dl2: ana.locator("[data-goto=pkg]").click()
     zn = zipfile.ZipFile(dl2.value.path()).namelist()

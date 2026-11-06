@@ -96,7 +96,7 @@ async function songSlides(team, song, per) {
   const saved = song.own ? { blocks: song.lyrics?.blocks, style: song.style } : (await sb.from("lyric_slides").select("blocks,style").eq("team_id", team.id).eq("song_id", song.id).maybeSingle()).data;
   const blocks = saved?.blocks?.length ? saved.blocks : song.lyrics?.blocks || [];
   const footer = [song.title, song.artist].filter(Boolean).join(" · ");
-  return slidesOf(blocks, saved?.style?.per || per).map((x) => ({ id: uid(), kind: "letra", label: x.label, text: x.text, footer, song: song.id }));
+  return slidesOf(blocks, saved?.style?.per || per).map((x) => ({ id: uid(), kind: "letra", label: x.label, text: x.text, footer, song: song.id, ...(saved?.style?.layout ? { layout: saved.style.layout } : {}) }));
 }
 const loadLib = async (teamId) => loadLibrary(teamId).catch(() => []);
 
