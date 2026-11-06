@@ -10,14 +10,46 @@ export function register(route) {
 }
 
 // Envio direto ao R2 por link temporário, com progresso (XMLHttpRequest, porque fetch não informa o envio).
-const sendFile = (url, file, onProgress) => new Promise((res, rej) => {
+const put = (url, blob, onProgress) => new Promise((res, rej) => {
   const x = new XMLHttpRequest();
   x.open("PUT", url);
-  x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
+  x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded);
   x.onload = () => (x.status >= 200 && x.status < 300 ? res() : rej(new Error(`O envio falhou (${x.status}). Tente de novo.`)));
   x.onerror = () => rej(new Error("O envio falhou. Confira a internet e tente de novo. Se persistir, falta liberar o envio (CORS) no R2."));
-  x.send(file);
+  x.send(blob);
 });
+const MULTI_FROM = 32 * 1024 * 1024;
+const rpc = async (body) => { const g = await sb.functions.invoke("drive-media", body); if (g.error) throw new Error(g.error.message); return g.data; };
+// Envia o vídeo e devolve a chave no R2. Até 32 MB vai num pedido só; acima disso, em partes (cada uma tenta de novo se falhar).
+async function sendVideo(team, file, onProgress) {
+  const type = file.type || "video/mp4";
+  if (file.size < MULTI_FROM) {
+    const g = await rpc({ action: "devo_put", team_id: team.id, name: file.name });
+    await put(g.url, file, (n) => onProgress(n / file.size));
+    return g.key;
+  }
+  const st = await rpc({ action: "devo_mp_start", team_id: team.id, name: file.name, content_type: type });
+  const size = st.part_size, total = Math.ceil(file.size / size);
+  try {
+    let done = 0;
+    for (let n = 1; n <= total; n++) {
+      const blob = file.slice((n - 1) * size, Math.min(file.size, n * size));
+      for (let tries = 1; ; tries++) {
+        try {
+          const u = await rpc({ action: "devo_mp_url", team_id: team.id, key: st.key, upload_id: st.upload_id, part: n });
+          await put(u.url, blob, (b) => onProgress((done + b) / file.size));
+          break;
+        } catch (e) { if (tries >= 4) throw e; await new Promise((r) => setTimeout(r, 1500 * tries)); }
+      }
+      done += blob.size; onProgress(done / file.size);
+    }
+    await rpc({ action: "devo_mp_done", team_id: team.id, key: st.key, upload_id: st.upload_id });
+    return st.key;
+  } catch (e) {
+    rpc({ action: "devo_mp_abort", team_id: team.id, key: st.key, upload_id: st.upload_id }).catch(() => {});
+    throw e;
+  }
+}
 const SETUP = (n) => `<div class="card small">Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>${n}</b> no SQL Editor do Supabase.</div>`;
 const missing = (e) => /relation|does not exist|schema cache|42P01|PGRST|function/i.test(String(e?.message || e?.code || e));
 const KINDS = { reuniao: "Reunião", fraternizacao: "Fraternização", ensaio: "Ensaio", estudo: "Estudo", outro: "Outro" };
@@ -139,10 +171,8 @@ function postSheet(team, again) {
         const prog = s.el.querySelector("#dprog");
         prog.textContent = "Preparando…";
         thumb = await thumbnail(file);
-        const g = await sb.functions.invoke("drive-media", { action: "devo_put", team_id: team.id, name: file.name });
-        if (g.error) throw new Error(g.error.message);
-        await sendFile(g.data.url, file, (p) => { prog.textContent = `Enviando… ${Math.round(p * 100)}%`; });
-        key = g.data.key; bytes = file.size;
+        key = await sendVideo(team, file, (p) => { prog.textContent = `Enviando… ${Math.round(p * 100)}% (${(file.size / 1048576).toFixed(0)} MB)`; });
+        bytes = file.size;
       }
       await must(sb.from("team_devotionals").insert({ team_id: team.id, org_id: team.org_id, title, description: s.el.querySelector("#dds").value.trim() || null, r2_key: key, video_url: link || null, author_id: state.user.id, thumb, video_bytes: bytes }));
       s.close(); toast("Devocional postado. O time foi avisado."); again();

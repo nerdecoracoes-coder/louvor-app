@@ -95,6 +95,23 @@ Bun.serve({
       if (p.startsWith("/r2/")) {
         const f = normalize(join(R2DIR, decodeURIComponent(p.slice(4))));
         if (!f.startsWith(R2DIR)) return new Response("bad", { status: 400 });
+        // envio em partes (S3 multipart) simulado: partes ficam em uma pasta de trabalho até a conclusão
+        const upId = u.searchParams.get("uploadId"), partsDir = upId ? join(R2DIR, ".mp", upId.replace(/[^\w-]/g, "")) : "";
+        if (req.method === "POST" && u.searchParams.has("uploads")) { const id = crypto.randomUUID(); mkdirSync(join(R2DIR, ".mp", id), { recursive: true }); return new Response(`<InitiateMultipartUploadResult><UploadId>${id}</UploadId></InitiateMultipartUploadResult>`, { headers: CORS }); }
+        if (req.method === "PUT" && upId && u.searchParams.get("partNumber")) {
+          const n = Number(u.searchParams.get("partNumber")); writeFileSync(join(partsDir, String(n).padStart(6, "0")), new Uint8Array(await req.arrayBuffer()));
+          return new Response("", { status: 200, headers: { ...CORS, ETag: `"part${n}"` } });
+        }
+        if (req.method === "GET" && upId && !existsSync(f)) {
+          const names = existsSync(partsDir) ? (await import("node:fs")).readdirSync(partsDir).sort() : [];
+          return new Response(`<ListPartsResult>${names.map((n) => `<Part><PartNumber>${Number(n)}</PartNumber><ETag>"part${Number(n)}"</ETag></Part>`).join("")}</ListPartsResult>`, { headers: CORS });
+        }
+        if (req.method === "POST" && upId) {
+          const fs = await import("node:fs"); const names = fs.readdirSync(partsDir).sort();
+          mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, Buffer.concat(names.map((n) => fs.readFileSync(join(partsDir, n))))); rmSync(partsDir, { recursive: true, force: true });
+          return new Response("<CompleteMultipartUploadResult></CompleteMultipartUploadResult>", { headers: CORS });
+        }
+        if (req.method === "DELETE") { rmSync(upId ? partsDir : f, { recursive: true, force: true }); return new Response("", { status: 204, headers: CORS }); }
         if (req.method === "PUT") { mkdirSync(dirname(f), { recursive: true }); writeFileSync(f, new Uint8Array(await req.arrayBuffer())); return new Response("", { status: 200 }); }
         if (!u.searchParams.get("X-Amz-Signature")) return new Response("AccessDenied", { status: 403, headers: CORS });
         if (!existsSync(f)) return new Response("NoSuchKey", { status: 404, headers: CORS });

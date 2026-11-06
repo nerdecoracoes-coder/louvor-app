@@ -2,7 +2,7 @@
 import { Db, asUser } from "./db.ts";
 import { FOLDER_MIME, folderIdFromInput, type DriveClient } from "./drive.ts";
 import { syncOrg, type CoverStore } from "./sync.ts";
-import { presignGet, presignPut, remove as r2Remove, type R2Config } from "./r2.ts";
+import { presignGet, presignPut, mpCreate, presignPart, mpComplete, mpAbort, remove as r2Remove, type R2Config } from "./r2.ts";
 import { createDemo, deleteDemo, cleanupDemo } from "./demo.ts";
 
 export interface Env {
@@ -245,6 +245,7 @@ export async function handleMedia(req: Request, env: Env): Promise<Response> {
 
 // Vídeos do devocional guardados no Cloudflare R2 (original, sem comprimir). O envio e a leitura usam links
 // temporários; quem pode enviar/ver é decidido pelo banco (participação no time e RLS).
+const PART_SIZE = 16 * 1024 * 1024;
 async function devotionalVideo(env: Env, jwt: string, body: any): Promise<Response> {
   if (!env.r2) return json({ error: "O armazenamento de vídeos (R2) ainda não foi configurado." }, 503);
   const rest = env.rest, anon = env.anonKey;
@@ -257,6 +258,28 @@ async function devotionalVideo(env: Env, jwt: string, body: any): Promise<Respon
     const slug = String(body.name ?? "video").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "").slice(-60) || "video";
     const key = `devotionals/${team}/${Date.now()}-${slug}`;
     return json({ key, url: await presignPut(env.r2, key, 3 * 3600), expires_in: 3 * 3600 });
+  }
+  // envio em partes, para vídeos grandes
+  if (typeof body.action === "string" && body.action.startsWith("devo_mp_")) {
+    const team = String(body.team_id ?? "");
+    if (!uuid.test(team)) return json({ error: "time inválido" }, 400);
+    const ok = (await asUser(rest, anon, jwt, "is_team_member", { p_team: team })) === true || (await asUser(rest, anon, jwt, "can_manage_team", { p_team: team })) === true;
+    if (!ok) return json({ error: "forbidden" }, 403);
+    if (body.action === "devo_mp_start") {
+      const slug = String(body.name ?? "video").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9.]+/g, "-").replace(/^-|-$/g, "").slice(-60) || "video";
+      const key = `devotionals/${team}/${Date.now()}-${slug}`;
+      const uploadId = await mpCreate(env.r2, key, String(body.content_type || "video/mp4").slice(0, 80));
+      return json({ key, upload_id: uploadId, part_size: PART_SIZE });
+    }
+    const key = String(body.key ?? ""), uploadId = String(body.upload_id ?? "");
+    if (!key.startsWith(`devotionals/${team}/`) || key.includes("..") || !uploadId) return json({ error: "envio inválido" }, 400);
+    if (body.action === "devo_mp_url") {
+      const part = Number(body.part);
+      if (!Number.isInteger(part) || part < 1 || part > 10000) return json({ error: "parte inválida" }, 400);
+      return json({ url: await presignPart(env.r2, key, uploadId, part) });
+    }
+    if (body.action === "devo_mp_done") return json({ ok: true, parts: await mpComplete(env.r2, key, uploadId) });
+    if (body.action === "devo_mp_abort") { await mpAbort(env.r2, key, uploadId); return json({ ok: true }); }
   }
   // as demais ações partem de um devocional que o próprio usuário consegue ver (RLS)
   const id = String(body.devotional_id ?? "");

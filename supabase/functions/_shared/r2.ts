@@ -13,7 +13,7 @@ export function r2FromEnv(get: (k: string) => string | undefined): R2Config | nu
 
 const enc = new TextEncoder();
 const hex = (b: ArrayBuffer) => Array.from(new Uint8Array(b), (x) => x.toString(16).padStart(2, "0")).join("");
-async function sha256Hex(data: string | Uint8Array) { return hex(await crypto.subtle.digest("SHA-256", typeof data === "string" ? enc.encode(data) : data)); }
+export async function sha256Hex(data: string | Uint8Array) { return hex(await crypto.subtle.digest("SHA-256", typeof data === "string" ? enc.encode(data) : data)); }
 async function hmac(key: ArrayBuffer | Uint8Array, msg: string) {
   const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   return crypto.subtle.sign("HMAC", k, enc.encode(msg));
@@ -39,12 +39,12 @@ function target(cfg: R2Config, key: string) {
   return { origin: u.origin, host: u.host, path: uriEncode(path, true) };
 }
 
-export async function presignGet(cfg: R2Config, key: string, expiresSec = 6 * 3600, now = new Date(), opts: { host?: string; path?: string; method?: string } = {}) {
+export async function presignGet(cfg: R2Config, key: string, expiresSec = 6 * 3600, now = new Date(), opts: { host?: string; path?: string; method?: string; query?: Record<string, string> } = {}) {
   const t = target(cfg, key);
   const host = opts.host ?? t.host, path = opts.path ?? t.path;
   const region = cfg.region ?? "auto", ts = amzDate(now), day = ts.slice(0, 8);
   const scope = `${day}/${region}/s3/aws4_request`;
-  const q: [string, string][] = [
+  const q: [string, string][] = [...Object.entries(opts.query ?? {}),
     ["X-Amz-Algorithm", "AWS4-HMAC-SHA256"], ["X-Amz-Credential", `${cfg.accessKeyId}/${scope}`], ["X-Amz-Date", ts],
     ["X-Amz-Expires", String(expiresSec)], ["X-Amz-SignedHeaders", "host"],
   ];
@@ -95,4 +95,35 @@ export async function put(cfg: R2Config, key: string, body: Uint8Array, contentT
     if (!transient || i >= tries - 1) throw new Error(msg);
     await new Promise((res) => setTimeout(res, 1000 * 2 ** i)); // erro temporário do Cloudflare: tenta de novo
   }
+}
+
+// ---- envio em partes (multipart, API S3): arquivos grandes sobem em pedaços, cada um com seu link temporário
+const qstr = (q: Record<string, string>) => Object.entries(q).map(([k, v]) => [uriEncode(k), uriEncode(v)]).sort((a, b) => (a[0] < b[0] ? -1 : 1)).map(([k, v]) => `${k}=${v}`).join("&");
+async function s3(cfg: R2Config, method: string, key: string, q: Record<string, string>, body?: string, contentType?: string) {
+  const t = target(cfg, key), query = qstr(q);
+  const hash = await sha256Hex(body ?? "");
+  const h = await signHeaders(cfg, method, key, contentType ? { "content-type": contentType } : {}, hash, new Date(), { query });
+  const r = await fetch(`${t.origin}${t.path}?${query}`, { method, headers: h, body });
+  const text = await r.text();
+  if (!r.ok) throw new Error(`R2 ${r.status}: ${text.slice(0, 200)}`);
+  return text;
+}
+export async function mpCreate(cfg: R2Config, key: string, contentType: string) {
+  const x = await s3(cfg, "POST", key, { uploads: "" }, undefined, contentType);
+  const id = /<UploadId>([^<]+)<\/UploadId>/.exec(x)?.[1];
+  if (!id) throw new Error("R2: sem UploadId");
+  return id;
+}
+export const presignPart = (cfg: R2Config, key: string, uploadId: string, part: number, expiresSec = 6 * 3600) =>
+  presignGet(cfg, key, expiresSec, new Date(), { method: "PUT", query: { partNumber: String(part), uploadId } });
+export async function mpComplete(cfg: R2Config, key: string, uploadId: string) {
+  const listed = await s3(cfg, "GET", key, { uploadId });
+  const parts = [...listed.matchAll(/<Part>([\s\S]*?)<\/Part>/g)].map((m) => ({ n: Number(/<PartNumber>(\d+)</.exec(m[1])![1]), etag: /<ETag>([^<]+)<\/ETag>/.exec(m[1])![1] })).sort((a, b) => a.n - b.n);
+  if (!parts.length) throw new Error("Nenhuma parte enviada.");
+  const xml = `<CompleteMultipartUpload>${parts.map((p) => `<Part><PartNumber>${p.n}</PartNumber><ETag>${p.etag}</ETag></Part>`).join("")}</CompleteMultipartUpload>`;
+  await s3(cfg, "POST", key, { uploadId }, xml, "application/xml");
+  return parts.length;
+}
+export async function mpAbort(cfg: R2Config, key: string, uploadId: string) {
+  await s3(cfg, "DELETE", key, { uploadId }).catch(() => {});
 }
