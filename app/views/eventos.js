@@ -222,7 +222,7 @@ export async function teamExtras(team) {
   if (wantsDev) {
     out.push(d
       ? `<div class="sec"><h2>Devocional da semana</h2><a href="#/times/${team.id}/devocional">Ver todos ${icon("chevronRight")}</a></div>
-         <a class="devo" href="#/times/${team.id}/devocional/${d.id}"><span class="play">${icon("play")}</span><span class="grow" style="min-width:0"><b class="ellipsis" style="display:block">${esc(d.title)}</b><small>${esc(personName(ppl, d.author_id))} · ${fDate(d.created_at)}</small></span></a>`
+         <a class="devo ${d.thumb ? "big" : ""}" href="#/times/${team.id}/devocional/${d.id}">${d.thumb ? `<span class="shot"><img src="${attr(d.thumb)}" alt=""><span class="play">${icon("play")}</span></span>` : `<span class="play">${icon("play")}</span>`}<span class="grow" style="min-width:0"><b class="ellipsis" style="display:block">${esc(d.title)}</b><small>${esc(personName(ppl, d.author_id))} · ${fDate(d.created_at)}</small></span></a>`
       : dv?.error ? "" : `<div class="sec"><h2>Devocional da semana</h2><a href="#/times/${team.id}/devocional">Postar ${icon("plus")}</a></div><div class="card small muted">Nenhum devocional ainda. Quem grava o vídeo da semana pode postar aqui.</div>`);
   }
   if (wantsEv && ev && !ev.error) {

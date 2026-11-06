@@ -887,3 +887,8 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .devo .play { width: 48px; height: 48px; border-radius: 99px; background: var(--accent); color: #fff; display: grid; place-items: center; flex: none; }
 .devo .play .ic { width: 22px; height: 22px; }
 .devo small { color: var(--muted); }
+.devo.big { flex-direction: column; align-items: stretch; gap: 0; padding: 0; overflow: hidden; }
+.devo.big .shot { position: relative; display: block; aspect-ratio: 16 / 9; background: #000; }
+.devo.big .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.devo.big .shot .play { position: absolute; inset: 0; margin: auto; background: color-mix(in srgb, #000 55%, transparent); backdrop-filter: blur(2px); }
+.devo.big .grow { padding: 12px 14px 14px; }
