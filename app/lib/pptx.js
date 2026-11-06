@@ -35,13 +35,25 @@ const NS = `xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmln
 const HEAD = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n`;
 const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
-function slideXml(s, st, H) {
+function boxXml(b, id, H, st) {
+  const font = x(b.font || st.font || "Arial"), color = hex(b.color || st.color, "FFFFFF"), size = Math.round((b.size || st.size || 54) * 100);
+  const algn = { l: "l", r: "r", ctr: "ctr", c: "ctr" }[b.align] || "ctr", anchor = { t: "t", b: "b", ctr: "ctr", c: "ctr" }[b.anchor] || "ctr";
+  const paras = String(b.text || "").split("\n").map((l) => `<a:p><a:pPr algn="${algn}"/><a:r><a:rPr lang="pt-BR" sz="${size}" b="${b.bold === false ? 0 : 1}" dirty="0"><a:solidFill><a:srgbClr val="${color}">${b.alpha ? `<a:alpha val="${Math.round(b.alpha * 100000)}"/>` : ""}</a:srgbClr></a:solidFill><a:latin typeface="${font}"/><a:cs typeface="${font}"/></a:rPr><a:t>${x(b.caps ? l.toUpperCase() : l)}</a:t></a:r></a:p>`).join("");
+  const X = Math.round(W * (b.x ?? 0.04)), Y = Math.round(H * (b.y ?? 0.06)), CX = Math.round(W * (b.w ?? 0.92)), CY = Math.round(H * (b.h ?? 0.88));
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Texto ${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${X}" y="${Y}"/><a:ext cx="${CX}" cy="${CY}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" anchor="${anchor}"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>`;
+}
+function slideXml(s, st, H, imgRid) {
+  const bgFill = imgRid ? `<a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="${imgRid}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>` : `<a:solidFill><a:srgbClr val="${hex(s.bg || st.bg, "000000")}"/></a:solidFill>`;
+  if (s.boxes) {
+    const dim = s.dim ? `<p:sp><p:nvSpPr><p:cNvPr id="90" name="Escurecer"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${W}" cy="${H}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="000000"><a:alpha val="${Math.round(s.dim * 100000)}"/></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>` : "";
+    return `${HEAD}<p:sld ${NS}><p:cSld><p:bg><p:bgPr>${bgFill}<a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${dim}${s.boxes.map((b, i) => boxXml(b, 2 + i, H, st)).join("")}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+  }
   const font = x(st.font || "Arial"), color = hex(st.color, "FFFFFF"), size = Math.round((st.size || 54) * 100);
   const lines = String(s.text || "").split("\n");
   const paras = lines.map((l) => `<a:p><a:pPr algn="ctr"/><a:r><a:rPr lang="pt-BR" sz="${size}" b="1" dirty="0"><a:solidFill><a:srgbClr val="${color}"/></a:solidFill><a:latin typeface="${font}"/><a:cs typeface="${font}"/></a:rPr><a:t>${x(st.caps ? l.toUpperCase() : l)}</a:t></a:r></a:p>`).join("");
   const label = st.showLabel && s.label ? `<p:sp><p:nvSpPr><p:cNvPr id="3" name="Parte"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="228600"/><a:ext cx="${W - 914400}" cy="457200"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>
     <p:txBody><a:bodyPr wrap="square" anchor="t"/><a:lstStyle/><a:p><a:pPr algn="l"/><a:r><a:rPr lang="pt-BR" sz="1800" dirty="0"><a:solidFill><a:srgbClr val="${color}"><a:alpha val="60000"/></a:srgbClr></a:solidFill><a:latin typeface="${font}"/></a:rPr><a:t>${x(st.caps ? s.label.toUpperCase() : s.label)}</a:t></a:r></a:p></p:txBody></p:sp>` : "";
-  return `${HEAD}<p:sld ${NS}><p:cSld><p:bg><p:bgPr><a:solidFill><a:srgbClr val="${hex(st.bg, "000000")}"/></a:solidFill><a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
+  return `${HEAD}<p:sld ${NS}><p:cSld><p:bg><p:bgPr>${bgFill}<a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>
     <p:sp><p:nvSpPr><p:cNvPr id="2" name="Letra"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="457200" y="685800"/><a:ext cx="${W - 914400}" cy="${H - 1371600}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr>
     <p:txBody><a:bodyPr wrap="square" anchor="ctr"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>${label}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
 }
@@ -49,7 +61,7 @@ function slideXml(s, st, H) {
 export function buildPptx(slides, style = {}) {
   const n = slides.length;
   const files = [
-    ["[Content_Types].xml", `${HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/>
+    ["[Content_Types].xml", `${HEAD}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpg" ContentType="image/jpeg"/><Default Extension="png" ContentType="image/png"/>
 <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/><Override PartName="/ppt/slideMasters/slideMaster1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideMaster+xml"/>
 <Override PartName="/ppt/slideLayouts/slideLayout1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slideLayout+xml"/><Override PartName="/ppt/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/>
 ${slides.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`).join("")}</Types>`],
@@ -64,8 +76,9 @@ ${slides.map((_, i) => `<Override PartName="/ppt/slides/slide${i + 1}.xml" Conte
 <a:fontScheme name="Somos"><a:majorFont><a:latin typeface="Arial"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont><a:minorFont><a:latin typeface="Arial"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>
 <a:fmtScheme name="Somos"><a:fillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:fillStyleLst><a:lnStyleLst><a:ln w="6350"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="12700"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln><a:ln w="19050"><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:ln></a:lnStyleLst><a:effectStyleLst><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle><a:effectStyle><a:effectLst/></a:effectStyle></a:effectStyleLst><a:bgFillStyleLst><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill><a:solidFill><a:schemeClr val="phClr"/></a:solidFill></a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`],
     ...slides.flatMap((s, i) => [
-      [`ppt/slides/slide${i + 1}.xml`, slideXml(s, s.style || style, hFor(style.ratio))],
-      [`ppt/slides/_rels/slide${i + 1}.xml.rels`, `${HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/slideLayout" Target="../slideLayouts/slideLayout1.xml"/></Relationships>`],
+      [`ppt/slides/slide${i + 1}.xml`, slideXml(s, s.style || style, hFor(style.ratio), s.bgImage ? "rId2" : null)],
+      [`ppt/slides/_rels/slide${i + 1}.xml.rels`, `${HEAD}<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/slideLayout" Target="../slideLayouts/slideLayout1.xml"/>${s.bgImage ? `<Relationship Id="rId2" Type="${REL}/image" Target="../media/image${i + 1}.${s.bgImage.ext}"/>` : ""}</Relationships>`],
+      ...(s.bgImage ? [[`ppt/media/image${i + 1}.${s.bgImage.ext}`, s.bgImage.bytes]] : []),
     ]),
   ];
   return zipStore(files, "application/vnd.openxmlformats-officedocument.presentationml.presentation");

@@ -352,7 +352,7 @@ with sync_playwright() as pw:
     ana.locator("#savebtn").click()
     expect(ana.locator("[data-dtab=rot]")).to_be_visible(timeout=10000); ana.locator("[data-dtab=rot]").click()
     expect(ana.get_by_role("heading", name="Roteiro do culto")).to_be_visible(timeout=10000)
-    ana.locator("#cedit").click(); ana.locator(".sheet #tpl").click(); ana.locator(".sheet #ok").click()
+    ana.locator("#cedit").click(); ana.locator(".sheet #tpl").click(); ana.locator(".sheet-wrap:not(.out) #ok").click()
     toast_has(ana, "Roteiro salvo")
     expect(ana.locator(".cue", has_text="Pregação")).to_contain_text("19:")
     expect(ana.locator(".cue.k-louvor .cue-song", has_text="Emaús")).to_be_visible(timeout=10000)
@@ -394,6 +394,24 @@ with sync_playwright() as pw:
     assert any(n.endswith("00-ordem-do-culto.txt") for n in zn) and any(n.endswith("culto-completo.pptx") for n in zn) and any(n.endswith("-emaus.pptx") for n in zn), zn
     ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); ana.locator("#ratio").select_option("16:9"); toast_has(ana, "Tela da projeção atualizada")
     ok("Letras para a mídia: tela da projeção (4:3 no PowerPoint), partes, estilo, PowerPoint gerado e versão salva; pacote do culto em .zip")
+    # ------------------------------------------------------------------ Estúdio de mídia
+    ana.goto(f"{BASE}/#/times/{jovens_id}/estudio/fundos"); ana.reload()
+    with ana.expect_file_chooser() as fc: ana.locator("#up").click()
+    fc.value.set_files("/home/claude/louvor-app/tests/fixtures/fundo.png")
+    expect(ana.locator(".bgi img")).to_be_visible(timeout=15000)
+    ana.goto(f"{BASE}/#/times/{jovens_id}/estudio"); ana.locator("#new").click()
+    ana.fill("#dt", "Culto de domingo"); ana.locator("[data-mode=preg]").click()
+    expect(ana.locator(".dslide")).to_have_count(3, timeout=10000)
+    ana.locator("[data-edit='0']").click(); ana.fill(".sheet [data-f=title]", "Fé que move")
+    ana.locator(".sheet [data-bga]").first.click(); expect(ana.locator(".sheet-wrap:not(.out) .bgp.on")).to_be_visible(timeout=5000)
+    ana.locator(".sheet-wrap:not(.out) #ok").click()
+    ana.locator("#add").click(); ana.locator(".sheet [data-k=contagem]").click(); ana.locator(".sheet-wrap:not(.out) #ok").click()
+    expect(ana.locator(".dslide")).to_have_count(4)
+    shot(ana, "21f-estudio")
+    with ana.expect_download() as dl3: ana.locator("#pptx").click()
+    z3 = zipfile.ZipFile(dl3.value.path()); names = z3.namelist()
+    assert "ppt/slides/slide4.xml" in names and any(n.startswith("ppt/media/") for n in names) and "Fé que move".encode() in z3.read("ppt/slides/slide1.xml"), names
+    ok("Estúdio de mídia: apresentação de pregação, fundo em imagem, contagem e PowerPoint com imagem")
 
     # ------------------------------------------------------------------ Tutoriais em vídeo
     ana.goto(BASE + "/#/ajuda"); expect(ana.locator(".list .li", has_text="Como criar uma escala")).to_be_visible(timeout=10000)

@@ -49,10 +49,11 @@ export const FEATURES = [
   ["pedidos", "Pedidos de mídia", "A igreja pede artes, vídeos e slides; o time acompanha e entrega"],
   ["checklist", "Checklist pré-culto", "Itens a conferir antes de cada culto"],
   ["letras", "Letras para a mídia", "Letras do repertório divididas em partes, com estilo e exportação para PowerPoint e texto"],
+  ["estudio", "Estúdio de mídia", "Slides de música, pregação e aviso, fundos, contagem regressiva e ferramentas de imagem e vídeo"],
   ["criancas", "Crianças", "Cadastro, entrada e saída com código, alergias e responsáveis"],
   ["visitantes", "Visitantes", "Registro de quem visita a igreja e acompanhamento"],
 ];
-const PRESETS = { louvor: ["repertorio", "letras"], multimidia: ["checklist", "letras", "pedidos", "roteiro"], diaconal: ["checklist", "roteiro", "visitantes"], infantil: ["checklist", "criancas"] }; // igual ao banco: team_feature_preset
+const PRESETS = { louvor: ["repertorio", "letras"], multimidia: ["checklist", "estudio", "letras", "pedidos", "roteiro"], diaconal: ["checklist", "roteiro", "visitantes"], infantil: ["checklist", "criancas"] }; // igual ao banco: team_feature_preset
 export const featurePreset = (type) => PRESETS[type] || [];
 export const teamHas = (t, f) => (Array.isArray(t?.features) ? t.features.includes(f) : featurePreset(t?.team_type).includes(f));
 export const teamHasRepertoire = (t) => (Array.isArray(t?.features) ? t.features.includes("repertorio") : REPERTOIRE_TYPES.includes(t?.team_type));

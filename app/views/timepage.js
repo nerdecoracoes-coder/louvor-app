@@ -44,6 +44,7 @@ export async function timePage(id, el, alive) {
       ${row("layers", "Equipes", `#/times/${id}/equipes`, groups ? groups.length : null)}
       ${teamHasRepertoire(team) ? row("tag", "Classificações", `#/times/${id}/classificacoes`, null) : ""}
       ${row("crown", "Liderança", `#/times/${id}/lideranca`, leaders)}
+      ${teamHas(team, "estudio") ? row("layers", "Estúdio de mídia", `#/times/${id}/estudio`, null, "Slides do culto, fundos, vídeos e legendas") : ""}
       ${teamHas(team, "letras") ? row("lyrics", "Letras para a mídia", `#/times/${id}/letras`, null, "Partes, estilo e exportar para PowerPoint") : ""}
       ${row("file", "Arquivos", `#/times/${id}/arquivos`, null)}
       ${row("megaphone", "Avisos do time", `#/times/${id}/avisos`, null)}

@@ -108,7 +108,7 @@ describe("liderança, membros da igreja e funções por tipo", () => {
     await admin.api.rpc("add_team_members", { p_team: multimidia, p_users: [midia.id] });
     const t = (await admin.api.get(`/teams?id=in.(${louvor},${multimidia})&select=id,features`)).data;
     expect(t.find((x: any) => x.id === louvor).features).toEqual(["letras", "repertorio"]);
-    expect(t.find((x: any) => x.id === multimidia).features).toEqual(["checklist", "letras", "pedidos", "roteiro"]);
+    expect(t.find((x: any) => x.id === multimidia).features).toEqual(["checklist", "estudio", "letras", "pedidos", "roteiro"]);
     const r = await midiaLider.api.patch(`teams?id=eq.${multimidia}`, { features: ["checklist", "pedidos", "repertorio", "roteiro"] });
     expect(JSON.stringify(r.data)).toContain("only_admin_sets_features");
     expect((await midia.api.get(`/songs?org_id=eq.${org}`)).data).toHaveLength(0);
