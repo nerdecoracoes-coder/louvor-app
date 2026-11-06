@@ -15,7 +15,7 @@ const put = (url, blob, onProgress) => new Promise((res, rej) => {
   x.open("PUT", url);
   x.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded);
   x.onload = () => (x.status >= 200 && x.status < 300 ? res() : rej(new Error(`O envio falhou (${x.status}). Tente de novo.`)));
-  x.onerror = () => rej(new Error("O envio falhou. Confira a internet e tente de novo. Se persistir, falta liberar o envio (CORS) no R2."));
+  x.onerror = () => rej(new Error(`O envio falhou. Confira a internet e tente de novo. Se persistir, falta liberar o envio (CORS) no R2. (status ${x.status}, ${typeof blob.size === "number" ? blob.size : blob.byteLength} bytes)`));
   x.send(blob);
 });
 const MULTI_FROM = 32 * 1024 * 1024;
@@ -28,20 +28,21 @@ async function sendVideo(team, file, onProgress) {
     await put(g.url, file, (n) => onProgress(n / file.size));
     return g.key;
   }
-  const st = await rpc({ action: "devo_mp_start", team_id: team.id, name: file.name, content_type: type }).catch((e) => { throw new Error(`${e.message} [v49 início do envio]`); });
+  const st = await rpc({ action: "devo_mp_start", team_id: team.id, name: file.name, content_type: type }).catch((e) => { throw new Error(`${e.message} [v51 início do envio]`); });
   const size = st.part_size, total = Math.ceil(file.size / size);
   try {
     let done = 0;
     for (let n = 1; n <= total; n++) {
-      const blob = file.slice((n - 1) * size, Math.min(file.size, n * size));
+      // lê a parte para a memória antes de enviar: o Android falha ao enviar direto um arquivo grande da galeria
+      const blob = await file.slice((n - 1) * size, Math.min(file.size, n * size)).arrayBuffer().catch((e) => { throw new Error(`Não consegui ler o vídeo no celular (${e.name || "erro"}). [v51 leitura da parte ${n}/${total}]`); });
       for (let tries = 1; ; tries++) {
         try {
           const u = await rpc({ action: "devo_mp_url", team_id: team.id, key: st.key, upload_id: st.upload_id, part: n });
           await put(u.url, blob, (b) => onProgress((done + b) / file.size));
           break;
-        } catch (e) { if (tries >= 4) throw new Error(`${e.message} [v49 parte ${n}/${total}, ${tries} tentativas]`); await new Promise((r) => setTimeout(r, 1500 * tries)); }
+        } catch (e) { if (tries >= 4) throw new Error(`${e.message} [v51 parte ${n}/${total}, ${tries} tentativas]`); await new Promise((r) => setTimeout(r, 1500 * tries)); }
       }
-      done += blob.size; onProgress(done / file.size);
+      done += blob.byteLength; onProgress(done / file.size);
     }
     await rpc({ action: "devo_mp_done", team_id: team.id, key: st.key, upload_id: st.upload_id });
     return st.key;
