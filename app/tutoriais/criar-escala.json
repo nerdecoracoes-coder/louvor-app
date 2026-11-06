@@ -2,51 +2,56 @@
  "slug": "criar-escala",
  "title": "Como criar uma escala",
  "about": "Passo a passo para montar uma escala, escolher os participantes e as músicas.",
- "duration": 63.6,
+ "duration": 65.3,
  "cues": [
   {
-   "t": 0.0,
-   "text": "Vamos criar uma escala. Toque em Escalas, na barra de baixo."
+   "t": 2.73,
+   "text": "Neste vídeo, você vai aprender a criar uma escala."
   },
   {
-   "t": 5.0,
+   "t": 6.23,
+   "text": "Toque em Escalas, na barra de baixo."
+  },
+  {
+   "t": 9.16,
    "text": "Toque no botão mais para criar uma nova escala."
   },
   {
-   "t": 8.93,
+   "t": 12.67,
    "text": "Escreva o nome do culto."
   },
   {
-   "t": 13.53,
+   "t": 16.83,
    "text": "Escolha a data e o horário de início. O término é opcional."
   },
   {
-   "t": 19.72,
+   "t": 23.03,
    "text": "Agora vamos escolher quem participa. Toque na aba Participantes."
   },
   {
-   "t": 25.05,
-   "text": "Toque em Sugerir escala e o aplicativo monta a equipe sozinho, pelas funções de cada pessoa."
+   "t": 28.1,
+   "text": "Toque em Sugerir escala, e o aplicativo monta a equipe sozinho, pelas funções de cada pessoa."
   },
   {
-   "t": 32.72,
+   "t": 34.19,
    "text": "Revise os nomes. Para trocar alguém, toque no cartão da função."
   },
   {
-   "t": 37.97,
+   "t": 39.08,
    "text": "Agora, na aba Músicas, escolha o repertório."
   },
   {
-   "t": 41.64,
+   "t": 42.94,
    "text": "Toque em Adicionar músicas e marque as que vão ser tocadas."
   },
   {
-   "t": 49.76,
-   "text": "Pronto. Toque em Salvar. Os participantes recebem o aviso da escala."
+   "t": 52.23,
+   "text": "Toque em Salvar. Os participantes recebem o aviso da escala."
   },
   {
-   "t": 55.44,
-   "text": "A escala está publicada. Aqui você vê os detalhes, as músicas e quem está escalado."
+   "t": 56.99,
+   "text": "A escala está publicada. Aqui você vê os detalhes, as músicas e quem está escalado. Pronto!"
   }
- ]
+ ],
+ "voz": true
 }

@@ -2,23 +2,28 @@
  "slug": "confirmar-escala",
  "title": "Como confirmar que viu a escala",
  "about": "Abrir a escala em que você foi escalado e confirmar.",
- "duration": 34.5,
+ "duration": 36.7,
  "cues": [
   {
-   "t": 0.0,
+   "t": 2.67,
+   "text": "Neste vídeo, você vai aprender a confirmar que viu a sua escala."
+  },
+  {
+   "t": 6.86,
    "text": "Quando você é escalado, a escala aparece aqui no Início, em Minhas próximas escalas. Toque nela."
   },
   {
-   "t": 8.01,
-   "text": "Aqui estão o dia, o horário e a sua função. Toque em Tomei conhecimento da escala para avisar o líder que você viu."
+   "t": 13.76,
+   "text": "Aqui estão o dia, o horário e a sua função. Toque em Tomei conhecimento da escala, para avisar o líder que você viu."
   },
   {
-   "t": 17.59,
-   "text": "Pronto. Agora o líder sabe que você confirmou. Veja quem mais está escalado na aba Participantes."
+   "t": 21.23,
+   "text": "Agora o líder sabe que você confirmou. Veja quem mais está escalado na aba Participantes."
   },
   {
-   "t": 25.67,
-   "text": "As músicas estão na aba Músicas. Toque em uma música para abrir a cifra, a letra e o player."
+   "t": 27.68,
+   "text": "As músicas estão na aba Músicas. Toque em uma música para abrir a cifra, a letra e o player. Pronto!"
   }
- ]
+ ],
+ "voz": true
 }
