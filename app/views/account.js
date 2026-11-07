@@ -69,6 +69,8 @@ async function inviteView(token) {
   const T = inv.team, isOrg = !T;
   if (!inv.valid) { el.innerHTML = authShell(`${logo()}<h1>Convite expirado</h1><p class="sub">${isOrg ? `Peça um novo link ao administrador da ${esc(inv.org.name)}.` : `Peça um novo link ao líder do time ${esc(T.name)}.`}</p><a class="btn ghost block" href="#/">Ir para o início</a>`); clearPending(); return; }
   if (!state.user) return authView(el, "", inv);
+  // Louvor: quem entra faz o cadastro completo (só limite por mês e "evitar escalar com" ficam de fora)
+  const regRequired = T?.team_type === "louvor" && (inv.is_church_member || T.category !== "open");
   const card = isOrg
     ? `<div class="invitecard">${teamBadge(inv.org, 60)}<div class="grow"><span class="tiny muted">Igreja</span><b style="display:block;font-size:19px">${esc(inv.org.name)}</b><span class="small muted">${inv.org.members} membro(s)</span></div></div>`
     : `<div class="invitecard">${teamBadge(T, 60)}<div class="grow"><span class="tiny muted">${esc(inv.org.name)}</span><b style="display:block;font-size:19px">${esc(T.name)}</b><span class="small muted">${T.members} integrante(s)</span></div></div>`;
@@ -94,6 +96,50 @@ async function inviteView(token) {
     toast(a.data.status === "already_member" ? "Você já fazia parte" : `Bem-vindo(a) ${isOrg ? "à " + inv.org.name : "ao " + T.name}!`);
     openIt(a.data.org_id, a.data.team_id);
   });
+  if (regRequired && !inv.already_member) await registrationForm(el, inv, token, openIt);
+}
+// Cadastro obrigatório do Louvor: nome, WhatsApp, nascimento, cidade, sobre, foto e funções. Sem tudo preenchido, não aceita.
+async function registrationForm(el, inv, token, openIt) {
+  const T = inv.team, p = state.profile || {};
+  const roles = (await sb.rpc("invite_roles", { p_token: token })).data || [];
+  let photo = p.avatar_url || null, photoFile = null;
+  el.innerHTML = authShell(`${logo()}<div class="invitecard">${teamBadge(T, 60)}<div class="grow"><span class="tiny muted">${esc(inv.org.name)}</span><b style="display:block;font-size:19px">${esc(T.name)}</b></div></div>
+    <h1>Complete seu cadastro</h1><p class="sub">Para entrar no ${esc(T.name)}, preencha tudo abaixo. Só o limite de escalas por mês e quem evitar escalar junto são opcionais, e você ajusta depois com o líder.</p>
+    <form id="rf" novalidate>
+      <div class="row gap mb"><span id="rphoto">${avatar({ ...p, avatar_url: photo }, 72)}</span>
+        <label class="btn ghost sm" for="rfile">${icon("camera")} ${photo ? "Trocar foto" : "Escolher foto *"}</label><input id="rfile" type="file" accept="image/*" class="sr"></div>
+      <label class="field"><span>Nome completo *</span><input name="full_name" required maxlength="100" value="${attr(p.full_name || "")}" autocomplete="name"></label>
+      <label class="field"><span>WhatsApp *</span><input name="phone" type="tel" required value="${attr(p.phone || "")}" placeholder="(21) 99999-9999" autocomplete="tel"></label>
+      <div class="two"><label class="field"><span>Data de nascimento *</span><input name="birth_date" type="date" required value="${attr(p.birth_date || "")}"></label>
+        <label class="field"><span>Cidade *</span><input name="city" required maxlength="80" value="${attr(p.city || "")}"></label></div>
+      <label class="field"><span>Sobre você *</span><textarea name="about" required maxlength="500" placeholder="Conte um pouco sobre você e sua caminhada no louvor">${esc(p.about || "")}</textarea></label>
+      <div class="field"><span>Suas funções no louvor * <small class="muted">(escolha pelo menos uma)</small></span><div class="chips wrap" style="flex-wrap:wrap">${roles.map((r) => `<label class="chip"><input type="checkbox" class="sr" name="role" value="${r.id}">${esc(r.name)}</label>`).join("")}</div></div>
+      <button class="btn primary block" id="accept">Concluir cadastro e entrar</button><a class="btn ghost block mt-s" href="#/">Agora não</a></form>`);
+  const form = el.querySelector("#rf");
+  form.addEventListener("change", (e) => { if (e.target.name === "role") e.target.closest(".chip").classList.toggle("on", e.target.checked); });
+  el.querySelector("#rfile").onchange = (e) => {
+    photoFile = e.target.files?.[0] || null; if (!photoFile) return;
+    el.querySelector("#rphoto").innerHTML = avatar({ ...p, avatar_url: URL.createObjectURL(photoFile) }, 72);
+  };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const f = Object.fromEntries(new FormData(form)), ids = new FormData(form).getAll("role"), btn = el.querySelector("#accept");
+    const falta = [!f.full_name.trim() && "nome completo", !f.phone.trim() && "WhatsApp", !f.birth_date && "data de nascimento", !f.city.trim() && "cidade", !f.about.trim() && "sobre você", !photo && !photoFile && "foto", !ids.length && "pelo menos uma função"].filter(Boolean);
+    if (falta.length) return toast(`Falta preencher: ${falta.join(", ")}.`, "err");
+    busy(btn);
+    try {
+      if (photoFile) photo = await uploadPublic(`avatars/${state.user.id}`, photoFile);
+      const pr = await sb.from("profiles").update({ full_name: f.full_name.trim(), phone: f.phone.trim(), birth_date: f.birth_date, city: f.city.trim(), about: f.about.trim(), avatar_url: photo }).eq("id", state.user.id).select("*").single();
+      if (pr.error) throw pr.error;
+      state.profile = pr.data;
+      const a = await sb.rpc("accept_invite", { p_token: token, p_church: null });
+      if (a.error) throw a.error;
+      const fr = await sb.rpc("finish_registration", { p_team: a.data.team_id || T.id, p_roles: ids });
+      if (fr.error) throw fr.error;
+      toast(`Bem-vindo(a) ao ${T.name}!`);
+      openIt(a.data.org_id, a.data.team_id || T.id);
+    } catch (err) { busy(btn, false); toast(errMsg(err), "err"); }
+  };
 }
 const clearPending = () => { try { localStorage.removeItem("louvor.pendingInvite"); } catch {} };
 

@@ -1,4 +1,4 @@
-import re
+import base64, re
 # Teste ponta a ponta no navegador (Chrome sem interface), contra o ambiente local:
 #   dev/stack.sh start && bun dev/serve.ts && python3 tests/e2e.py
 # Executa o fluxo real de várias pessoas: cadastro, organização, times, convites, funções, Drive, repertório,
@@ -91,7 +91,15 @@ with sync_playwright() as pw:
         p.get_by_role("button", name="Aceitar convite").click(timeout=15000)
         expect(p.locator(".hero")).to_be_visible(timeout=15000)
         p.goto(link)
-        p.get_by_role("button", name="Aceitar convite").click(timeout=15000)
+        # cadastro obrigatório do Louvor: sem tudo preenchido não entra
+        expect(p.get_by_text("Complete seu cadastro")).to_be_visible(timeout=15000)
+        p.locator("#accept").click(); expect(p.locator(".toast", has_text="Falta preencher")).to_be_visible(timeout=10000)
+        p.fill("input[name=phone]", "(21) 99999-0000"); p.fill("input[name=birth_date]", "1995-04-12"); p.fill("input[name=city]", "Niterói"); p.fill("textarea[name=about]", "Toco há 5 anos")
+        p.locator("#accept").click(); expect(p.locator(".toast", has_text="foto").first).to_be_visible(timeout=10000)
+        p.set_input_files("#rfile", {"name": "foto.png", "mimeType": "image/png", "buffer": base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==")})
+        p.locator("#accept").click(); expect(p.locator(".toast", has_text="função").first).to_be_visible(timeout=10000)
+        p.locator(".chip", has_text="Bateria").first.click()
+        p.locator("#accept").click()
         expect(p.locator(".teamcover h2", has_text="Louvor Domingo")).to_be_visible(timeout=15000)
         people[who] = (c, p)
     ok("convite de membro da igreja e depois convite do time")
