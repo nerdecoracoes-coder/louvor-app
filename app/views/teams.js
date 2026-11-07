@@ -63,21 +63,29 @@ export const bindColor = (form, name) => {
 async function teamsList(_, el, alive) {
   el.innerHTML = spinner();
   const all = await must(sb.from("teams").select("*").eq("org_id", state.org.id).order("name"));
-  const counts = await must(sb.from("team_members").select("team_id").eq("org_id", state.org.id));
+  const counts = await must(sb.from("team_members").select("team_id,user_id,is_leader").eq("org_id", state.org.id));
+  const ppl = await people();
   if (!alive()) return;
   const cnt = (id) => counts.filter((c) => c.team_id === id).length;
+  const leaders = (id) => counts.filter((c) => c.team_id === id && c.is_leader).map((c) => ppl.get(c.user_id)?.display_name).filter(Boolean);
   const mine = new Set(state.myTeams.map((t) => t.id));
-  const visible = isAdmin() ? all : all.filter((t) => mine.has(t.id));
-  const others = isAdmin() ? [] : [];
+  // todos os times da igreja aparecem para qualquer pessoa; só abre quem participa (ou o administrador)
+  const canOpen = (t) => isAdmin() || mine.has(t.id);
+  const sorted = [...all].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name));
   el.innerHTML = `<div class="pagehead"><h1>Times</h1>${isAdmin() ? `<a class="btn primary sm" href="#/times/novo">${icon("plus")} Novo time</a>` : ""}</div>
-    <p class="muted small">${isAdmin() ? "Como administrador geral, você vê todos os times da igreja." : "Times dos quais você participa."}</p>
-    ${visible.length ? `<div class="grid mt">${visible.map((t) => `<div class="teamcard" style="--tc:${attr(t.accent_color || "var(--accent)")}">
-      <a href="#/times/${t.id}" class="row gap grow" style="color:inherit;min-width:0">${teamBadge(t, 52)}<span class="grow" style="min-width:0"><h3 class="ellipsis">${esc(t.name)}</h3>
-        <span class="small muted">${esc(teamTypeLabel(t))}${t.category === "open" ? " · aberto a convidados" : ""} · ${cnt(t.id)} integrante${cnt(t.id) === 1 ? "" : "s"}${state.leaderOf.has(t.id) ? " · você é líder" : mine.has(t.id) ? "" : " · você não participa"}</span></span></a>
+    <p class="muted small">${isAdmin() ? "Como administrador geral, você abre todos os times da igreja." : "Estes são os times da igreja. Você abre os seus; para entrar em outro, fale com o líder dele."}</p>
+    ${sorted.length ? `<div class="grid mt">${sorted.map((t) => {
+      const ls = leaders(t.id), open = canOpen(t);
+      const info = `${teamBadge(t, 52)}<span class="grow" style="min-width:0"><h3 class="ellipsis">${esc(t.name)}</h3>
+        <span class="small muted">${esc(teamTypeLabel(t))}${t.category === "open" ? " · aberto a convidados" : ""} · ${cnt(t.id)} integrante${cnt(t.id) === 1 ? "" : "s"}${state.leaderOf.has(t.id) ? " · você é líder" : mine.has(t.id) ? " · você participa" : ""}</span>
+        ${!mine.has(t.id) && ls.length ? `<span class="small muted" style="display:block">Líder${ls.length > 1 ? "es" : ""}: ${esc(ls.join(", "))}</span>` : ""}
+        ${!open ? `<span class="small" style="display:block;color:var(--accent)">Para entrar, fale com o líder</span>` : ""}</span>`;
+      return `<div class="teamcard" style="--tc:${attr(t.accent_color || "var(--accent)")}">
+      ${open ? `<a href="#/times/${t.id}" class="row gap grow" style="color:inherit;min-width:0">${info}</a>` : `<div class="row gap grow" style="min-width:0">${info}</div>`}
       ${mine.has(t.id) ? `<a class="iconbtn" href="#/chat/${t.id}" aria-label="Chat do time">${icon("chat")}</a>` : ""}
-      <button class="iconbtn" data-menu="${t.id}" aria-label="Opções">${icon("more")}</button></div>`).join("")}</div>`
-      : `<div class="card mt">${empty("users", "Você ainda não está em nenhum time", "Peça ao líder um link de convite.")}</div>`}`;
-  void others;
+      ${open ? `<button class="iconbtn" data-menu="${t.id}" aria-label="Opções">${icon("more")}</button>` : ""}</div>`;
+    }).join("")}</div>`
+      : `<div class="card mt">${empty("users", "Ainda não há times na igreja", isAdmin() ? "Toque em Novo time para criar o primeiro." : "O administrador cria os times.")}</div>`}`;
   on(el, "click", "[data-menu]", (e, b) => {
     const t = all.find((x) => x.id === b.dataset.menu);
     const m = mine.has(t.id);

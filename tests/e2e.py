@@ -354,6 +354,9 @@ with sync_playwright() as pw:
     # ------------------------------------------------------------------ Multimídia: recursos, checklist, roteiro com o louvor, pedido
     ana.goto(BASE + "/#/times"); ana.reload()
     jovens_id = ana.locator(".teamcard a", has_text="Jovens").get_attribute("href").split("/")[-1]
+    bruno.goto(BASE + "/#/times"); card = bruno.locator(".teamcard", has_text="Jovens"); expect(card).to_be_visible(timeout=10000)
+    expect(card).to_contain_text("Para entrar, fale com o líder"); expect(card.locator("a[href*='/times/']")).to_have_count(0)
+    ok("qualquer pessoa vê todos os times da igreja; só abre os seus (os outros pedem falar com o líder)")
     ana.goto(f"{BASE}/#/times/{jovens_id}/config")
     for k, on_ in [("roteiro", True), ("pedidos", True), ("checklist", True), ("repertorio", False)]:
         assert ana.locator(f"input[name=feat_{k}]").is_checked() == on_, k
