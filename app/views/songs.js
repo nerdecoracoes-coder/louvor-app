@@ -1,5 +1,5 @@
 // Biblioteca geral (uma por organização): lista, filtros, cadastro manual, detalhe, anexos e letra.
-import { sb, state, must, esc, attr, icon, headerActions, isRepertoireStaff as isStaff, hasRepertoire, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fDur, safeUrl, confirmDialog, uploadPublic, pickFile } from "../core.js";
+import { sb, state, must, esc, attr, icon, headerActions, isRepertoireStaff as isStaff, hasRepertoire, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fDur, safeUrl, confirmDialog, uploadPublic, pickFile, people } from "../core.js";
 
 const onlyRep = (fn) => (p, el, a) => hasRepertoire() ? fn(p, el, a)
   : (el.innerHTML = empty("music", "Repertório disponível para times de Louvor", "Você não participa de nenhum time que usa o repertório."));
@@ -149,9 +149,12 @@ async function songForm(el, id) {
       <div class="col gap-s"><button type="button" class="btn ghost sm" id="upc">${icon("image")} Capa</button>${!drive ? `<button type="button" class="btn ghost sm" id="find">${icon("search")} Buscar informações</button>` : ""}</div></div>
     <label class="field"><span>Título *</span><input name="title" required maxlength="200" value="${attr(s?.title || "")}" ${drive ? "disabled" : ""}></label>
     <label class="field"><span>Artista</span><input name="artist" maxlength="120" value="${attr(s?.artist || "")}" ${drive ? "disabled" : ""}></label>
+    <label class="field"><span>Álbum</span><input name="album" maxlength="160" value="${attr(s?.album || "")}" placeholder="Ex.: Diante do Trono (Ao Vivo)"></label>
     <div class="three"><label class="field"><span>Tom</span><input name="song_key" maxlength="8" value="${attr(s?.song_key || "")}" placeholder="Ex.: B" ${drive ? "disabled" : ""}></label>
       <label class="field"><span>BPM</span><input name="bpm" type="number" min="20" max="400" step="0.01" value="${s?.bpm ?? ""}" ${drive ? "disabled" : ""}></label>
       <label class="field"><span>Duração</span><input name="duration" placeholder="4:35" value="${s?.duration_sec ? fDur(s.duration_sec) : ""}" ${drive ? "disabled" : ""}></label></div>
+    <label class="field"><span>Classificações</span><input name="classification" maxlength="120" value="${attr(s?.classification || "")}" placeholder="Ex.: Louvor"></label>
+    <label class="field"><span>Observações gerais</span><textarea name="notes" maxlength="1000" placeholder="Ex.: Rafael tom D · Douglas tom B">${esc(s?.notes || "")}</textarea></label>
     <label class="field"><span>Link do YouTube</span><input name="youtube_url" type="url" value="${attr(s?.youtube_url || "")}" placeholder="https://youtube.com/..."></label>
     <label class="field"><span>Link da cifra</span><input name="chords_url" type="url" value="${attr(s?.chords_url || "")}" placeholder="https://www.cifraclub.com.br/..."></label>
     <div class="row gap-s small mb" id="helpers"></div>
@@ -199,7 +202,7 @@ async function songForm(el, id) {
     e.preventDefault(); const btn = el.querySelector("#save"); busy(btn);
     try {
       for (const u of [form.youtube_url.value, form.chords_url.value, ...links.map((l) => l.url)]) if (u && !safeUrl(u)) throw new Error(`Link inválido: ${u}`);
-      const row = { youtube_url: form.youtube_url.value || null, chords_url: form.chords_url.value || null, cover_url: cover, links: links.filter((l) => l.url).map((l) => ({ label: l.label || "Link", url: l.url })) };
+      const row = { album: form.album.value.trim() || null, notes: form.notes.value.trim() || null, classification: form.classification.value.trim() || null, youtube_url: form.youtube_url.value || null, chords_url: form.chords_url.value || null, cover_url: cover, links: links.filter((l) => l.url).map((l) => ({ label: l.label || "Link", url: l.url })) };
       if (!drive) {
         const dur = form.duration.value.trim();
         const m = dur.match(/^(\d+):(\d{1,2})$/);
@@ -227,39 +230,53 @@ function songRefs(s) {
   });
 }
 
+const verPick = new Map(); // versão aberta por música
+
 async function songDetail(el, id) {
   el.innerHTML = spinner();
   const s = await must(sb.from("songs").select("*").eq("id", id).maybeSingle());
   if (!s) { el.innerHTML = empty("alert", "Música não encontrada"); return; }
-  const [files, project, versions, history] = await Promise.all([
+  const [files, project, versions, history, sv] = await Promise.all([
     must(sb.from("song_files").select("*").eq("song_id", id).order("created_at")),
     s.current_project_id ? must(sb.from("multitrack_projects").select("id,version,tempo,time_sig_num,time_sig_den,sample_rate,length_sec,warnings,lyrics_raw,rpp_name,created_at").eq("id", s.current_project_id).maybeSingle()) : null,
     s.source === "drive" ? must(sb.from("multitrack_projects").select("id,version,created_at,is_current").eq("song_id", id).order("version", { ascending: false })) : [],
     must(sb.from("schedule_songs").select("schedule_id,schedules(title,starts_at,status)").eq("song_id", id).limit(30)),
+    sb.from("song_versions").select("*").eq("song_id", id).order("position").order("created_at").then((r) => (r.error ? [] : r.data || [])), // tabela nova
   ]);
+  const vSel = Math.max(0, sv.findIndex((v) => v.id === (verPick.get(id) || "")));
+  const cur = sv[vSel] || null;
   const tracks = project ? await must(sb.from("project_tracks").select("name,kind,warnings").eq("project_id", project.id).order("idx")) : [];
   const staff = isStaff();
   const st = STATUS[s.status];
   const canPlay = !!(s.current_project_id && s.status === "ready");
   const refs = songRefs(s);
+  const vrefs = cur?.links?.length ? songRefs({ links: cur.links }) : refs;
   const warnings = project ? [...(project.warnings || []), ...tracks.flatMap((t) => (t.warnings || []).map((w) => `${t.name}: ${w}`))] : [];
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/musicas">${icon("chevronLeft")}</a><h1 class="grow ellipsis" style="font-size:22px">Música</h1>
       ${staff ? `<a class="iconbtn" href="#/musica/${id}/editar" aria-label="Editar">${icon("edit")}</a>` : ""}</div>
     <div class="sd-head">
       <span class="cover sd-cover">${s.cover_url ? `<img src="${attr(s.cover_url)}" alt="">` : icon("music")}</span>
       <div class="grow" style="min-width:0"><h2 class="sd-title">${esc(s.title)}</h2>
+        ${s.album ? `<div class="sd-album">Álbum: ${esc(s.album)}</div>` : ""}
         ${s.artist ? `<div class="sd-artist"><span class="sd-av">${esc(s.artist.trim().slice(0, 1).toUpperCase())}</span><span class="ellipsis">${esc(s.artist)}</span></div>` : `<div class="muted small">Artista não informado</div>`}</div></div>
     ${canPlay ? `<a class="btn primary block mt" href="#/player/${id}">${icon("play")} Abrir no player</a>` : ""}
     <div class="chiprow">${refs.map((r) => `<a class="refchip" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico" style="background:${r.color}">${r.mark}</span>${esc(r.name)}${icon("link")}</a>`).join("")}
       <button class="refchip" id="share">${icon("chat")} Enviar no chat</button></div>
 
-    <div class="sec"><h2>Informações</h2></div>
+    ${s.notes ? `<div class="sec"><h2>Observações gerais</h2></div><p class="sd-notes">${esc(s.notes)}</p>` : ""}
+
+    <div class="sec"><h2>Versões</h2>${sv.length ? `<span class="count">${sv.length}</span>` : ""}${staff ? `<button class="more" id="addver">${icon("plus")} Versão</button>` : ""}</div>
+    ${sv.length ? `<div class="vtabs" role="tablist">${sv.map((v, i) => `<button role="tab" class="${i === vSel ? "on" : ""}" data-ver="${v.id}">${esc(v.name)}</button>`).join("")}</div>` : ""}
     <div class="card sd-card">
-      <div class="tiles"><div class="tile"><small>Tom</small><b>${esc(s.song_key || "—")}</b></div><div class="tile hi"><small>BPM</small><b>${s.bpm ? Number(s.bpm) : "—"}</b></div><div class="tile"><small>Duração</small><b>${s.duration_sec ? fDur(s.duration_sec) : "—"}</b></div></div>
+      <div class="tiles"><div class="tile"><small>Tom</small><b>${esc((cur?.song_key ?? s.song_key) || "—")}</b></div><div class="tile hi"><small>BPM</small><b>${(cur?.bpm ?? s.bpm) ? Number(cur?.bpm ?? s.bpm) : "—"}</b></div><div class="tile"><small>Duração</small><b>${(cur?.duration_sec ?? s.duration_sec) ? fDur(cur?.duration_sec ?? s.duration_sec) : "—"}</b></div></div>
       ${project?.time_sig_num ? `<div class="sd-lbl">Compasso</div><div class="sd-val">${project.time_sig_num}/${project.time_sig_den}</div>` : ""}
-      ${s.classification ? `<div class="sd-lbl">Classificações</div><div class="sd-val">${esc(s.classification)}</div>` : ""}
-      ${refs.length ? `<div class="sd-lbl accent row gap-s">${icon("link")} Referências</div>${refs.map((r) => `<a class="refrow" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico big" style="background:${r.color}">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.name)}</span><span class="s ellipsis">${esc(r.url)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}` : ""}
+      ${(cur?.classification || s.classification) ? `<div class="sd-lbl">Classificações</div><div class="sd-val">${esc(cur?.classification || s.classification)}</div>` : ""}
+      ${cur?.notes ? `<div class="sd-lbl">Observações</div><div class="sd-note">${esc(cur.notes)}</div>` : ""}
+      ${vrefs.length ? `<div class="sd-lbl accent row gap-s">${icon("link")} Referências</div>${vrefs.map((r) => `<a class="refrow" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico big" style="background:${r.color}">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.name)}</span><span class="s ellipsis">${esc(r.url)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}` : ""}
+      ${cur && staff ? `<div class="row gap mt"><button class="btn ghost sm" id="editver">${icon("edit")} Editar versão</button><button class="btn danger sm" id="delver">${icon("trash")} Excluir</button></div>` : ""}
     </div>
+    ${!sv.length && staff ? `<p class="small muted mt-s">Registre aqui o tom e os detalhes que cada cantor usa. Toque em <b>+ Versão</b>.</p>` : ""}
+
     ${st ? `<div class="card mt row gap"><span class="tag ${st[1]}">${st[0]}</span><span class="small grow">${esc(s.status_message || "")}</span>
       ${isAdmin() && s.source === "drive" && ["error", "waiting_files"].includes(s.status) ? `<button class="btn ghost sm" id="retry">${icon("refresh")} Tentar de novo</button>` : ""}</div>` : ""}
     ${s.duplicate_of ? `<div class="card mt small warn row gap">${icon("alert")}<span>Esta música parece duplicada de <a class="link" href="#/musica/${s.duplicate_of}">outra do repertório</a> (mesmo título e artista em outra pasta do Drive).</span></div>` : ""}
@@ -286,6 +303,15 @@ async function songDetail(el, id) {
     ${staff && s.source === "manual" ? `<button class="btn danger sm mt" id="del">${icon("trash")} Excluir música</button>` : ""}`;
 
   el.querySelector("#share").onclick = async () => { const { shareSongsToChat } = await import("./chat.js"); shareSongsToChat([id]); };
+  on(el, "click", "[data-ver]", (e, b) => { verPick.set(id, b.dataset.ver); songDetail(el, id); });
+  el.querySelector("#addver")?.addEventListener("click", () => versionForm(null, s, () => songDetail(el, id)));
+  el.querySelector("#editver")?.addEventListener("click", () => versionForm(cur, s, () => songDetail(el, id)));
+  el.querySelector("#delver")?.addEventListener("click", async () => {
+    if (!(await confirmDialog(`Excluir a versão de ${cur.name}?`, "Excluir", true))) return;
+    const r = await sb.from("song_versions").delete().eq("id", cur.id);
+    if (r.error) return toast(errMsg(r.error), "err");
+    verPick.delete(id); toast("Versão excluída"); songDetail(el, id);
+  });
   el.querySelector("#retry")?.addEventListener("click", async (e) => {
     busy(e.target);
     const r = await sb.functions.invoke("drive-sync", { action: "retry", org_id: state.org.id, song_id: id });
@@ -338,6 +364,40 @@ async function songDetail(el, id) {
     if (r.error) return toast(errMsg(r.error), "err");
     toast("Música excluída"); go("/musicas");
   });
+}
+
+// Versão por cantor: tom, BPM, duração, classificações, observações e referências próprias
+async function versionForm(v, song, done) {
+  const ppl = [...(await people()).values()].sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const links = [...(v?.links || [])];
+  const sh = sheet(`<h3>${v ? "Editar versão" : "Nova versão"}</h3><form id="vf">
+    <label class="field"><span>Quem canta *</span><input name="name" required maxlength="80" list="vppl" value="${attr(v?.name || "")}" placeholder="Ex.: Rafael"><datalist id="vppl">${ppl.map((p) => `<option value="${attr(p.display_name)}"></option>`).join("")}</datalist></label>
+    <div class="three"><label class="field"><span>Tom</span><input name="song_key" maxlength="8" value="${attr(v?.song_key || "")}" placeholder="${attr(song.song_key || "Ex.: D")}"></label>
+      <label class="field"><span>BPM</span><input name="bpm" type="number" min="20" max="400" step="0.01" value="${v?.bpm ?? ""}" placeholder="${song.bpm ? Number(song.bpm) : ""}"></label>
+      <label class="field"><span>Duração</span><input name="duration" placeholder="${song.duration_sec ? fDur(song.duration_sec) : "4:35"}" value="${v?.duration_sec ? fDur(v.duration_sec) : ""}"></label></div>
+    <label class="field"><span>Classificações</span><input name="classification" maxlength="120" value="${attr(v?.classification || "")}" placeholder="Ex.: Louvor"></label>
+    <label class="field"><span>Observações</span><textarea name="notes" maxlength="600">${esc(v?.notes || "")}</textarea></label>
+    <div class="field"><span>Referências desta versão</span><div id="vl"></div><button type="button" class="btn ghost sm mt-s" id="vadd">${icon("plus")} Adicionar link</button></div>
+    <button class="btn primary block mt" id="vsave">Salvar versão</button></form>`);
+  const draw = () => { sh.el.querySelector("#vl").innerHTML = links.map((l, i) => `<div class="row gap-s mb"><input data-ll="${i}" placeholder="Nome" value="${attr(l.label || "")}" style="flex:1"><input data-lu="${i}" type="url" placeholder="https://" value="${attr(l.url || "")}" style="flex:2"><button type="button" class="iconbtn" data-lr="${i}">${icon("trash")}</button></div>`).join(""); };
+  draw();
+  sh.el.addEventListener("input", (e) => { if (e.target.dataset.ll) links[e.target.dataset.ll].label = e.target.value; if (e.target.dataset.lu) links[e.target.dataset.lu].url = e.target.value; });
+  on(sh.el, "click", "[data-lr]", (e, b) => { links.splice(Number(b.dataset.lr), 1); draw(); });
+  sh.el.querySelector("#vadd").onclick = () => { links.push({ label: "", url: "" }); draw(); };
+  sh.el.querySelector("#vf").onsubmit = async (e) => {
+    e.preventDefault(); const f = e.target, btn = sh.el.querySelector("#vsave"); busy(btn);
+    try {
+      for (const l of links) if (l.url && !safeUrl(l.url)) throw new Error(`Link inválido: ${l.url}`);
+      const dur = f.duration.value.trim(), m = dur.match(/^(\d+):(\d{1,2})$/), name = f.name.value.trim();
+      const row = { name, singer_id: ppl.find((p) => p.display_name === name)?.id || null, song_key: f.song_key.value.trim() || null, bpm: f.bpm.value ? Number(f.bpm.value) : null,
+        duration_sec: m ? Number(m[1]) * 60 + Number(m[2]) : /^\d+$/.test(dur) ? Number(dur) : null, classification: f.classification.value.trim() || null, notes: f.notes.value.trim() || null,
+        links: links.filter((l) => l.url).map((l) => ({ label: l.label || "Link", url: l.url })) };
+      const r = v ? await sb.from("song_versions").update(row).eq("id", v.id).select("id").single()
+        : await sb.from("song_versions").insert({ ...row, song_id: song.id, org_id: state.org.id, created_by: state.user.id }).select("id").single();
+      if (r.error) throw new Error(r.error.code === "23505" ? "Já existe uma versão com esse nome." : errMsg(r.error));
+      verPick.set(song.id, r.data.id); sh.close(); toast("Versão salva"); done();
+    } catch (err) { toast(errMsg(err), "err"); busy(btn, false); }
+  };
 }
 
 // ---------------------------------------------------------------- letra (blocos)

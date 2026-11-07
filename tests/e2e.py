@@ -136,6 +136,12 @@ with sync_playwright() as pw:
     shot(ana, "07-musicas"); ok("pasta do Drive importada: nome, artista, BPM, tom e VS")
     ana.locator(".song", has_text="Emaús").first.click(); expect(ana.locator(".sd-card .tile", has_text="BPM")).to_contain_text("140", timeout=10000)
     shot(ana, "07b-musica-detalhe"); ok("detalhe da música no novo layout (tiles de tom, BPM e duração)")
+    ana.locator("#addver").click(); ana.fill(".sheet input[name=name]", "Rafael"); ana.fill(".sheet input[name=song_key]", "D"); ana.locator("#vsave").click()
+    expect(ana.locator(".vtabs button.on", has_text="Rafael")).to_be_visible(timeout=10000); expect(ana.locator(".sd-card .tile", has_text="Tom")).to_contain_text("D")
+    ana.locator("#addver").click(); ana.fill(".sheet input[name=name]", "Douglas"); ana.fill(".sheet input[name=song_key]", "B"); ana.locator("#vsave").click()
+    expect(ana.locator(".sd-card .tile", has_text="Tom")).to_contain_text("B", timeout=10000)
+    ana.locator(".vtabs button", has_text="Rafael").click(); expect(ana.locator(".sd-card .tile", has_text="Tom")).to_contain_text("D", timeout=10000)
+    shot(ana, "07c-musica-versoes"); ok("versões por cantor: cada um com o seu tom")
     ana.goto(BASE + "/#/musicas")
 
     # cadastro manual
@@ -143,7 +149,7 @@ with sync_playwright() as pw:
     ana.fill("input[name=title]", "Bondade de Deus"); ana.fill("input[name=artist]", "Isaias Saad"); ana.fill("input[name=song_key]", "G")
     ana.fill("input[name=bpm]", "68"); ana.fill("input[name=youtube_url]", "https://www.youtube.com/watch?v=abc")
     ana.locator("#save").click()
-    expect(ana.locator(".pagehead h1", has_text="Bondade de Deus")).to_be_visible(timeout=10000)
+    expect(ana.locator(".sd-title", has_text="Bondade de Deus")).to_be_visible(timeout=10000)
     ana.goto(BASE + "/#/musicas")
     row = ana.locator(".song", has_text="Bondade de Deus")
     expect(row).to_contain_text("YouTube"); assert row.locator(".tag", has_text="VS").count() == 0
