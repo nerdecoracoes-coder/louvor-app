@@ -140,7 +140,8 @@ async function songForm(el, id) {
   const s = id ? await must(sb.from("songs").select("*").eq("id", id).maybeSingle()) : null;
   if (id && !s) { el.innerHTML = empty("alert", "Música não encontrada"); return; }
   const drive = s?.source === "drive";
-  const links = [...(s?.links || [])];
+  const typed = splitLinks(s?.links, { cifra: s?.chords_url, video: s?.youtube_url });
+  const links = typed.rest;
   let cover = s?.cover_url || null;
   el.innerHTML = `<div class="pagehead"><a class="back" href="${id ? `#/musica/${id}` : "#/musicas"}">${icon("chevronLeft")}</a><h1>${id ? "Editar música" : "Nova música"}</h1></div>
   ${drive ? `<div class="card small muted mb row gap">${icon("cloud", "accent")}<span>Música importada do Google Drive. Título, artista, tom e BPM vêm do nome do projeto e são atualizados automaticamente.</span></div>` : ""}
@@ -155,8 +156,10 @@ async function songForm(el, id) {
       <label class="field"><span>Duração</span><input name="duration" placeholder="4:35" value="${s?.duration_sec ? fDur(s.duration_sec) : ""}" ${drive ? "disabled" : ""}></label></div>
     <label class="field"><span>Classificações</span><input name="classification" maxlength="120" value="${attr(s?.classification || "")}" placeholder="Ex.: Louvor"></label>
     <label class="field"><span>Observações gerais</span><textarea name="notes" maxlength="1000" placeholder="Ex.: Rafael tom D · Douglas tom B">${esc(s?.notes || "")}</textarea></label>
-    <label class="field"><span>Link do YouTube</span><input name="youtube_url" type="url" value="${attr(s?.youtube_url || "")}" placeholder="https://youtube.com/..."></label>
-    <label class="field"><span>Link da cifra</span><input name="chords_url" type="url" value="${attr(s?.chords_url || "")}" placeholder="https://www.cifraclub.com.br/..."></label>
+    <label class="field"><span>Link da letra</span><input name="letra" type="url" value="${attr(typed.letra)}" placeholder="https://www.letras.mus.br/..."></label>
+    <label class="field"><span>Link do áudio</span><input name="audio" type="url" value="${attr(typed.audio)}" placeholder="Spotify, Deezer…"></label>
+    <label class="field"><span>Link do YouTube (vídeo)</span><input name="youtube_url" type="url" value="${attr(typed.video)}" placeholder="https://youtube.com/..."></label>
+    <label class="field"><span>Link da cifra</span><input name="chords_url" type="url" value="${attr(typed.cifra)}" placeholder="https://www.cifraclub.com.br/..."></label>
     <div class="row gap-s small mb" id="helpers"></div>
     <div class="field"><span>Outros links</span><div id="links"></div><button type="button" class="btn ghost sm mt-s" id="addlink">${icon("plus")} Adicionar link</button></div>
     <button class="btn primary block" id="save">${id ? "Salvar" : "Cadastrar música"}</button>
@@ -201,8 +204,8 @@ async function songForm(el, id) {
   form.onsubmit = async (e) => {
     e.preventDefault(); const btn = el.querySelector("#save"); busy(btn);
     try {
-      for (const u of [form.youtube_url.value, form.chords_url.value, ...links.map((l) => l.url)]) if (u && !safeUrl(u)) throw new Error(`Link inválido: ${u}`);
-      const row = { album: form.album.value.trim() || null, notes: form.notes.value.trim() || null, classification: form.classification.value.trim() || null, youtube_url: form.youtube_url.value || null, chords_url: form.chords_url.value || null, cover_url: cover, links: links.filter((l) => l.url).map((l) => ({ label: l.label || "Link", url: l.url })) };
+      for (const u of [form.youtube_url.value, form.chords_url.value, form.letra.value, form.audio.value, ...links.map((l) => l.url)]) if (u && !safeUrl(u)) throw new Error(`Link inválido: ${u}`);
+      const row = { album: form.album.value.trim() || null, notes: form.notes.value.trim() || null, classification: form.classification.value.trim() || null, youtube_url: form.youtube_url.value || null, chords_url: form.chords_url.value || null, cover_url: cover, links: joinLinks({ letra: form.letra.value.trim(), audio: form.audio.value.trim() }, links) };
       if (!drive) {
         const dur = form.duration.value.trim();
         const m = dur.match(/^(\d+):(\d{1,2})$/);
@@ -220,13 +223,26 @@ async function songForm(el, id) {
 
 // Referências da música (YouTube, cifra e links extras) com nome e cor da fonte
 const BRANDS = [[/spotify\./, "Spotify", "#1db954", "♫"], [/letras\.mus\.br/, "Letras", "#b5c812", "★"], [/cifraclub/, "Cifra Club", "#f26b21", "♪"], [/youtu/, "YouTube", "#e53935", "▶"],
-  [/deezer\./, "Deezer", "#8a5cf6", "♫"], [/music\.apple|itunes\./, "Apple Music", "#fa2d48", "♫"], [/palcomp3/, "Palco MP3", "#ff7a00", "♪"]];
+  [/deezer\./, "Deezer", "#9b3cff", "♥"], [/music\.apple|itunes\./, "Apple Music", "#fa2d48", "♫"], [/palcomp3/, "Palco MP3", "#ff7a00", "♪"]];
+// Tipos fixos de referência: o rótulo vira o nome da linha; o ícone vem do site do link
+const REF_TYPES = [["letra", "Letra", "Letras (letras.mus.br…)"], ["cifra", "Cifra", "Cifra Club…"], ["audio", "Áudio", "Spotify, Deezer…"], ["video", "Vídeo", "YouTube…"]];
+const typeOf = (label) => REF_TYPES.find((t) => t[1].toLowerCase() === String(label || "").trim().toLowerCase())?.[0] || null;
+// separa uma lista de links nos 4 tipos fixos e nos demais
+function splitLinks(links, extra = {}) {
+  const out = { letra: extra.letra || "", cifra: extra.cifra || "", audio: extra.audio || "", video: extra.video || "", rest: [] };
+  for (const l of links || []) { const t = typeOf(l.label); if (t && !out[t]) out[t] = l.url; else out.rest.push({ label: l.label, url: l.url }); }
+  return out;
+}
+const joinLinks = (f, rest) => [...REF_TYPES.filter((t) => f[t[0]]).map((t) => ({ label: t[1], url: f[t[0]] })), ...rest.filter((l) => l.url).map((l) => ({ label: l.label || "Link", url: l.url }))];
+
 function songRefs(s) {
-  const raw = [s.youtube_url && { url: s.youtube_url }, s.chords_url && { url: s.chords_url }, ...(s.links || [])].filter((l) => l && safeUrl(l.url));
+  const f = splitLinks(s.links, { cifra: s.chords_url, video: s.youtube_url });
+  const raw = [...REF_TYPES.filter((t) => f[t[0]]).map((t) => ({ label: t[1], url: f[t[0]] })), ...f.rest].filter((l) => safeUrl(l.url));
   const seen = new Set();
   return raw.filter((l) => !seen.has(l.url) && seen.add(l.url)).map((l) => {
     const b = BRANDS.find((x) => x[0].test(l.url));
-    return { url: l.url, name: b ? b[1] : l.label || new URL(l.url).hostname.replace(/^www\./, ""), color: b ? b[2] : "#5b6478", mark: b ? b[3] : "↗" };
+    const host = new URL(l.url).hostname.replace(/^www\./, "");
+    return { url: l.url, label: l.label || (b ? b[1] : host), name: b ? b[1] : l.label || host, color: b ? b[2] : "#5b6478", mark: b ? b[3] : "↗" };
   });
 }
 
@@ -272,7 +288,7 @@ async function songDetail(el, id) {
       ${project?.time_sig_num ? `<div class="sd-lbl">Compasso: <b class="sd-inl">${project.time_sig_num}/${project.time_sig_den}</b></div>` : ""}
       ${(cur?.classification || s.classification) ? `<div class="sd-lbl">Classificações</div><div class="sd-val">${esc(cur?.classification || s.classification)}</div>` : ""}
       ${cur?.notes ? `<div class="sd-lbl">Observações</div><div class="sd-note">${esc(cur.notes)}</div>` : ""}
-      ${vrefs.length ? `<div class="sd-lbl accent row gap-s">${icon("link")} Referências</div>${vrefs.map((r) => `<a class="refrow" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico big" style="background:${r.color}">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.name)}</span><span class="s ellipsis">${esc(r.url)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}` : ""}
+      ${vrefs.length ? `<div class="sd-lbl accent row gap-s">${icon("link")} Referências</div>${vrefs.map((r) => `<a class="refrow" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico big" style="background:${r.color}">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.label)}</span><span class="s ellipsis">${esc(r.url)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}` : ""}
       ${cur && staff ? `<div class="row gap mt"><button class="btn ghost sm" id="editver">${icon("edit")} Editar versão</button><button class="btn danger sm" id="delver">${icon("trash")} Excluir</button></div>` : ""}
     </div>
     ${!sv.length && staff ? `<p class="small muted mt-s">Registre aqui o tom e os detalhes que cada cantor usa. Toque em <b>+ Versão</b>.</p>` : ""}
@@ -369,7 +385,8 @@ async function songDetail(el, id) {
 // Versão por cantor: tom, BPM, duração, classificações, observações e referências próprias
 async function versionForm(v, song, done) {
   const ppl = [...(await people()).values()].sort((a, b) => a.display_name.localeCompare(b.display_name));
-  const links = [...(v?.links || [])];
+  const typed = splitLinks(v?.links);
+  const links = typed.rest;
   const sh = sheet(`<h3>${v ? "Editar versão" : "Nova versão"}</h3><form id="vf">
     <label class="field"><span>Quem canta *</span><input name="name" required maxlength="80" list="vppl" value="${attr(v?.name || "")}" placeholder="Ex.: Rafael"><datalist id="vppl">${ppl.map((p) => `<option value="${attr(p.display_name)}"></option>`).join("")}</datalist></label>
     <div class="three"><label class="field"><span>Tom</span><input name="song_key" maxlength="8" value="${attr(v?.song_key || "")}" placeholder="${attr(song.song_key || "Ex.: D")}"></label>
@@ -377,7 +394,9 @@ async function versionForm(v, song, done) {
       <label class="field"><span>Duração</span><input name="duration" placeholder="${song.duration_sec ? fDur(song.duration_sec) : "4:35"}" value="${v?.duration_sec ? fDur(v.duration_sec) : ""}"></label></div>
     <label class="field"><span>Classificações</span><input name="classification" maxlength="120" value="${attr(v?.classification || "")}" placeholder="Ex.: Louvor"></label>
     <label class="field"><span>Observações</span><textarea name="notes" maxlength="600">${esc(v?.notes || "")}</textarea></label>
-    <div class="field"><span>Referências desta versão</span><div id="vl"></div><button type="button" class="btn ghost sm mt-s" id="vadd">${icon("plus")} Adicionar link</button></div>
+    <div class="field"><span>Referências desta versão</span><p class="small muted">Se ficar em branco, vale o que está na música.</p>
+      ${REF_TYPES.map((t) => `<label class="field"><span>${t[1]}</span><input name="r_${t[0]}" type="url" value="${attr(typed[t[0]])}" placeholder="${t[2]}"></label>`).join("")}
+      <span class="small muted">Outros links</span><div id="vl"></div><button type="button" class="btn ghost sm mt-s" id="vadd">${icon("plus")} Adicionar link</button></div>
     <button class="btn primary block mt" id="vsave">Salvar versão</button></form>`);
   const draw = () => { sh.el.querySelector("#vl").innerHTML = links.map((l, i) => `<div class="row gap-s mb"><input data-ll="${i}" placeholder="Nome" value="${attr(l.label || "")}" style="flex:1"><input data-lu="${i}" type="url" placeholder="https://" value="${attr(l.url || "")}" style="flex:2"><button type="button" class="iconbtn" data-lr="${i}">${icon("trash")}</button></div>`).join(""); };
   draw();
@@ -387,11 +406,12 @@ async function versionForm(v, song, done) {
   sh.el.querySelector("#vf").onsubmit = async (e) => {
     e.preventDefault(); const f = e.target, btn = sh.el.querySelector("#vsave"); busy(btn);
     try {
-      for (const l of links) if (l.url && !safeUrl(l.url)) throw new Error(`Link inválido: ${l.url}`);
+      const fx = Object.fromEntries(REF_TYPES.map((t) => [t[0], f[`r_${t[0]}`].value.trim()]));
+      for (const u of [...Object.values(fx), ...links.map((l) => l.url)]) if (u && !safeUrl(u)) throw new Error(`Link inválido: ${u}`);
       const dur = f.duration.value.trim(), m = dur.match(/^(\d+):(\d{1,2})$/), name = f.name.value.trim();
       const row = { name, singer_id: ppl.find((p) => p.display_name === name)?.id || null, song_key: f.song_key.value.trim() || null, bpm: f.bpm.value ? Number(f.bpm.value) : null,
         duration_sec: m ? Number(m[1]) * 60 + Number(m[2]) : /^\d+$/.test(dur) ? Number(dur) : null, classification: f.classification.value.trim() || null, notes: f.notes.value.trim() || null,
-        links: links.filter((l) => l.url).map((l) => ({ label: l.label || "Link", url: l.url })) };
+        links: joinLinks(fx, links) };
       const r = v ? await sb.from("song_versions").update(row).eq("id", v.id).select("id").single()
         : await sb.from("song_versions").insert({ ...row, song_id: song.id, org_id: state.org.id, created_by: state.user.id }).select("id").single();
       if (r.error) throw new Error(r.error.code === "23505" ? "Já existe uma versão com esse nome." : errMsg(r.error));
