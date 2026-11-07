@@ -421,7 +421,8 @@ with sync_playwright() as pw:
     import os, subprocess
     big = "/tmp/claude-0/devo-grande.mp4"
     if not os.path.exists(big): subprocess.run(["ffmpeg", "-loglevel", "error", "-y", "-f", "lavfi", "-i", "testsrc2=size=640x360:rate=25", "-t", "3", "-c:v", "libx264", "-pix_fmt", "yuv420p", big], check=True)
-    with open(big, "ab") as f: f.write(b"\0" * (52 * 1024 * 1024))   # passa de 50 MB sem estragar o início do vídeo
+    if os.path.getsize(big) < 50 * 1024 * 1024:
+        with open(big, "ab") as f: f.write(b"\0" * (52 * 1024 * 1024))   # passa de 50 MB sem estragar o início do vídeo
     ana.goto(f"{BASE}/#/times/{louvor_id}/devocional"); ana.locator("#post").click(); ana.fill("#dtl", "Devocional: vídeo grande")
     with ana.expect_file_chooser() as fc: ana.locator("#dpick").click()
     fc.value.set_files(big)
@@ -529,9 +530,13 @@ with sync_playwright() as pw:
     bruno.goto(BASE + "/#/igreja"); bruno.reload(); expect(bruno.locator(".notice", has_text="Ensaio Geral")).to_be_visible(timeout=10000)  # avisos gerais ficam na área da igreja
     shot(bruno, "17-inicio-lider"); ok("aviso da organização publicado e exibido")
     expect(bruno.get_by_text("Agenda da igreja").first).to_be_visible(); expect(bruno.get_by_text("Minhas próximas escalas")).to_have_count(0)
-    ana.goto(BASE + "/#/agenda"); ana.locator("#newev").click(); ana.fill(".sheet input[name=title]", "Culto de celebração"); ana.locator("#esave").click()
+    ana.goto(BASE + "/#/agenda"); ana.locator("#newev").click(); ana.fill(".sheet input[name=title]", "Culto de celebração"); ana.select_option(".sheet select[name=kind]", "culto")
+    ana.locator(".sheet label.li", has_text="Louvor Domingo").locator("input").check(); ana.locator("#esave").click()
     expect(ana.locator(".evt", has_text="Culto de celebração")).to_be_visible(timeout=10000)
-    ok("agenda da igreja: evento criado")
+    ok("agenda da igreja: evento criado com tipo e ministério de serviço")
+    bruno.goto(BASE + "/#/"); bruno.reload(); expect(bruno.locator(".pending", has_text="Culto de celebração")).to_be_visible(timeout=10000)
+    bruno.locator(".pending .prow").first.click(); expect(bruno.locator("input[name=title]")).to_have_value("Culto de celebração", timeout=10000)
+    ok("líder do ministério vê o aviso vermelho e abre a escala já com o evento")
     ok("página da igreja: avisos, agenda, liderança e ministérios (sem escalas de time)")
     cd, desk = ctx(br, 1440, 900)
     desk.goto(BASE + "/")

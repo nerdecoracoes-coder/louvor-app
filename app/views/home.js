@@ -1,9 +1,9 @@
 // Início: perfil, atalhos, avisos, próximas escalas, aniversariantes e bloqueio de datas.
-import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDate, fDateLong, ymd, people, personName, myName, isStaff, isAdmin,
+import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDate, fDateLong, ymd, people, personName, myName, isStaff, isAdmin, canEditAgenda,
   canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire, invalidatePeople,
   teamBadge, teamHasRepertoire, teamTypeLabel, teamHas } from "../core.js";
 import { openRequestsCard } from "./multimidia.js";
-import { churchHome } from "./igreja.js";
+import { churchHome, pendingScalesCard } from "./igreja.js";
 import { teamExtras } from "./eventos.js";
 
 export function register(route) {
@@ -148,17 +148,18 @@ async function homeView(_, el, alive) {
   </section>
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
+  <div id="pend"></div>
   <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/calendario/meu">Agenda ${icon("chevronRight")}</a></div>
   <div id="ups">${ups.length ? `<div class="scards">${ups.map((s) => schedCard(s, { ppl })).join("")}</div>` : empty("calendar", "Nenhuma escala por enquanto", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>
 
   <div class="sec"><h2>Avisos</h2><a href="#/avisos">Todos ${icon("chevronRight")}</a></div>
   ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>
     ${notices.length > 1 ? `<div class="dots" id="ndots">${notices.map((_, i) => `<i class="${i ? "" : "on"}"></i>`).join("")}</div>` : ""}`
-    : empty("megaphone", "Nenhum aviso publicado", isStaff() ? `<a class="link" href="#/avisos/novo">Publicar o primeiro aviso</a>` : "Os comunicados da igreja aparecem aqui.")}
+    : empty("megaphone", "Nenhum aviso publicado", canPostNotice() ? `<a class="link" href="#/avisos/novo">Publicar o primeiro aviso</a>` : "Os comunicados da igreja aparecem aqui.")}
 
   ${birthdaySection([...ppl.values()])}
-  ${isStaff() ? `<div class="sec"><h2>Ações da igreja</h2></div><div class="chips" style="flex-wrap:wrap">
-    <a class="chip" href="#/escala/nova">${icon("calendar")} Nova escala</a><a class="chip" href="#/avisos/novo">${icon("megaphone")} Novo aviso</a>
+  ${canPostNotice() ? `<div class="sec"><h2>Ações da igreja</h2></div><div class="chips" style="flex-wrap:wrap">
+    ${isStaff() ? `<a class="chip" href="#/escala/nova">${icon("calendar")} Nova escala</a>` : ""}<a class="chip" href="#/avisos/novo">${icon("megaphone")} Novo aviso</a>
     ${state.myTeams.some((x) => canManageTeam(x.id)) || isAdmin() ? `<a class="chip" href="#/convidar">${icon("link")} Convidar para um time</a>` : ""}
     ${isAdmin() ? `<a class="chip" href="#/times/novo">${icon("users")} Novo time</a><a class="chip" href="#/convidar-membro">${icon("org")} Convidar membro da igreja</a>` : ""}</div>` : ""}`;
   const pickPhoto = async () => {
@@ -172,6 +173,7 @@ async function homeView(_, el, alive) {
   };
   el.querySelector("#addphoto")?.addEventListener("click", pickPhoto);
   el.querySelector("#heroav").onclick = () => (noPhoto ? pickPhoto() : go("/perfil"));
+  pendingScalesCard().then((h) => { const b = el.querySelector("#pend"); if (b) b.innerHTML = h; }).catch(() => {});
   const car = el.querySelector("#notices");
   if (car) car.addEventListener("scroll", () => {
     const i = Math.round(car.scrollLeft / car.clientWidth);
@@ -213,6 +215,7 @@ async function teamHome(team, el, alive) {
   </section>
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
+  <div id="pend"></div>
   <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/times/${team.id}/escalas">Ver todas ${icon("chevronRight")}</a></div>
   <div id="ups">${myUps.length ? `<div class="scards">${myUps.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
   ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div><div class="scards">${others.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : ""}
@@ -242,6 +245,7 @@ async function teamHome(team, el, alive) {
     el.querySelectorAll("#ndots i").forEach((d, k) => d.classList.toggle("on", k === i));
   }, { passive: true });
   on(el, "click", "[data-notice]", (e, b) => openNotice(notices.find((n) => n.id === b.dataset.notice), ppl));
+  pendingScalesCard(team.id).then((h) => { const b = el.querySelector("#pend"); if (b) b.innerHTML = h; }).catch(() => {});
   teamExtras(team).then((h) => { const b = el.querySelector("#extras"); if (b) b.innerHTML = h; }).catch(() => {});
   if (teamHas(team, "pedidos")) openRequestsCard(team).then((h) => { const b = el.querySelector("#reqs"); if (b) b.innerHTML = h; }).catch(() => {});
 }
@@ -259,7 +263,7 @@ export function openNotice(n, ppl) {
   if (!n) return;
   const link = safeUrl(n.link_url);
   const img = safeUrl(n.image_url);
-  const canDel = n.created_by === state.user.id || isAdmin() || (n.team_id && canManageTeam(n.team_id));
+  const canDel = n.created_by === state.user.id || isAdmin() || (n.team_id && canManageTeam(n.team_id)) || (!n.team_id && canEditAgenda());
   const s = sheet(`${img ? `<img src="${attr(img)}" alt="" style="border-radius:16px;margin-bottom:14px;max-height:260px;width:100%;object-fit:cover">` : ""}
     ${n.tag ? `<span class="tag">${esc(n.tag)}</span>` : ""}<h3 style="margin-top:8px">${esc(n.title)}</h3>
     ${n.event_at ? `<p class="row gap-s muted">${icon("calendar")}${esc(fDateLong(n.event_at))} às ${fTime(n.event_at)}</p>` : ""}
@@ -281,21 +285,23 @@ async function noticesView(_, el) {
     must(sb.from("announcements").select("*,teams(name)").eq("org_id", state.org.id).order("created_at", { ascending: false }).limit(100)),
     people(),
   ]);
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Avisos</h1>${isStaff() ? `<a class="btn primary sm" href="#/avisos/novo">${icon("plus")} Novo</a>` : ""}</div>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Avisos</h1>${canPostNotice() ? `<a class="btn primary sm" href="#/avisos/novo">${icon("plus")} Novo</a>` : ""}</div>
     ${rows.length ? `<div class="list">${rows.map((n) => `<button class="li" data-notice="${n.id}"><span class="cover" style="width:48px;height:48px">${safeUrl(n.image_url) ? `<img src="${attr(n.image_url)}" alt="">` : icon("megaphone")}</span>
       <span class="grow"><span class="t">${esc(n.title)}</span><span class="s">${n.teams ? esc(n.teams.name) + " · " : ""}${esc(personName(ppl, n.created_by))} · ${fDate(n.created_at)}</span></span>${n.tag ? `<span class="tag soft">${esc(n.tag)}</span>` : ""}</button>`).join("")}</div>`
       : `<div class="card">${empty("megaphone", "Nenhum aviso publicado")}</div>`}`;
   on(el, "click", "[data-notice]", (e, b) => openNotice(rows.find((n) => n.id === b.dataset.notice), ppl));
 }
 
+const canPostNotice = () => isStaff() || canEditAgenda();
+
 export async function noticeForm(el, teamId) {
   const teamsManaged = state.myTeams.filter((t) => canManageTeam(t.id));
-  if (!isStaff()) { el.innerHTML = empty("lock", "Somente administradores e líderes publicam avisos."); return; }
+  if (!canPostNotice()) { el.innerHTML = empty("lock", "Somente administradores, coordenadores de agenda e líderes publicam avisos."); return; }
   const allTeams = isAdmin() ? await must(sb.from("teams").select("id,name").eq("org_id", state.org.id).order("name")) : teamsManaged;
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/avisos">${icon("chevronLeft")}</a><h1>Novo aviso</h1></div>
   <form class="card" id="f">
     <label class="field"><span>Para quem</span><select name="team_id">
-      ${isStaff() ? `<option value="">Toda a igreja</option>` : ""}${allTeams.map((t) => `<option value="${t.id}" ${t.id === teamId ? "selected" : ""}>Time: ${esc(t.name)}</option>`).join("")}</select></label>
+      ${canEditAgenda() ? `<option value="">Toda a igreja</option>` : ""}${allTeams.map((t) => `<option value="${t.id}" ${t.id === teamId ? "selected" : ""}>Time: ${esc(t.name)}</option>`).join("")}</select></label>
     <label class="field"><span>Título *</span><input name="title" required maxlength="140" placeholder="Ex.: Ensaio Geral"></label>
     <label class="field"><span>Mensagem</span><textarea name="body" maxlength="4000" placeholder="Detalhes do comunicado"></textarea></label>
     <div class="two"><label class="field"><span>Etiqueta</span><input name="tag" maxlength="24" placeholder="Ex.: Reunião"></label>

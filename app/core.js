@@ -37,6 +37,8 @@ export const isAdmin = () => state.role === "admin";
 export const isGuest = () => state.role === "guest";
 export const canManageTeam = (teamId) => isAdmin() || state.leaderOf.has(teamId);
 export const isStaff = () => isAdmin() || state.leaderOf.size > 0;
+// Coordenador de agenda: escolhido pelo administrador; monta a agenda da igreja e os avisos gerais
+export const canEditAgenda = () => isAdmin() || !!state.agendaCoord;
 // Tipos de time. O repertório (músicas, player) é exclusivo dos tipos em REPERTOIRE_TYPES (igual ao banco: repertoire_types()).
 export const TEAM_TYPES = [["louvor", "Louvor"], ["multimidia", "Multimídia"], ["diaconal", "Diáconos"], ["infantil", "Ministério Infantil"], ["outro", "Outro"]];
 const OLD_TYPES = { recepcao: "Recepção", intercessao: "Intercessão" }; // tipos antigos continuam com o nome certo
@@ -293,9 +295,12 @@ export async function selectOrg(orgId, persist = true) {
   const m = state.orgs.find((o) => o.org_id === orgId);
   state.org = m?.organizations || null;
   state.role = m?.role || null;
-  state.myTeams = []; state.leaderOf = new Set();
+  state.myTeams = []; state.leaderOf = new Set(); state.agendaCoord = false;
   if (persist) try { localStorage.setItem("louvor.org", orgId || ""); } catch {}
   if (state.org) {
+    // coluna nova: se a atualização do banco ainda não foi aplicada, segue sem ela
+    const ac = await sb.from("org_members").select("agenda_coordinator").eq("user_id", state.user.id).eq("org_id", state.org.id).maybeSingle();
+    state.agendaCoord = !ac.error && !!ac.data?.agenda_coordinator;
     const t = await sb.from("team_members").select("team_id,is_leader,teams(*)").eq("user_id", state.user.id).eq("org_id", state.org.id);
     state.myTeams = (t.data || []).filter((x) => x.teams).map((x) => ({ ...x.teams, is_leader: x.is_leader })).sort((a, b) => a.name.localeCompare(b.name));
     state.leaderOf = new Set(state.myTeams.filter((x) => x.is_leader).map((x) => x.id));

@@ -42,15 +42,18 @@ async function editor(el, scheduleId, teamId) {
   const askTeam = !scheduleId && !teamId && teams.length > 1;
   teamId = teamId || teams[0].id;
   const ppl = await people();
+  // vindo do aviso "crie a escala": traz nome, data, horário e local do evento da agenda da igreja
+  const evId = !scheduleId ? /[?&]evento=([0-9a-f-]{36})/.exec(location.hash)?.[1] : null;
+  const churchEv = evId ? (await sb.from("church_events").select("*").eq("id", evId).maybeSingle()).data : null;
 
   // estado do formulário
   const f = {
     team: teamId,
-    title: sched?.title || "", type: sched?.event_type || "",
-    date: sched ? ymd(sched.starts_at) : (/[?&]data=(\d{4}-\d{2}-\d{2})/.exec(location.hash)?.[1] || ymd(new Date(Date.now() + 864e5))),
-    time: sched ? fTime(sched.starts_at) : "19:00",
-    end: sched?.ends_at ? fTime(sched.ends_at) : "",
-    location: sched?.location || "", notes: sched?.notes || "",
+    title: sched?.title || churchEv?.title || "", type: sched?.event_type || "",
+    date: sched ? ymd(sched.starts_at) : (churchEv ? ymd(churchEv.starts_at) : /[?&]data=(\d{4}-\d{2}-\d{2})/.exec(location.hash)?.[1] || ymd(new Date(Date.now() + 864e5))),
+    time: sched ? fTime(sched.starts_at) : churchEv ? fTime(churchEv.starts_at) : "19:00",
+    end: sched?.ends_at ? fTime(sched.ends_at) : churchEv?.ends_at ? fTime(churchEv.ends_at) : "",
+    location: sched?.location || churchEv?.location || "", notes: sched?.notes || "",
     // por função: [{user_id}]
     picks: new Map(), slots: new Map(), songs: songsSel,
     tab: "detalhes", publish: sched ? sched.status === "published" : true,
@@ -333,6 +336,7 @@ async function editor(el, scheduleId, teamId) {
         let ends_at = f.end ? fromLocal(date, f.end) : null;
         if (ends_at && ends_at <= starts_at) ends_at = new Date(new Date(ends_at).getTime() + 864e5).toISOString();
         const row = { org_id: state.org.id, team_id: f.team, title: f.title.trim(), event_type: f.type || null, starts_at, ends_at, location: f.location || null, notes: f.notes || null };
+        if (churchEv && !scheduleId) row.church_event_id = churchEv.id;
         if (hasExt) { row.ask_confirmation = f.ask; row.palettes = f.palettes.filter((p) => p.colors.length).map((p) => ({ desc: p.desc.trim(), colors: p.colors })); }
         let id = scheduleId;
         // grava como rascunho primeiro e só publica no fim (as notificações saem com a escala completa)

@@ -892,3 +892,10 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .devo.big .shot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .devo.big .shot .play { position: absolute; inset: 0; margin: auto; width: 30px; height: 30px; background: color-mix(in srgb, #000 55%, transparent); }
 .devo.big .shot .play .ic { width: 14px; height: 14px; }
+
+/* aviso enfático: escala que o líder ainda precisa criar */
+.pending { margin: 14px 0; padding: 12px 14px; border-radius: 16px; background: rgba(239, 123, 123, .14); border: 1.5px solid var(--danger); }
+.pending .pt { display: flex; align-items: center; gap: 8px; color: var(--danger); font-size: 15px; margin-bottom: 6px; }
+.pending .prow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-top: 1px solid rgba(239, 123, 123, .3); color: inherit; text-decoration: none; }
+.pending .prow small { display: block; color: var(--muted); }
+.pending .go { color: var(--danger); font-weight: 600; display: inline-flex; align-items: center; gap: 2px; white-space: nowrap; }
