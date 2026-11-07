@@ -215,6 +215,18 @@ async function songForm(el, id) {
   };
 }
 
+// Referências da música (YouTube, cifra e links extras) com nome e cor da fonte
+const BRANDS = [[/spotify\./, "Spotify", "#1db954", "♫"], [/letras\.mus\.br/, "Letras", "#b5c812", "★"], [/cifraclub/, "Cifra Club", "#f26b21", "♪"], [/youtu/, "YouTube", "#e53935", "▶"],
+  [/deezer\./, "Deezer", "#8a5cf6", "♫"], [/music\.apple|itunes\./, "Apple Music", "#fa2d48", "♫"], [/palcomp3/, "Palco MP3", "#ff7a00", "♪"]];
+function songRefs(s) {
+  const raw = [s.youtube_url && { url: s.youtube_url }, s.chords_url && { url: s.chords_url }, ...(s.links || [])].filter((l) => l && safeUrl(l.url));
+  const seen = new Set();
+  return raw.filter((l) => !seen.has(l.url) && seen.add(l.url)).map((l) => {
+    const b = BRANDS.find((x) => x[0].test(l.url));
+    return { url: l.url, name: b ? b[1] : l.label || new URL(l.url).hostname.replace(/^www\./, ""), color: b ? b[2] : "#5b6478", mark: b ? b[3] : "↗" };
+  });
+}
+
 async function songDetail(el, id) {
   el.innerHTML = spinner();
   const s = await must(sb.from("songs").select("*").eq("id", id).maybeSingle());
@@ -228,23 +240,30 @@ async function songDetail(el, id) {
   const tracks = project ? await must(sb.from("project_tracks").select("name,kind,warnings").eq("project_id", project.id).order("idx")) : [];
   const staff = isStaff();
   const st = STATUS[s.status];
+  const canPlay = !!(s.current_project_id && s.status === "ready");
+  const refs = songRefs(s);
   const warnings = project ? [...(project.warnings || []), ...tracks.flatMap((t) => (t.warnings || []).map((w) => `${t.name}: ${w}`))] : [];
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/musicas">${icon("chevronLeft")}</a><h1 class="grow ellipsis" style="font-size:22px">${esc(s.title)}</h1>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/musicas">${icon("chevronLeft")}</a><h1 class="grow ellipsis" style="font-size:22px">Música</h1>
       ${staff ? `<a class="iconbtn" href="#/musica/${id}/editar" aria-label="Editar">${icon("edit")}</a>` : ""}</div>
-    <div class="row gap-l" style="align-items:flex-start;flex-wrap:wrap">
-      <span class="cover" style="width:132px;height:132px;border-radius:20px">${s.cover_url ? `<img src="${attr(s.cover_url)}" alt="">` : icon("music")}</span>
-      <div class="grow" style="min-width:200px"><div class="muted">${esc(s.artist || "Artista não informado")}</div>
-        <div class="row gap wrap mt-s">${s.song_key ? `<span class="pill">Tom ${esc(s.song_key)}</span>` : ""}${s.bpm ? `<span class="pill">${Number(s.bpm)} BPM</span>` : ""}${s.duration_sec ? `<span class="pill">${fDur(s.duration_sec)}</span>` : ""}
-          ${project?.time_sig_num ? `<span class="pill">${project.time_sig_num}/${project.time_sig_den}</span>` : ""}</div>
-        <div class="row gap wrap mt">${s.current_project_id && s.status === "ready" ? `<a class="btn primary" href="#/player/${id}">${icon("play")} Abrir no player</a>` : ""}
-          ${safeUrl(s.youtube_url) ? `<a class="btn ghost" href="${attr(s.youtube_url)}" target="_blank" rel="noopener">${icon("youtube")} YouTube</a>` : ""}
-          ${safeUrl(s.chords_url) ? `<a class="btn ghost" href="${attr(s.chords_url)}" target="_blank" rel="noopener">${icon("file")} Cifra</a>` : ""}
-          <button class="btn ghost" id="share">${icon("chat")} Enviar no chat</button></div></div></div>
+    <div class="sd-head">
+      <span class="cover sd-cover">${s.cover_url ? `<img src="${attr(s.cover_url)}" alt="">` : icon("music")}</span>
+      <div class="grow" style="min-width:0"><h2 class="sd-title">${esc(s.title)}</h2>
+        ${s.artist ? `<div class="sd-artist"><span class="sd-av">${esc(s.artist.trim().slice(0, 1).toUpperCase())}</span><span class="ellipsis">${esc(s.artist)}</span></div>` : `<div class="muted small">Artista não informado</div>`}</div></div>
+    ${canPlay ? `<a class="btn primary block mt" href="#/player/${id}">${icon("play")} Abrir no player</a>` : ""}
+    <div class="chiprow">${refs.map((r) => `<a class="refchip" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico" style="background:${r.color}">${r.mark}</span>${esc(r.name)}${icon("link")}</a>`).join("")}
+      <button class="refchip" id="share">${icon("chat")} Enviar no chat</button></div>
+
+    <div class="sec"><h2>Informações</h2></div>
+    <div class="card sd-card">
+      <div class="tiles"><div class="tile"><small>Tom</small><b>${esc(s.song_key || "—")}</b></div><div class="tile hi"><small>BPM</small><b>${s.bpm ? Number(s.bpm) : "—"}</b></div><div class="tile"><small>Duração</small><b>${s.duration_sec ? fDur(s.duration_sec) : "—"}</b></div></div>
+      ${project?.time_sig_num ? `<div class="sd-lbl">Compasso</div><div class="sd-val">${project.time_sig_num}/${project.time_sig_den}</div>` : ""}
+      ${s.classification ? `<div class="sd-lbl">Classificações</div><div class="sd-val">${esc(s.classification)}</div>` : ""}
+      ${refs.length ? `<div class="sd-lbl accent row gap-s">${icon("link")} Referências</div>${refs.map((r) => `<a class="refrow" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico big" style="background:${r.color}">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.name)}</span><span class="s ellipsis">${esc(r.url)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}` : ""}
+    </div>
     ${st ? `<div class="card mt row gap"><span class="tag ${st[1]}">${st[0]}</span><span class="small grow">${esc(s.status_message || "")}</span>
       ${isAdmin() && s.source === "drive" && ["error", "waiting_files"].includes(s.status) ? `<button class="btn ghost sm" id="retry">${icon("refresh")} Tentar de novo</button>` : ""}</div>` : ""}
     ${s.duplicate_of ? `<div class="card mt small warn row gap">${icon("alert")}<span>Esta música parece duplicada de <a class="link" href="#/musica/${s.duplicate_of}">outra do repertório</a> (mesmo título e artista em outra pasta do Drive).</span></div>` : ""}
 
-    ${(s.links || []).length ? `<div class="sec"><h2>Links</h2></div><div class="list">${s.links.filter((l) => safeUrl(l.url)).map((l) => `<a class="li" href="${attr(l.url)}" target="_blank" rel="noopener">${icon("link", "accent")}<span class="grow t">${esc(l.label)}</span>${icon("chevronRight", "chev")}</a>`).join("")}</div>` : ""}
 
     <div class="sec">${icon("lyrics")}<h2>Letra</h2>${staff ? `<a href="#/musica/${id}/letra">${s.lyrics?.blocks?.length ? "Editar" : "Adicionar"} ${icon("chevronRight")}</a>` : ""}</div>
     ${s.lyrics?.blocks?.length ? `<div class="card">${s.lyrics.blocks.slice(0, 3).map((b) => `${b.label ? `<div class="tiny accent" style="letter-spacing:.12em;text-transform:uppercase">${esc(b.label)}</div>` : ""}<p style="white-space:pre-line;margin:4px 0 12px">${esc(b.text)}</p>`).join("")}${s.lyrics.blocks.length > 3 ? `<p class="small muted">+${s.lyrics.blocks.length - 3} bloco(s)…</p>` : ""}</div>`

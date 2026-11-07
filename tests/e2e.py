@@ -134,6 +134,9 @@ with sync_playwright() as pw:
     expect(ana.locator(".song", has_text="Emaús")).to_contain_text("Tom B")
     expect(ana.locator(".song", has_text="Emaús")).to_contain_text("VS")
     shot(ana, "07-musicas"); ok("pasta do Drive importada: nome, artista, BPM, tom e VS")
+    ana.locator(".song", has_text="Emaús").first.click(); expect(ana.locator(".sd-card .tile", has_text="BPM")).to_contain_text("140", timeout=10000)
+    shot(ana, "07b-musica-detalhe"); ok("detalhe da música no novo layout (tiles de tom, BPM e duração)")
+    ana.goto(BASE + "/#/musicas")
 
     # cadastro manual
     ana.goto(BASE + "/#/musicas/nova")

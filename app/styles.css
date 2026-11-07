@@ -905,3 +905,26 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .cal .d.done { background: rgba(77, 148, 255, .2); box-shadow: inset 0 0 0 1.5px #4d94ff; color: #8ab8ff; font-weight: 700; }
 .cal .d.sel.pend, .cal .d.sel.done { outline: 2px solid var(--text); outline-offset: 1px; }
 .evchk.pend .evdate b { color: var(--danger); } .evchk.done .evdate b { color: #8ab8ff; }
+
+/* detalhe da música */
+.sd-head { display: flex; gap: 16px; align-items: flex-start; margin-top: 8px; }
+.sd-cover { width: 104px; height: 104px; flex: none; border-radius: 12px; }
+.sd-title { font-size: 24px; line-height: 1.15; margin: 0 0 8px; overflow-wrap: anywhere; }
+.sd-artist { display: flex; align-items: center; gap: 10px; color: var(--accent); font-size: 17px; }
+.sd-av { width: 36px; height: 36px; border-radius: 50%; background: var(--raised-2); display: grid; place-items: center; font-weight: 700; color: var(--text); flex: none; }
+.chiprow { display: flex; gap: 10px; overflow-x: auto; margin: 16px -16px 4px; padding: 2px 16px; scrollbar-width: none; }
+.chiprow::-webkit-scrollbar { display: none; }
+.refchip { flex: none; display: inline-flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: 999px; background: var(--raised-2); color: var(--accent); font-size: 16px; text-decoration: none; border: 0; font-family: inherit; }
+.rico { width: 28px; height: 28px; border-radius: 8px; display: inline-grid; place-items: center; color: #fff; font-size: 14px; font-weight: 700; flex: none; }
+.rico.big { width: 48px; height: 48px; border-radius: 10px; font-size: 22px; }
+.sd-card { padding: 16px; }
+.tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.tile { border: 1px solid var(--line-2); border-radius: 18px; padding: 16px 8px; text-align: center; }
+.tile.hi { background: var(--raised-2); border-color: transparent; }
+.tile small { display: block; color: var(--muted); font-size: 15px; }
+.tile b { font-size: 26px; font-weight: 600; }
+.sd-lbl { color: var(--muted); font-size: 18px; margin-top: 20px; }
+.sd-lbl.accent { color: var(--accent); font-size: 17px; }
+.sd-val { font-size: 22px; font-weight: 600; margin-top: 4px; }
+.refrow { display: flex; align-items: center; gap: 14px; padding: 14px 4px; color: inherit; text-decoration: none; }
+.refrow .t { display: block; font-size: 20px; } .refrow .s { display: block; color: var(--muted); font-size: 14px; }
