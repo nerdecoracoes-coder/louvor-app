@@ -267,6 +267,10 @@ async function songDetail(el, id) {
   const canPlay = !!(s.current_project_id && s.status === "ready");
   const refs = songRefs(s);
   const vrefs = cur?.links?.length ? songRefs({ links: cur.links }) : refs;
+  // os 4 tipos fixos sempre aparecem (vazios só para quem edita); depois os links extras
+  const slotMark = { letra: "★", cifra: "♪", audio: "♫", video: "▶" };
+  const refSlots = [...REF_TYPES.map((t) => vrefs.find((r) => r.label.toLowerCase() === t[1].toLowerCase()) || (staff ? { label: t[1], mark: slotMark[t[0]] } : null)).filter(Boolean),
+    ...vrefs.filter((r) => !typeOf(r.label))];
   const warnings = project ? [...(project.warnings || []), ...tracks.flatMap((t) => (t.warnings || []).map((w) => `${t.name}: ${w}`))] : [];
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/musicas">${icon("chevronLeft")}</a><h1 class="grow ellipsis" style="font-size:22px">Música</h1>
       ${staff ? `<a class="iconbtn" href="#/musica/${id}/editar" aria-label="Editar">${icon("edit")}</a>` : ""}</div>
@@ -288,7 +292,10 @@ async function songDetail(el, id) {
       ${project?.time_sig_num ? `<div class="sd-lbl">Compasso: <b class="sd-inl">${project.time_sig_num}/${project.time_sig_den}</b></div>` : ""}
       ${(cur?.classification || s.classification) ? `<div class="sd-lbl">Classificações</div><div class="sd-val">${esc(cur?.classification || s.classification)}</div>` : ""}
       ${cur?.notes ? `<div class="sd-lbl">Observações</div><div class="sd-note">${esc(cur.notes)}</div>` : ""}
-      ${vrefs.length ? `<div class="sd-lbl accent row gap-s">${icon("link")} Referências</div>${vrefs.map((r) => `<a class="refrow" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico big" style="background:${r.color}">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.label)}</span><span class="s ellipsis">${esc(r.url)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}` : ""}
+      ${(vrefs.length || staff) ? `<div class="sd-lbl accent row gap-s">${icon("link")} Referências</div>${refSlots.map((r) => r.url
+        ? `<a class="refrow" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico big" style="background:${r.color}">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.label)}</span><span class="s ellipsis">${esc(r.url)}</span></span>${icon("chevronRight", "chev")}</a>`
+        : cur ? `<button class="refrow empty" data-addref>${`<span class="rico big" style="background:#3a3f4d">${r.mark}</span>`}<span class="grow" style="min-width:0;text-align:left"><span class="t">${esc(r.label)}</span><span class="s">Toque para adicionar</span></span>${icon("plus", "chev")}</button>`
+        : `<a class="refrow empty" href="#/musica/${id}/editar"><span class="rico big" style="background:#3a3f4d">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.label)}</span><span class="s">Toque para adicionar</span></span>${icon("plus", "chev")}</a>`).join("")}` : ""}
       ${cur && staff ? `<div class="row gap mt"><button class="btn ghost sm" id="editver">${icon("edit")} Editar versão</button><button class="btn danger sm" id="delver">${icon("trash")} Excluir</button></div>` : ""}
     </div>
     ${!sv.length && staff ? `<p class="small muted mt-s">Registre aqui o tom e os detalhes que cada cantor usa. Toque em <b>+ Versão</b>.</p>` : ""}
@@ -321,6 +328,7 @@ async function songDetail(el, id) {
   el.querySelector("#share").onclick = async () => { const { shareSongsToChat } = await import("./chat.js"); shareSongsToChat([id]); };
   on(el, "click", "[data-ver]", (e, b) => { verPick.set(id, b.dataset.ver); songDetail(el, id); });
   el.querySelector("#addver")?.addEventListener("click", () => versionForm(null, s, () => songDetail(el, id)));
+  on(el, "click", "[data-addref]", () => versionForm(cur, s, () => songDetail(el, id)));
   el.querySelector("#editver")?.addEventListener("click", () => versionForm(cur, s, () => songDetail(el, id)));
   el.querySelector("#delver")?.addEventListener("click", async () => {
     if (!(await confirmDialog(`Excluir a versão de ${cur.name}?`, "Excluir", true))) return;

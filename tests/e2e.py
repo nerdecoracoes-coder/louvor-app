@@ -136,6 +136,7 @@ with sync_playwright() as pw:
     shot(ana, "07-musicas"); ok("pasta do Drive importada: nome, artista, BPM, tom e VS")
     ana.locator(".song", has_text="Emaús").first.click(); expect(ana.locator(".sd-card .tile", has_text="BPM")).to_contain_text("140", timeout=10000)
     shot(ana, "07b-musica-detalhe"); ok("detalhe da música no novo layout (tiles de tom, BPM e duração)")
+    expect(ana.locator(".refrow.empty")).to_have_count(4); ok("referências: Letra, Cifra, Áudio e Vídeo sempre aparecem (vazias para quem edita)")
     ana.locator("#addver").click(); ana.fill(".sheet input[name=name]", "Rafael"); ana.fill(".sheet input[name=song_key]", "D")
     ana.fill(".sheet input[name=r_letra]", "https://m.letras.mus.br/morada/emaus/"); ana.fill(".sheet input[name=r_audio]", "https://www.deezer.com/track/93551122"); ana.locator("#vsave").click()
     expect(ana.locator(".vtabs button.on", has_text="Rafael")).to_be_visible(timeout=10000)

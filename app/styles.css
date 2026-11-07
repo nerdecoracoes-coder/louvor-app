@@ -957,3 +957,4 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .refrow .t { font-size: 16px; } .refrow .s { font-size: 12px; }
 .vtabs button { padding: 8px 14px; font-size: 15px; }
 .sd-inl { color: var(--text); font-size: 15px; margin-left: 4px; }
+.refrow.empty { opacity: .6; width: 100%; background: none; border: 0; color: inherit; font-family: inherit; text-align: left; cursor: pointer; }
