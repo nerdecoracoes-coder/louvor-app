@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as multimidia from "./views/multimidia.js";
 import * as ministerios from "./views/ministerios.js";
@@ -110,12 +110,12 @@ function spaceSwitcher() {
       || `<div class="li muted small">Você ainda não participa de nenhum time.</div>`}
   </div>
   ${isAdmin() && (state.orgTeams || []).some((t) => !state.myTeams.some((x) => x.id === t.id)) ? `<h3 class="mt">Outros times da igreja</h3><div class="list menu">${state.orgTeams.filter((t) => !state.myTeams.some((x) => x.id === t.id)).map((t) => `<button class="li" data-space="${t.id}">${teamBadge(t, 40)}<span class="grow"><span class="t">${esc(t.name)}</span><span class="s">${esc(teamTypeLabel(t))} · Você administra</span></span>${state.space?.id === t.id ? icon("check", "accent") : ""}</button>`).join("")}</div>` : ""}
-  <h3 class="mt">Igreja</h3><div class="list menu">
+  ${teamOnly() ? "" : `<h3 class="mt">Igreja</h3><div class="list menu">
     <button class="li" data-space="">${orgBadge(o)}<span class="grow"><span class="t">${esc(o.name)}</span><span class="s">Avisos gerais, calendário, membros e times</span></span>${!state.space ? icon("check", "accent") : ""}</button>
     ${isAdmin() ? `<a class="li" href="#/org">${icon("settings")}<span class="grow t">Configurações da igreja</span></a>` : ""}
   </div>
   ${others.length ? `<h3 class="mt">Outras igrejas</h3><div class="list menu">${others.map((x) => `<button class="li" data-org="${x.org_id}">${orgBadge(x.organizations)}<span class="grow"><span class="t">${esc(x.organizations.name)}</span><span class="s">${x.role === "admin" ? "Administrador geral" : x.role === "guest" ? "Convidado" : "Membro"}</span></span></button>`).join("")}</div>` : ""}
-  <div class="list menu mt"><a class="li" href="#/nova-org">${icon("plus")}<span class="grow t">Cadastrar outra igreja</span></a></div>`);
+  <div class="list menu mt"><a class="li" href="#/nova-org">${icon("plus")}<span class="grow t">Cadastrar outra igreja</span></a></div>`}`);
   on(s.el, "click", "[data-space]", (e, b) => { s.close(); setSpace(b.dataset.space || null); renderShell(); go("/"); });
   on(s.el, "click", "[data-org]", async (e, b) => { s.close(); await selectOrg(b.dataset.org); renderShell(); go("/"); toast(`Você está em ${state.org.name}`); });
   s.el.addEventListener("click", (e) => { if (e.target.closest("a")) s.close(); });
@@ -130,8 +130,7 @@ function openMenu() {
   const asks = !isGuest() && state.orgTeams.some((x) => teamHas(x, "pedidos") && x.id !== t?.id);
   // [ícone, texto, link ou ação]
   const items = t ? [
-    ["org", "Visão geral da igreja", "#/igreja"],
-    ["swap", "Trocar de time", "act:switch"],
+    ...(teamOnly() ? (state.myTeams.length > 1 ? [["swap", "Trocar de time", "act:switch"]] : []) : [["org", "Visão geral da igreja", "#/igreja"], ["swap", "Trocar de time", "act:switch"]]),
     ["calendar", "Minhas escalas", "#/calendario/meu"],
     ["userOff", "Indisponibilidades", "#/bloqueios"],
     ["bars", "Panorama de escalas", "#/panorama"],
@@ -139,9 +138,9 @@ function openMenu() {
     ...(teamHas(t, "devocional") ? [["play", "Devocional", `#/times/${t.id}/devocional`]] : []),
     ...(estudio_ ? [["layers", "Estúdio de mídia", `#/times/${t.id}/estudio`], ["lyrics", "Letras", `#/times/${t.id}/letras`]] : []),
     ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"], ["clock", "Metrônomo", "#/metronomo"]] : []),
-    ["gift", "Aniversariantes", "#/aniversariantes"],
+    ...(teamOnly() ? [] : [["gift", "Aniversariantes", "#/aniversariantes"]]),
     ["play", "Tutoriais", "#/ajuda"],
-    ...(asks ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
+    ...(asks && !teamOnly() ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
   ] : [
     ["org", "Início da igreja", "#/"],
     ["swap", "Trocar de time", "act:switch"],
@@ -220,11 +219,13 @@ async function render() {
   }
   if (!state.orgs.length && !m?.opts.noOrg) return account.onboarding(app);
 
+  // modo restrito (fase de testes): páginas da igreja e de outros times ficam fechadas para quem não é administrador
+  if (blockedInTeamOnly(path)) { if (!state.space) { setSpace(state.myTeams[0].id); renderShell(); } toast("Essa área não está liberada para você ainda."); history.replaceState(null, "", "#/"); return render(); }
   if (m?.opts.overlay) { await m.handler(m.params); return; }
   closePlayer();
   if (m?.opts.noOrg || m?.opts.public) { document.body.classList.remove("in-chat"); return m.handler(m.params, app); }
   // abrir a página (ou o chat) de um dos meus times leva para dentro dele
-  if (path === "/igreja" && state.space) { setSpace(null); renderShell(); }
+  if (path === "/igreja" && state.space && !teamOnly()) { setSpace(null); renderShell(); }
   const tm = /^\/(?:times|chat|t)\/([0-9a-f-]{36})/.exec(path);
   if (tm && tm[1] !== state.space?.id && state.myTeams.some((t) => t.id === tm[1])) { setSpace(tm[1]); renderShell(); }
   if (!document.getElementById("view")) renderShell();

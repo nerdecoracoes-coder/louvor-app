@@ -32,12 +32,32 @@ export function setSpace(teamId, persist = true) {
 }
 function restoreSpace() {
   let saved = null; try { saved = localStorage.getItem(spaceKey()); } catch {}
-  if (saved === "church") return setSpace(null, false);
+  if (saved === "church" && !teamOnly()) return setSpace(null, false);
   setSpace(findTeam(saved)?.id || state.myTeams[0]?.id || null, false);
 }
 export const inTeam = () => !!state.space;
 export const isAdmin = () => state.role === "admin";
 export const isGuest = () => state.role === "guest";
+// Fase de testes: quem não é administrador e participa de algum time vê o app só como o(s) próprio(s) time(s):
+// sem a visão geral da igreja, sem a lista de times e sem entrar em times alheios. Para liberar de novo: false.
+// (só os testes automáticos ligam window.SOMOS_OPEN para enxergar tudo)
+export const RESTRICT_TO_TEAMS = true;
+export const teamOnly = () => RESTRICT_TO_TEAMS && globalThis.SOMOS_OPEN !== true && !isAdmin() && state.myTeams.length > 0;
+// caminhos que ficam fechados nesse modo (nada além do que é do time e da própria pessoa)
+export function blockedInTeamOnly(path) {
+  if (!teamOnly()) return false;
+  const mine = (id) => state.myTeams.some((t) => t.id === id);
+  if (/^\/(igreja|inicio|agenda|avisos|org|nova-org|convidar-membro|times|times\/novo|pedidos|pedido|aniversariantes)(\/|$)/.test(path) && path !== "/times" + "/" + (state.space?.id || "-")) {
+    const tm = /^\/times\/([0-9a-f-]{36})/.exec(path);
+    return !(tm && mine(tm[1]));
+  }
+  const tm = /^\/(?:times|chat|t)\/([0-9a-f-]{36})/.exec(path);
+  if (tm && !mine(tm[1])) return true;
+  const cal = /^\/calendario\/time:([0-9a-f-]{36})/.exec(path);
+  if (cal && !mine(cal[1])) return true;
+  if (path === "/calendario/igreja") return true;
+  return false;
+}
 export const canManageTeam = (teamId) => isAdmin() || state.leaderOf.has(teamId);
 export const isStaff = () => isAdmin() || state.leaderOf.size > 0;
 // Coordenador de agenda: escolhido pelo administrador; monta a agenda da igreja e os avisos gerais

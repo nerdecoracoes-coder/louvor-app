@@ -18,6 +18,7 @@ def ok(name):
 
 def ctx(browser, w=390, h=844):
     c = browser.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, locale="pt-BR", timezone_id="America/Sao_Paulo")
+    c.add_init_script("window.SOMOS_OPEN = true")  # os testes enxergam tudo; o modo restrito tem teste próprio
     p = c.new_page()
     p.on("console", lambda m: m.type == "error" and not any(x in m.text for x in IGNORED) and errors.append(f"[{w}] {m.text}"))
     p.on("pageerror", lambda e: errors.append(f"pageerror [{w}]: {e}"))
@@ -119,6 +120,16 @@ with sync_playwright() as pw:
     expect(bruno.get_by_text("você é líder")).to_be_visible(timeout=10000)
     assert bruno.get_by_role("link", name="Novo time").count() == 0
     ok("líder sem acesso administrativo à organização")
+
+    # modo restrito (fase de testes): integrante do Louvor só enxerga o time dele
+    carla.evaluate("window.SOMOS_OPEN = false"); carla.evaluate("location.hash = '#/igreja'")
+    expect(carla.locator(".toast", has_text="não está liberada")).to_be_visible(timeout=10000)
+    expect(carla.locator(".brand.team")).to_be_visible(); assert "/igreja" not in carla.url
+    carla.evaluate("location.hash = '#/times'"); expect(carla.locator(".toast", has_text="não está liberada").first).to_be_visible(timeout=10000)
+    carla.locator("[data-act=menu]").click(); expect(carla.locator(".drawer")).to_be_visible()
+    assert carla.locator(".drawer", has_text="Visão geral da igreja").count() == 0 and carla.locator(".drawer", has_text="Ministérios e times").count() == 0
+    carla.keyboard.press("Escape"); carla.evaluate("window.SOMOS_OPEN = true"); carla.evaluate("location.hash = '#/'")
+    ok("modo restrito: integrante do Louvor fica só no time (igreja, lista de times e menu fechados)")
 
     # ------------------------------------------------------------------ Google Drive (pasta simulada)
     root_id = json.loads(urllib.request.urlopen(BASE + "/__dev/drive").read())["rootId"]
