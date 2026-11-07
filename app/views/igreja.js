@@ -1,6 +1,6 @@
 // Página da igreja: avisos gerais, agenda da igreja, liderança, ministérios e aniversariantes.
 // Nada aqui vem das escalas dos times; cada time tem o seu próprio início.
-import { sb, state, must, esc, attr, icon, avatar, fDateLong, fDay, fMon, fTime, fDate, people, personName, myName, isStaff, isAdmin, canEditAgenda, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
+import { sb, state, must, esc, attr, icon, avatar, fDateLong, fMonthYear, cap, fDay, fMon, fTime, fDate, people, personName, myName, isStaff, isAdmin, canEditAgenda, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
   confirmDialog, fromLocal, ymd, teamBadge, teamTypeLabel, invalidatePeople } from "../core.js";
 import { noticeCard, openNotice, birthdaySection } from "./home.js";
 
@@ -47,13 +47,13 @@ async function openEvent(e, ppl, again) {
 }
 
 // Novo evento / editar. O coordenador (ou o administrador) escolhe o tipo e os ministérios que ficam de serviço.
-async function eventForm(again, ev = null, picked = []) {
+async function eventForm(again, ev = null, picked = [], day = null) {
   const teams = await sb.from("teams").select("id,name").eq("org_id", state.org.id).order("name").then((r) => (r.error ? [] : r.data || []));
   const sel = new Set(picked);
   const s = sheet(`<h3>${ev ? "Editar evento" : "Novo evento da igreja"}</h3><form id="ef">
     <label class="field"><span>Nome *</span><input name="title" required maxlength="120" placeholder="Ex.: Culto dos jovens" value="${attr(ev?.title || "")}"></label>
     <label class="field"><span>Tipo *</span><select name="kind" required><option value="">Escolha…</option>${Object.entries(EVENT_KINDS).map(([k, v]) => `<option value="${k}" ${ev?.kind === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>
-    <div class="dt3"><fieldset class="of"><legend>Data *</legend><input type="date" name="date" required value="${ev ? ymd(ev.starts_at) : ymd(new Date())}"></fieldset>
+    <div class="dt3"><fieldset class="of"><legend>Data *</legend><input type="date" name="date" required value="${ev ? ymd(ev.starts_at) : day || ymd(new Date())}"></fieldset>
       <fieldset class="of"><legend>Início *</legend><input type="time" name="start" required value="${ev ? fTime(ev.starts_at) : "19:00"}"></fieldset>
       <fieldset class="of"><legend>Fim</legend><input type="time" name="end" value="${ev?.ends_at ? fTime(ev.ends_at) : ""}"></fieldset></div>
     <label class="field"><span>Local</span><input name="location" maxlength="160" placeholder="Ex.: Templo principal" value="${attr(ev?.location || "")}"></label>
@@ -87,16 +87,44 @@ export async function pendingScalesCard(teamId = null) {
     ${rows.map((p) => `<a class="prow" href="#/escala/nova/${p.team_id}?evento=${p.event_id}"><span class="grow"><b>${esc(p.title)}</b><small>${esc(fDateLong(p.starts_at))} · ${fTime(p.starts_at)}${teamId ? "" : ` · ${esc(p.team_name)}`}</small></span><span class="go">Criar escala ${icon("chevronRight")}</span></a>`).join("")}</div>`;
 }
 
+// Agenda da igreja: calendário do mês (ou lista), botão de adicionar, como nas escalas dos times
 async function agenda(el, alive) {
-  el.innerHTML = spinner();
-  const [evs, ppl] = await Promise.all([upcoming(180), people()]);
-  if (!alive()) return;
-  el.innerHTML = `<div class="pagehead"><h1>Agenda da igreja</h1>${canEditAgenda() ? `<button class="btn primary sm" id="newev">${icon("plus")} Novo evento</button>` : ""}</div>
-    <p class="muted small">Cultos, reuniões e eventos de toda a igreja nos próximos meses.</p>
-    ${evs.length ? `<div class="list mt">${evs.map(eventRow).join("")}</div>` : `<div class="card">${empty("calendar", "Nada na agenda ainda", canEditAgenda() ? "Toque em Novo evento para marcar o primeiro." : "Os eventos da igreja aparecem aqui.")}</div>`}`;
-  const again = () => agenda(el, alive);
-  el.querySelector("#newev")?.addEventListener("click", () => eventForm(again));
-  on(el, "click", "[data-ev]", (e, b) => openEvent(evs.find((x) => x.id === b.dataset.ev), ppl, again));
+  const MODE_KEY = "somos.agenda.mode";
+  let mode = "calendar"; try { mode = localStorage.getItem(MODE_KEY) === "list" ? "list" : "calendar"; } catch { /* ok */ }
+  const ppl = await people();
+  let month = new Date(ymd(new Date()) + "T12:00:00"); month.setDate(1);
+  let selDay = ymd(new Date());
+  async function draw() {
+    el.innerHTML = spinner();
+    const from = new Date(month.getFullYear(), month.getMonth(), 1).toISOString(), to = new Date(month.getFullYear(), month.getMonth() + 1, 1).toISOString();
+    const evs = await must(sb.from("church_events").select("*").eq("org_id", state.org.id).gte("starts_at", from).lt("starts_at", to).order("starts_at"));
+    if (!alive()) return;
+    const last = new Date(month.getFullYear(), month.getMonth() + 1, 0), today = ymd(new Date());
+    const cells = [];
+    for (let i = 0; i < month.getDay(); i++) cells.push(`<div class="d out"></div>`);
+    for (let d = 1; d <= last.getDate(); d++) {
+      const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+      const n = evs.filter((e) => ymd(e.starts_at) === key).length;
+      cells.push(`<button class="d${key === today ? " today" : ""}${key === selDay ? " sel" : ""}" data-day="${key}">${d}<span class="marks">${"<i></i>".repeat(Math.min(3, n))}</span></button>`);
+    }
+    const nav = `<div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div>`;
+    const dayEvs = evs.filter((e) => ymd(e.starts_at) === selDay);
+    el.innerHTML = `<div class="pagehead"><h1>Agenda da igreja</h1>
+        <button class="iconbtn" id="modebtn" aria-label="${mode === "list" ? "Ver em calendário" : "Ver em lista"}" title="${mode === "list" ? "Ver em calendário" : "Ver em lista"}">${icon(mode === "list" ? "calendar" : "list")}</button>
+        ${canEditAgenda() ? `<button class="btn primary sm" id="newev">${icon("plus")} Novo evento</button>` : ""}</div>
+      <div class="card">${nav}${mode === "list" ? "" : `<div class="cal">${["D", "S", "T", "Q", "Q", "S", "S"].map((x) => `<div class="dow">${x}</div>`).join("")}${cells.join("")}</div>`}</div>
+      ${mode === "list" ? "" : `<div class="sec"><h2>${esc(cap(fDateLong(selDay + "T15:00:00Z")))}</h2></div>
+        ${dayEvs.length ? `<div class="list">${dayEvs.map(eventRow).join("")}</div>` : `<p class="muted small">Nada neste dia.</p>`}`}
+      <div class="sec"><h2>${mode === "list" ? "Eventos do mês" : "Todos do mês"}</h2><span class="muted small">${evs.length}</span></div>
+      ${evs.length ? `<div class="list">${evs.map(eventRow).join("")}</div>` : `<div class="card">${empty("calendar", "Nada na agenda neste mês", canEditAgenda() ? "Toque em Novo evento para marcar." : "Os eventos da igreja aparecem aqui.")}</div>`}`;
+    const again = () => draw();
+    el.querySelector("#newev")?.addEventListener("click", () => eventForm(again, null, [], selDay));
+    el.querySelector("#modebtn").onclick = () => { mode = mode === "list" ? "calendar" : "list"; try { localStorage.setItem(MODE_KEY, mode); } catch { /* ok */ } draw(); };
+    el.querySelectorAll("[data-m]").forEach((b) => { b.onclick = () => { month.setMonth(month.getMonth() + Number(b.dataset.m)); selDay = ymd(month); draw(); }; });
+    el.querySelectorAll("[data-day]").forEach((b) => { b.onclick = () => { selDay = b.dataset.day; draw(); }; });
+    on(el, "click", "[data-ev]", (e, b) => openEvent(evs.find((x) => x.id === b.dataset.ev), ppl, again));
+  }
+  await draw();
 }
 
 export async function churchHome(el, alive) {

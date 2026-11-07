@@ -484,6 +484,13 @@ async function detail(el, id, tab = "det") {
 }
 
 // ---------------------------------------------------------------- calendários
+// eventos da agenda da igreja marcados para este time no mês (vazio se o banco ainda não tem a tabela)
+async function churchEventsOf(teamId, first, last) {
+  const a = new Date(first.getFullYear(), first.getMonth(), 1).toISOString(), b = new Date(last.getFullYear(), last.getMonth() + 1, 1).toISOString();
+  const r = await sb.from("church_event_teams").select("church_events!inner(id,title,kind,starts_at)").eq("team_id", teamId).gte("church_events.starts_at", a).lt("church_events.starts_at", b);
+  return r.error ? [] : (r.data || []).map((x) => ({ ...x.church_events })).sort((x, y) => x.starts_at.localeCompare(y.starts_at));
+}
+
 async function calendar(el, scope) {
   const inTeam = scope.startsWith("time:") && state.space?.id === scope.slice(5);
   let month = new Date(ymd(new Date()) + "T12:00:00"); month.setDate(1);
@@ -513,12 +520,17 @@ async function calendar(el, scope) {
     if (mode === "timeline" && evs.length) extra = await loadExtra(evs.map((e) => e.id));
     const first = new Date(month); const last = new Date(month.getFullYear(), month.getMonth() + 1, 0);
     const today = ymd(new Date());
+    // eventos da igreja em que este time está de serviço: vermelho até existir a escala, depois azul
+    const tid = scope.startsWith("time:") ? scope.slice(5) : null;
+    const cev = tid ? await churchEventsOf(tid, first, last) : [];
+    for (const c of cev) c.done = evs.some((s) => s.team_id === tid && (s.church_event_id === c.id || ymd(s.starts_at) === ymd(c.starts_at)));
+    const dayState = (key) => { const l = cev.filter((c) => ymd(c.starts_at) === key); return l.length ? (l.some((c) => !c.done) ? " pend" : " done") : ""; };
     const cells = [];
     for (let i = 0; i < first.getDay(); i++) cells.push(`<div class="d out"></div>`);
     for (let d = 1; d <= last.getDate(); d++) {
       const key = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
       const n = evs.filter((e) => ymd(e.starts_at) === key);
-      cells.push(`<button class="d${key === today ? " today" : ""}${key === selDay ? " sel" : ""}" data-day="${key}">${d}<span class="marks">${n.slice(0, 3).map((e) => `<i style="background:${attr(e.teams?.accent_color || "var(--accent)")}"></i>`).join("")}</span></button>`);
+      cells.push(`<button class="d${key === today ? " today" : ""}${key === selDay ? " sel" : ""}${dayState(key)}" data-day="${key}">${d}<span class="marks">${n.slice(0, 3).map((e) => `<i style="background:${attr(e.teams?.accent_color || "var(--accent)")}"></i>`).join("")}</span></button>`);
     }
     const dayEvs = evs.filter((e) => ymd(e.starts_at) === selDay);
     const myTeamIds = new Set(state.myTeams.map((t) => t.id));
@@ -528,6 +540,7 @@ async function calendar(el, scope) {
         ${teamChips.map((t) => `<a class="chip ${scope === "time:" + t.id ? "on" : ""}" href="#/calendario/time:${t.id}"><i style="width:8px;height:8px;border-radius:8px;background:${attr(t.accent_color || "var(--accent)")}"></i>${esc(t.name)}</a>`).join("")}</div>`}
       ${mode === "timeline" ? timeline(evs, extra) : `<div class="card"><div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div>
         <div class="cal">${["D", "S", "T", "Q", "Q", "S", "S"].map((x) => `<div class="dow">${x}</div>`).join("")}${cells.join("")}</div></div>`}
+      ${cev.length ? `<div class="sec"><h2>Eventos da igreja com este time</h2></div><div class="list">${cev.map((c) => `<div class="li evchk ${c.done ? "done" : "pend"}"><span class="evdate"><b>${fDay(c.starts_at)}</b><small>${esc(fMon(c.starts_at))}</small></span><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(c.title)}</span><span class="s">${fTime(c.starts_at)} · ${c.done ? "escala criada" : "falta criar a escala"}</span></span>${c.done ? icon("check", "accent") : canManageTeam(tid) ? `<a class="btn primary sm" href="#/escala/nova/${tid}?evento=${c.id}">Criar escala</a>` : ""}</div>`).join("")}</div>` : ""}
       ${inTeam ? `<div class="menulist"><a href="#/panorama">${icon("bars")}<span class="grow">Panorama de escalas<small>Quantas vezes cada pessoa serve no mês</small></span>${icon("chevronRight", "chev")}</a></div>` : ""}
       ${mode === "timeline" ? "" : `<div class="sec"><h2>${esc(cap(fDateLong(selDay + "T15:00:00Z")))}</h2></div>
       ${dayEvs.length ? dayEvs.map((s) => schedRow(s)).join("") : `<p class="muted small">Nada neste dia.</p>`}

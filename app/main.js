@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as multimidia from "./views/multimidia.js";
 import * as ministerios from "./views/ministerios.js";
@@ -109,6 +109,7 @@ function spaceSwitcher() {
     ${state.myTeams.map((t) => `<button class="li" data-space="${t.id}">${teamBadge(t, 40)}<span class="grow"><span class="t">${esc(t.name)}</span><span class="s">${esc(teamTypeLabel(t))}${t.is_leader ? " · Líder" : ""}</span></span>${state.space?.id === t.id ? icon("check", "accent") : ""}</button>`).join("")
       || `<div class="li muted small">Você ainda não participa de nenhum time.</div>`}
   </div>
+  ${isAdmin() && (state.orgTeams || []).some((t) => !state.myTeams.some((x) => x.id === t.id)) ? `<h3 class="mt">Outros times da igreja</h3><div class="list menu">${state.orgTeams.filter((t) => !state.myTeams.some((x) => x.id === t.id)).map((t) => `<button class="li" data-space="${t.id}">${teamBadge(t, 40)}<span class="grow"><span class="t">${esc(t.name)}</span><span class="s">${esc(teamTypeLabel(t))} · Você administra</span></span>${state.space?.id === t.id ? icon("check", "accent") : ""}</button>`).join("")}</div>` : ""}
   <h3 class="mt">Igreja</h3><div class="list menu">
     <button class="li" data-space="">${orgBadge(o)}<span class="grow"><span class="t">${esc(o.name)}</span><span class="s">Avisos gerais, calendário, membros e times</span></span>${!state.space ? icon("check", "accent") : ""}</button>
     ${isAdmin() ? `<a class="li" href="#/org">${icon("settings")}<span class="grow t">Configurações da igreja</span></a>` : ""}

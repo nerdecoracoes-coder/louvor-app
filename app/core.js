@@ -21,8 +21,11 @@ export const state = {
 };
 // O app abre no último time usado; a igreja é um lugar para onde a pessoa vai quando quiser.
 const spaceKey = () => `somos.space:${state.org?.id || ""}`;
+// time que dá para abrir como "espaço": os meus; o administrador também entra nos demais times da igreja
+export const findTeam = (id) => state.myTeams.find((t) => t.id === id) || (isAdmin() ? (state.orgTeams || []).find((t) => t.id === id) : null) || null;
+
 export function setSpace(teamId, persist = true) {
-  state.space = (teamId && state.myTeams.find((t) => t.id === teamId)) || null;
+  state.space = (teamId && findTeam(teamId)) || null;
   if (persist) try { localStorage.setItem(spaceKey(), state.space ? state.space.id : "church"); } catch {}
   applyOrgTheme();
   document.dispatchEvent(new CustomEvent("space-changed"));
@@ -30,7 +33,7 @@ export function setSpace(teamId, persist = true) {
 function restoreSpace() {
   let saved = null; try { saved = localStorage.getItem(spaceKey()); } catch {}
   if (saved === "church") return setSpace(null, false);
-  setSpace(state.myTeams.find((t) => t.id === saved)?.id || state.myTeams[0]?.id || null, false);
+  setSpace(findTeam(saved)?.id || state.myTeams[0]?.id || null, false);
 }
 export const inTeam = () => !!state.space;
 export const isAdmin = () => state.role === "admin";
@@ -306,7 +309,7 @@ export async function selectOrg(orgId, persist = true) {
     state.leaderOf = new Set(state.myTeams.filter((x) => x.is_leader).map((x) => x.id));
     state.orgTeams = (await sb.from("teams").select("*").eq("org_id", state.org.id).order("name")).data || [];
   }
-  if (state.space) state.space = state.myTeams.find((t) => t.id === state.space.id) || null; // dados atualizados do time
+  if (state.space) state.space = findTeam(state.space.id); // dados atualizados do time
   if (persist || !state.space) restoreSpace();
   applyOrgTheme();
   document.dispatchEvent(new CustomEvent("org-changed"));
