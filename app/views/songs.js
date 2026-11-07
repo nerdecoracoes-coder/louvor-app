@@ -269,7 +269,7 @@ async function songDetail(el, id) {
     ${sv.length ? `<div class="vtabs" role="tablist">${sv.map((v, i) => `<button role="tab" class="${i === vSel ? "on" : ""}" data-ver="${v.id}">${esc(v.name)}</button>`).join("")}</div>` : ""}
     <div class="card sd-card">
       <div class="tiles"><div class="tile"><small>Tom</small><b>${esc((cur?.song_key ?? s.song_key) || "—")}</b></div><div class="tile hi"><small>BPM</small><b>${(cur?.bpm ?? s.bpm) ? Number(cur?.bpm ?? s.bpm) : "—"}</b></div><div class="tile"><small>Duração</small><b>${(cur?.duration_sec ?? s.duration_sec) ? fDur(cur?.duration_sec ?? s.duration_sec) : "—"}</b></div></div>
-      ${project?.time_sig_num ? `<div class="sd-lbl">Compasso</div><div class="sd-val">${project.time_sig_num}/${project.time_sig_den}</div>` : ""}
+      ${project?.time_sig_num ? `<div class="sd-lbl">Compasso: <b class="sd-inl">${project.time_sig_num}/${project.time_sig_den}</b></div>` : ""}
       ${(cur?.classification || s.classification) ? `<div class="sd-lbl">Classificações</div><div class="sd-val">${esc(cur?.classification || s.classification)}</div>` : ""}
       ${cur?.notes ? `<div class="sd-lbl">Observações</div><div class="sd-note">${esc(cur.notes)}</div>` : ""}
       ${vrefs.length ? `<div class="sd-lbl accent row gap-s">${icon("link")} Referências</div>${vrefs.map((r) => `<a class="refrow" href="${attr(r.url)}" target="_blank" rel="noopener"><span class="rico big" style="background:${r.color}">${r.mark}</span><span class="grow" style="min-width:0"><span class="t">${esc(r.name)}</span><span class="s ellipsis">${esc(r.url)}</span></span>${icon("chevronRight", "chev")}</a>`).join("")}` : ""}

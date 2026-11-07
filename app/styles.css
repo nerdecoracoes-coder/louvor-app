@@ -936,3 +936,24 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .vtabs { display: flex; gap: 6px; padding: 6px; border-radius: 22px; background: var(--raised); overflow-x: auto; margin-bottom: 12px; scrollbar-width: none; }
 .vtabs button { flex: 1 0 auto; padding: 12px 18px; border: 0; border-radius: 18px; background: transparent; color: var(--muted); font-size: 18px; font-family: inherit; font-weight: 600; }
 .vtabs button.on { background: var(--raised-2); color: var(--text); }
+
+/* detalhe da música: versão compacta */
+.sd-card { padding: 12px; }
+.tiles { gap: 8px; }
+.tile { border-radius: 14px; padding: 8px 6px; }
+.tile small { font-size: 12px; }
+.tile b { font-size: 20px; line-height: 1.2; }
+.sd-lbl { font-size: 13px; margin-top: 12px; }
+.sd-lbl.accent { font-size: 13px; }
+.sd-val { font-size: 16px; margin-top: 2px; }
+.sd-note { font-size: 15px; }
+.sd-notes { font-size: 15px; }
+.sd-title { font-size: 21px; }
+.sd-cover { width: 84px; height: 84px; }
+.sd-artist { font-size: 15px; } .sd-av { width: 30px; height: 30px; }
+.refchip { padding: 8px 14px; font-size: 14px; }
+.refrow { padding: 8px 2px; gap: 12px; }
+.rico.big { width: 36px; height: 36px; font-size: 17px; }
+.refrow .t { font-size: 16px; } .refrow .s { font-size: 12px; }
+.vtabs button { padding: 8px 14px; font-size: 15px; }
+.sd-inl { color: var(--text); font-size: 15px; margin-left: 4px; }
