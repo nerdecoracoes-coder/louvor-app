@@ -74,6 +74,7 @@ async function teamsList(_, el, alive) {
   const sorted = [...all].sort((a, b) => Number(mine.has(b.id)) - Number(mine.has(a.id)) || a.name.localeCompare(b.name));
   el.innerHTML = `<div class="pagehead"><h1>Times</h1>${isAdmin() ? `<a class="btn primary sm" href="#/times/novo">${icon("plus")} Novo time</a>` : ""}</div>
     <p class="muted small">${isAdmin() ? "Como administrador geral, você abre todos os times da igreja." : "Estes são os times da igreja. Você abre os seus; para entrar em outro, fale com o líder dele."}</p>
+    <p class="tiny muted">${esc(state.org.name)}: ${all.length} time${all.length === 1 ? "" : "s"} cadastrado${all.length === 1 ? "" : "s"}</p>
     ${sorted.length ? `<div class="grid mt">${sorted.map((t) => {
       const ls = leaders(t.id), open = canOpen(t);
       const info = `${teamBadge(t, 52)}<span class="grow" style="min-width:0"><h3 class="ellipsis">${esc(t.name)}</h3>
