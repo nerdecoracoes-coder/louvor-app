@@ -827,8 +827,20 @@ with sync_playwright() as pw:
     expect(bruno.locator(".svc-late")).to_have_count(1)  # marcou depois do horário-alvo (30 min antes)
     shot(bruno, "28-hora-de-servir")
     assert bruno.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
-    bruno.locator("#skip").click(); bruno.wait_for_url(re.compile(r"/inicio$"), timeout=10000)
+    for tab in ("agora", "preparar", "ajuda"):
+        bruno.locator(f"[data-tab={tab}]").click(); expect(bruno.locator("#pane")).not_to_be_empty()
+    expect(bruno.locator("[data-tab=culto], [data-tab=equipe]")).to_have_count(0)
+    bruno.get_by_role("link", name="Explorar o app").click(); bruno.wait_for_url(re.compile(r"/inicio$"), timeout=10000)
     expect(bruno.locator(".hero")).to_be_visible(timeout=10000)
+    expect(bruno.locator("#svcbar")).to_be_visible(timeout=10000)  # aviso para voltar à Hora de servir
+    bruno.locator("#svcbar").click(); bruno.wait_for_url(re.compile(r"/servico/[0-9a-f-]{36}$"), timeout=10000)
+    # teste/pré-visualização para o líder: escolhe função e horário, nada é salvo
+    bruno.goto(BASE + "/#/servico/teste")
+    expect(bruno.locator("#pr")).to_be_visible(timeout=10000)
+    bruno.locator("#pm").select_option("10")
+    expect(bruno.locator(".svc-kicker")).to_have_text("Hora de servir", timeout=10000)
+    bruno.locator("[data-it]").first.click(); expect(bruno.locator(".li.check.on")).to_contain_text("Marcado às", timeout=10000)
+    shot(bruno, "28b-hora-de-servir-teste")
     ok("ambiente de serviço: abre no dia da escala, checklist registra o horário real e atraso")
 
     # parabéns do dia: quem faz aniversário hoje aparece em uma janela na primeira abertura do dia

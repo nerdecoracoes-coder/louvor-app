@@ -1118,3 +1118,12 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .svc-ok { color: #7bd88f; } .svc-late { color: #f0b35a; }
 .svc-cfg { margin-bottom: 8px; } .svc-cfg [data-off], [data-newoff] { width: 92px; flex: none; }
 .etabs em { font-style: normal; }
+.svc-count { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 12px; }
+.svc-count b { font-size: 30px; }
+.svc-count span { color: var(--muted); }
+.svc-tl { display: flex; flex-direction: column; gap: 0; border-left: 2px solid rgba(255,255,255,.1); margin-left: 8px; }
+.svc-step { position: relative; display: flex; gap: 12px; padding: 8px 0 8px 16px; }
+.svc-step::before { content: ""; position: absolute; left: -7px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--dim); }
+.svc-step b { min-width: 48px; } .svc-step.past { opacity: .5; } .svc-step.next::before { background: var(--accent); box-shadow: 0 0 0 4px rgba(var(--accent-rgb), .25); } .svc-step.main b { color: var(--accent); }
+.svc-bar { position: fixed; left: 12px; right: 12px; bottom: calc(76px + env(safe-area-inset-bottom)); z-index: 40; display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 14px; background: var(--accent); color: #0c0c0f; font-size: 14px; box-shadow: 0 6px 20px rgba(0,0,0,.35); }
+.svc-bar span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; } .svc-bar .ic { width: 18px; height: 18px; }

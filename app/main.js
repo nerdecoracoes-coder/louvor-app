@@ -250,6 +250,7 @@ async function render() {
   const token = (current = {});
   if (!m) { view.innerHTML = `<div class="empty">${icon("alert")}<b>Página não encontrada</b><a class="btn ghost mt" href="#/">Voltar ao início</a></div>`; swap(); return; }
   headerActions("");
+  servico.updateBanner(path);
   view.dataset.route = path;
   try { await m.handler(m.params, view, () => token === current); }
   catch (e) { console.error(e); view.innerHTML = `<div class="empty">${icon("alert")}<b>Não foi possível carregar</b><p>${esc(errMsg(e))}</p><button class="btn ghost mt" onclick="location.reload()">Tentar de novo</button></div>`; }
