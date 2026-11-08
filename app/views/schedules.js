@@ -87,6 +87,16 @@ async function editor(el, scheduleId, teamId) {
   await loadTeam();
   await loadCandidates();
 
+  // pessoas já escaladas em OUTRO time no mesmo evento (mesmo evento da agenda ou mesmo horário)
+  const evLink = churchEv?.id || sched?.church_event_id || null, okElsewhere = new Set();
+  async function elsewhere(users) {
+    if (!f.team || !f.date || !f.time || !users.length) return [];
+    const r = await sb.rpc("scheduled_elsewhere", { p_team: f.team, p_starts: fromLocal(f.date, f.time), p_church_event: evLink, p_exclude: scheduleId || null, p_users: users });
+    return r.error ? [] : r.data || [];
+  }
+  const elsewhereText = (rows) => [...new Set(rows.map((r) => `no time ${r.team_name}${r.role_name ? `, como ${r.role_name}` : ""}`))].join(" e ");
+  const teamName = () => teams.find((t) => t.id === f.team)?.name || "este time";
+
   // funções em que a pessoa já está escalada nesta escala
   const rolesOf = (uid) => [...f.picks].filter(([, users]) => users.includes(uid)).map(([rid]) => rid);
   const candInfo = (uid, roleId) => candidates?.find((c) => c.user_id === uid && c.role_id === roleId) || candidates?.find((c) => c.user_id === uid);
@@ -231,7 +241,7 @@ async function editor(el, scheduleId, teamId) {
     if (t.dataset.unpick) { const [rid, uid] = t.dataset.unpick.split(":"); f.picks.set(rid, (f.picks.get(rid) || []).filter((x) => x !== uid)); return draw(); }
     if (t.dataset.pick) { readForm(); return memberPicker(t.dataset.pick); }
     if (t.id === "addrole") return roleSheet();
-    if (t.id === "suggest") { readForm(); if (!f.date || !f.time) return toast("Informe data e horário primeiro.", "err"); await loadCandidates(); suggest(); return draw(); }
+    if (t.id === "suggest") { readForm(); if (!f.date || !f.time) return toast("Informe data e horário primeiro.", "err"); await loadCandidates(); await suggest(); return draw(); }
     if (t.dataset.save) { readForm(); return save(f.publish ? "published" : "draft", t); }
   });
 
@@ -277,7 +287,11 @@ async function editor(el, scheduleId, teamId) {
       if (!sel.has(u)) {
         // regra: a mesma pessoa em mais de uma função precisa de confirmação de quem está escalando
         const other = rolesOf(u).filter((rid) => rid !== roleId).map((rid) => teamRoles.find((r) => r.id === rid)?.name).filter(Boolean);
-        if (other.length && !(await confirmDialog(`${personName(ppl, u)} já está escalado(a) como ${other.join(" e ")}. Escalar também como ${role.name}?`, "Escalar nas duas funções"))) return;
+        if (other.length && !(await confirmDialog(`${personName(ppl, u)} já está escalado(a) neste evento como ${other.join(" e ")} aqui no time. Escalar também como ${role.name}?`, "Escalar nas duas funções"))) return;
+        if (!okElsewhere.has(u)) {
+          const el2 = await elsewhere([u]);
+          if (el2.length) { if (!(await confirmDialog(`${personName(ppl, u)} já está escalado(a) neste evento ${elsewhereText(el2)}. Escalar também no ${teamName()}?`, "Escalar mesmo assim"))) return; okElsewhere.add(u); }
+        }
         sel.add(u);
       } else sel.delete(u);
       b.querySelector(".selbox").classList.toggle("on", sel.has(u));
@@ -287,14 +301,15 @@ async function editor(el, scheduleId, teamId) {
 
   // Sugestão: preenche as vagas vazias com quem tem a função, priorizando disponibilidade,
   // limite mensal, menos escalas no mês e respeitando as preferências "evitar escalar junto".
-  function suggest() {
+  async function suggest() {
+    const busyElsewhere = new Set((await elsewhere([...new Set((candidates || []).map((c) => c.user_id))])).map((r) => r.user_id));
     const chosen = new Set([...f.picks.values()].flat());
     let filled = 0;
     for (const r of teamRoles) {
       const cur = f.picks.get(r.id) || [];
       const need = (f.slots.get(r.id) ?? 1) - cur.length;
       for (let k = 0; k < need; k++) {
-        const pool = (candidates || []).filter((c) => c.role_id === r.id && !cur.includes(c.user_id) && !chosen.has(c.user_id));   // a sugestão não escala a mesma pessoa em duas funções
+        const pool = (candidates || []).filter((c) => c.role_id === r.id && !cur.includes(c.user_id) && !chosen.has(c.user_id) && !busyElsewhere.has(c.user_id));   // a sugestão não escala a mesma pessoa em duas funções
         if (!pool.length) break;
         const score = (c) => {
           let s = 0;
@@ -319,6 +334,13 @@ async function editor(el, scheduleId, teamId) {
     if (!f.title.trim()) { f.tab = "detalhes"; draw(); return toast("Informe o nome do evento.", "err"); }
     if (!f.date || !f.time) { f.tab = "detalhes"; draw(); return toast("Informe data e horário.", "err"); }
     // datas: uma só, ou todas as repetições
+    // revisão final: data/horário podem ter mudado depois de escolher as pessoas
+    const risk = await elsewhere([...new Set([...f.picks.values()].flat())].filter((u) => !okElsewhere.has(u)));
+    if (risk.length) {
+      const names = [...new Set(risk.map((r) => r.user_id))].map((u) => `${personName(ppl, u)} (${elsewhereText(risk.filter((r) => r.user_id === u))})`);
+      if (!(await confirmDialog(`Já escalados neste evento: ${names.join("; ")}. Salvar mesmo assim?`, "Salvar mesmo assim"))) return;
+      risk.forEach((r) => okElsewhere.add(r.user_id));
+    }
     let dates = [f.date];
     if (!scheduleId && f.repeat !== "none") {
       const step = f.repeat === "weekly" ? 7 : f.repeat === "biweekly" ? 14 : 0;
@@ -525,6 +547,7 @@ async function calendar(el, scope) {
     const cev = tid ? await churchEventsOf(tid, first, last) : [];
     for (const c of cev) c.done = evs.some((s) => s.team_id === tid && (s.church_event_id === c.id || ymd(s.starts_at) === ymd(c.starts_at)));
     const dayState = (key) => { const l = cev.filter((c) => ymd(c.starts_at) === key); return l.length ? (l.some((c) => !c.done) ? " pend" : " done") : ""; };
+    const pendDay = cev.filter((c) => !c.done && ymd(c.starts_at) === selDay);
     const cells = [];
     for (let i = 0; i < first.getDay(); i++) cells.push(`<div class="d out"></div>`);
     for (let d = 1; d <= last.getDate(); d++) {
@@ -540,12 +563,10 @@ async function calendar(el, scope) {
         ${teamChips.map((t) => `<a class="chip ${scope === "time:" + t.id ? "on" : ""}" href="#/calendario/time:${t.id}"><i style="width:8px;height:8px;border-radius:8px;background:${attr(t.accent_color || "var(--accent)")}"></i>${esc(t.name)}</a>`).join("")}</div>`}
       ${mode === "timeline" ? timeline(evs, extra) : `<div class="card"><div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div>
         <div class="cal">${["D", "S", "T", "Q", "Q", "S", "S"].map((x) => `<div class="dow">${x}</div>`).join("")}${cells.join("")}</div></div>`}
-      ${cev.length ? `<div class="sec"><h2>Eventos da igreja com este time</h2></div><div class="list">${cev.map((c) => `<div class="li evchk ${c.done ? "done" : "pend"}"><span class="evdate"><b>${fDay(c.starts_at)}</b><small>${esc(fMon(c.starts_at))}</small></span><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(c.title)}</span><span class="s">${fTime(c.starts_at)} · ${c.done ? "escala criada" : "falta criar a escala"}</span></span>${c.done ? icon("check", "accent") : canManageTeam(tid) ? `<a class="btn primary sm" href="#/escala/nova/${tid}?evento=${c.id}">Criar escala</a>` : ""}</div>`).join("")}</div>` : ""}
       ${inTeam ? `<div class="menulist"><a href="#/panorama">${icon("bars")}<span class="grow">Panorama de escalas<small>Quantas vezes cada pessoa serve no mês</small></span>${icon("chevronRight", "chev")}</a></div>` : ""}
-      ${mode === "timeline" ? "" : `<div class="sec"><h2>${esc(cap(fDateLong(selDay + "T15:00:00Z")))}</h2></div>
-      ${dayEvs.length ? dayEvs.map((s) => schedRow(s)).join("") : `<p class="muted small">Nada neste dia.</p>`}
-      <div class="sec"><h2>Todos do mês</h2><span class="muted small">${evs.length}</span></div>
-      ${evs.length ? evs.map((s) => schedRow(s)).join("") : `<div class="card">${empty("calendar", "Nenhuma escala neste mês")}</div>`}`}`;
+      ${mode === "timeline" ? "" : `${dayEvs.length || pendDay.length ? `<div class="sec"><h2>${esc(cap(fDateLong(selDay + "T15:00:00Z")))}</h2></div>` : ""}
+      ${pendDay.map((c) => `<div class="pending"><div class="pt">${icon("bell")}<b>Falta criar a escala</b></div><div class="prow" style="cursor:default"><span class="grow"><b>${esc(c.title)}</b><small>${fTime(c.starts_at)} · evento da igreja</small></span>${canManageTeam(tid) ? `<a class="btn primary sm" href="#/escala/nova/${tid}?evento=${c.id}">Criar escala</a>` : ""}</div></div>`).join("")}
+      ${dayEvs.map((s) => schedRow(s)).join("")}`}`;
   }
   async function loadExtra(ids) {
     const [as, ss] = await Promise.all([

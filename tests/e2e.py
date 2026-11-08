@@ -228,8 +228,8 @@ with sync_playwright() as pw:
     bruno.goto(sched_url); bruno.reload()
     bruno.locator("[data-dtab=par]").click()
     expect(bruno.locator(".li", has_text="Carla Dias")).to_contain_text("Visto")
-    carla.goto(BASE + "/#/calendario/geral"); expect(carla.locator(".sched", has_text="Culto de Celebração").first).to_be_visible(timeout=10000)
-    carla.goto(f"{BASE}/#/calendario/time:{louvor_id}"); expect(carla.locator(".sched", has_text="Culto de Celebração").first).to_be_visible(timeout=10000)
+    carla.goto(BASE + "/#/calendario/geral"); expect(carla.locator(".cal .marks i").first).to_be_visible(timeout=10000)
+    carla.goto(f"{BASE}/#/calendario/time:{louvor_id}"); expect(carla.locator(".cal .marks i").first).to_be_visible(timeout=10000)
     shot(carla, "10-calendario"); ok("calendário geral e do time")
 
     # bloqueio de data
@@ -572,9 +572,10 @@ with sync_playwright() as pw:
     bruno.locator(".pending .prow").first.click(); expect(bruno.locator("input[name=title]")).to_have_value("Culto de celebração", timeout=10000)
     ok("líder do ministério vê o aviso vermelho e abre a escala já com o evento")
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas"); expect(bruno.locator(".cal .d.pend")).to_have_count(1, timeout=10000)
-    expect(bruno.locator(".evchk.pend", has_text="Culto de celebração")).to_be_visible()
+    bruno.locator(".cal .d.pend").click(); expect(bruno.locator(".pending", has_text="Culto de celebração")).to_be_visible()
+    assert bruno.locator("text=Eventos da igreja com este time").count() == 0 and bruno.locator("text=Todos do mês").count() == 0
     ok("calendário do time marca o dia do evento da igreja em vermelho até criar a escala")
-    bruno.locator(".evchk.pend a", has_text="Criar escala").click(); expect(bruno.locator("input[name=title]")).to_have_value("Culto de celebração", timeout=10000)
+    bruno.locator(".pending a", has_text="Criar escala").click(); expect(bruno.locator("input[name=title]")).to_have_value("Culto de celebração", timeout=10000)
     bruno.locator("#savebtn").click(); expect(bruno.locator(".toast").first).to_be_visible(timeout=10000)
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas"); expect(bruno.locator(".cal .d.done")).to_have_count(1, timeout=10000)
     expect(bruno.locator(".cal .d.pend")).to_have_count(0)
