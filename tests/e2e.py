@@ -702,7 +702,7 @@ with sync_playwright() as pw:
     bruno.goto(f"{BASE}/#/times/{louvor_id}/palco")
     bruno.locator("#seed").click(); expect(bruno.locator(".stage.editing .slot").first).to_be_visible(timeout=10000)
     n_slots = bruno.locator(".stage.editing .slot").count(); assert n_slots >= 3, n_slots
-    bruno.locator(".stage.editing .slot").first.click(); expect(bruno.locator(".slot.sel .stools")).to_be_visible(timeout=5000)   # toque seleciona e mostra girar/trocar/apagar
+    last_slot = bruno.locator(".stage.editing .slot").last; last_slot.click(timeout=8000); expect(bruno.locator(".slot.sel .stools")).to_be_visible(timeout=5000)   # toque seleciona e mostra girar/trocar/apagar
     bruno.locator(".slot.sel [data-act=rot]").click(); expect(bruno.locator(".slot.sel .art")).to_have_attribute("style", re.compile(r"rotate\(45deg\)"), timeout=5000)
     shot(bruno, "08d0-palco-selecionado")
     bruno.locator("#addpreset").click(); bruno.fill(".sheet #pn", "Domingo")
@@ -740,6 +740,20 @@ with sync_playwright() as pw:
     assert bruno.locator(".stage.readonly .stools, .stage.readonly .handles").count() == 0
     shot(bruno, "08g-palco-visualizador")
     ok("palco do time com preset, escolha pelo palco, músicas sem setas, versão e arrastar")
+    # editar em todas as abas; detalhes completos; roteiro dentro da edição
+    for t in ["det", "mus", "par"]:
+        bruno.locator(f"[data-dtab={t}]").click()
+        expect(bruno.locator("a.btn", has_text="Editar")).to_be_visible(timeout=10000)
+    bruno.locator("[data-dtab=det]").click(); expect(bruno.locator(".menurow", has_text="Horário")).to_be_visible()
+    bruno.locator("a.btn", has_text="Editar").click(); bruno.wait_for_url(re.compile(r"/editar$"), timeout=10000)
+    bruno.locator("input[name=rehDate]").fill("2026-12-01"); bruno.locator("input[name=rehNotes]").fill("Passar o repertório novo")
+    bruno.locator("[data-etab=roteiro]").click(); bruno.locator("[data-ctpl]").click()
+    expect(bruno.locator(".cue-edit")).to_have_count(6, timeout=10000)
+    bruno.locator("#savebtn").click(); bruno.wait_for_timeout(1500); shot(bruno, "08h-salvar-roteiro")
+    bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=15000)
+    expect(bruno.locator(".menurow", has_text="Ensaio")).to_be_visible(timeout=10000)
+    expect(bruno.locator("[data-dtab=rot] .cnt")).to_have_text("6")
+    ok("escala: Editar em todas as abas, detalhes com horário e ensaio, roteiro dentro da edição")
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")
     # modo linha do tempo (ícone ao lado do +), lembrado entre visitas
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")

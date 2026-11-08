@@ -180,7 +180,7 @@ const hhmm = (t) => (t ? String(t).slice(0, 5) : "");
 export async function scheduleExtras(box, s) {
   const team = s.teams || state.orgTeams.find((t) => t.id === s.team_id);
   const parts = [];
-  if (teamHas(team, "roteiro")) parts.push(roteiro(s, team));
+  if (roteiroOn(team)) parts.push(roteiro(s, team));
   if (teamHas(team, "checklist")) parts.push(checklist(s, team));
   if (!parts.length) return;
   box.innerHTML = parts.map((_, i) => `<div id="ex${i}"></div>`).join("");
@@ -221,51 +221,61 @@ function lyricsSheet(x) {
   sh.el.querySelector("#cp")?.addEventListener("click", async () => { try { await navigator.clipboard.writeText(text); toast("Letra copiada"); } catch { toast("Não foi possível copiar", "err"); } });
 }
 
-export function cueEditor(s, team, cues, done) {
+// editor de itens do roteiro dentro de um elemento; usado na janela do culto e na aba Roteiro da edição da escala
+export function mountCueList(box, cues, startsAt) {
   let list = cues.map((c) => ({ ...c }));
-  const sh = sheet(`<h3>Roteiro do culto</h3><div id="cl"></div>
-    <div class="row gap mt wrap"><button class="btn ghost grow" id="add">${icon("plus")} Item</button>${!list.length ? `<button class="btn ghost grow" id="tpl">${icon("sparkle")} Usar modelo</button>` : ""}</div>
-    <button class="btn primary block mt" id="ok">Salvar roteiro</button>`, { wide: true });
-  const start = new Date(s.starts_at);
+  box.innerHTML = `<div id="cl"></div><div class="row gap mt wrap"><button type="button" class="btn ghost grow" id="add" data-cadd>${icon("plus")} Item</button><button type="button" class="btn ghost grow" id="tpl" data-ctpl hidden>${icon("sparkle")} Usar modelo</button></div>`;
+  const start = new Date(startsAt);
+  const tpl = box.querySelector("[data-ctpl]");
   const draw = () => {
-    sh.el.querySelector("#cl").innerHTML = list.length ? list.map((c, i) => `<div class="cue-edit" data-i="${i}">
+    tpl.hidden = !!list.length;
+    box.querySelector("#cl").innerHTML = list.length ? list.map((c, i) => `<div class="cue-edit" data-i="${i}">
       <div class="row gap-s"><input class="input" data-f="at_time" type="time" value="${hhmm(c.at_time)}" style="width:96px">
         <select class="input" data-f="kind" style="width:auto">${CUE_KINDS.map(([k, l]) => `<option value="${k}" ${c.kind === k ? "selected" : ""}>${l}</option>`).join("")}</select>
         <input class="input" data-f="duration_min" type="number" min="0" max="600" placeholder="min" value="${c.duration_min ?? ""}" style="width:70px"></div>
       <input class="input mt-s" data-f="title" placeholder="Título" maxlength="120" value="${attr(c.title || "")}">
       <div class="row gap-s mt-s"><input class="input grow" data-f="responsible" placeholder="Responsável (opcional)" value="${attr(c.responsible || "")}">
-        <button class="iconbtn" data-up="${i}" aria-label="Subir">${icon("chevronUp")}</button><button class="iconbtn" data-dn="${i}" aria-label="Descer">${icon("chevronDown")}</button><button class="iconbtn" data-rm="${i}" aria-label="Remover">${icon("trash")}</button></div>
+        <button type="button" class="iconbtn" data-up="${i}" aria-label="Subir">${icon("chevronUp")}</button><button type="button" class="iconbtn" data-dn="${i}" aria-label="Descer">${icon("chevronDown")}</button><button type="button" class="iconbtn" data-rm="${i}" aria-label="Remover">${icon("trash")}</button></div>
       <textarea class="input mt-s" data-f="notes" rows="1" placeholder="Observações (vídeo a rodar, versículo, aviso...)">${esc(c.notes || "")}</textarea></div>`).join("")
       : `<p class="small muted">Nenhum item ainda.</p>`;
   };
-  const read = () => sh.el.querySelectorAll("[data-i]").forEach((row) => {
-    const c = list[Number(row.dataset.i)];
+  const read = () => { box.querySelectorAll("[data-i]").forEach((row) => {
+    const c = list[Number(row.dataset.i)]; if (!c) return;
     row.querySelectorAll("[data-f]").forEach((inp) => { const f = inp.dataset.f; c[f] = f === "duration_min" ? (inp.value === "" ? null : Number(inp.value)) : inp.value || null; });
-  });
+  }); return list; };
   const retime = () => { // horários em sequência a partir do início do culto, quando ainda não definidos
     let t = start.getTime();
     for (const c of list) { if (!c.at_time) c.at_time = fTime(new Date(t)); t = new Date(`${ymd(start)}T${hhmm(c.at_time)}:00-03:00`).getTime() + (c.duration_min || 0) * 60e3; }
   };
-  sh.el.querySelector("#add").onclick = () => { read(); list.push({ kind: "outro", title: "", duration_min: null }); retime(); draw(); };
-  const tpl = sh.el.querySelector("#tpl");
-  tpl?.addEventListener("click", () => { list = TEMPLATE.map(([kind, title, duration_min]) => ({ kind, title, duration_min })); retime(); tpl.remove(); draw(); });
-  on(sh.el, "click", "[data-rm]", (e, b) => { read(); list.splice(Number(b.dataset.rm), 1); draw(); });
-  on(sh.el, "click", "[data-up]", (e, b) => { read(); const i = Number(b.dataset.up); if (i > 0) [list[i - 1], list[i]] = [list[i], list[i - 1]]; draw(); });
-  on(sh.el, "click", "[data-dn]", (e, b) => { read(); const i = Number(b.dataset.dn); if (i < list.length - 1) [list[i + 1], list[i]] = [list[i], list[i + 1]]; draw(); });
+  box.querySelector("[data-cadd]").onclick = () => { read(); list.push({ kind: "outro", title: "", duration_min: null }); retime(); draw(); };
+  tpl.onclick = () => { list = TEMPLATE.map(([kind, title, duration_min]) => ({ kind, title, duration_min })); retime(); draw(); };
+  on(box, "click", "[data-rm]", (e, b) => { read(); list.splice(Number(b.dataset.rm), 1); draw(); });
+  on(box, "click", "[data-up]", (e, b) => { read(); const i = Number(b.dataset.up); if (i > 0) [list[i - 1], list[i]] = [list[i], list[i - 1]]; draw(); });
+  on(box, "click", "[data-dn]", (e, b) => { read(); const i = Number(b.dataset.dn); if (i < list.length - 1) [list[i + 1], list[i]] = [list[i], list[i + 1]]; draw(); });
+  draw();
+  return { read, set start(v) { start.setTime(new Date(v).getTime()); } };
+}
+
+export const cueRows = (list, s) => list.map((c, i) => ({ schedule_id: s.id, org_id: s.org_id, team_id: s.team_id, position: i + 1, at_time: c.at_time || null, kind: c.kind,
+  title: c.title.trim(), duration_min: c.duration_min, responsible: c.responsible?.trim() || null, notes: c.notes?.trim() || null }));
+
+export function cueEditor(s, team, cues, done) {
+  const sh = sheet(`<h3>Roteiro do culto</h3><div id="ce"></div><button class="btn primary block mt" id="ok">Salvar roteiro</button>`, { wide: true });
+  const m = mountCueList(sh.el.querySelector("#ce"), cues, s.starts_at);
   sh.el.querySelector("#ok").onclick = async (e) => {
-    read();
+    const list = m.read();
     if (list.some((c) => !c.title?.trim())) return toast("Dê um título a cada item", "err");
     busy(e.target);
     const del = await sb.from("schedule_cues").delete().eq("schedule_id", s.id);
-    const rows = list.map((c, i) => ({ schedule_id: s.id, org_id: s.org_id, team_id: s.team_id, position: i + 1, at_time: c.at_time || null, kind: c.kind,
-      title: c.title.trim(), duration_min: c.duration_min, responsible: c.responsible?.trim() || null, notes: c.notes?.trim() || null }));
+    const rows = cueRows(list, s);
     const ins = rows.length ? await sb.from("schedule_cues").insert(rows) : { error: null };
     busy(e.target, false);
     if (del.error || ins.error) return toast(errMsg(del.error || ins.error), "err");
     toast("Roteiro salvo"); sh.close(); done();
   };
-  draw();
 }
+
+export const roteiroOn = (team) => !!team && (teamHas(team, "roteiro") || team.team_type === "louvor");
 
 // ================================================================ checklist pré-culto
 export const CHECK_TEMPLATE = ["Projetor / TV ligados e testados", "Letras e slides conferidos", "Câmeras posicionadas, com bateria e cartão", "Mesa de corte funcionando",

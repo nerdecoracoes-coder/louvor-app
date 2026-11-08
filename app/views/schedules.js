@@ -2,7 +2,7 @@
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, isAdmin, canManageTeam, isStaff, sheet, toast, errMsg, busy, on, go,
   empty, spinner, fDate, fDateLong, fTime, fDow, fDay, fMon, ymd, fromLocal, confirmDialog, roleIcon, linkify, fDur, fMonthYear, cap, teamHasRepertoire, teamHas } from "../core.js";
 import { schedRow } from "./home.js";
-import { scheduleExtras, cueEditor } from "./multimidia.js";
+import { scheduleExtras, cueEditor, mountCueList, cueRows, roteiroOn } from "./multimidia.js";
 import { downloadPackage, letrasTeamOf } from "./letras.js";
 import { loadStage, stageHTML } from "./palco.js";
 
@@ -58,10 +58,14 @@ async function editor(el, scheduleId, teamId) {
     // por função: [{user_id}]
     picks: new Map(), slots: new Map(), songs: songsSel,
     tab: "detalhes", publish: sched ? sched.status === "published" : true,
+    rehDate: sched?.rehearsal_at ? ymd(sched.rehearsal_at) : "", rehTime: sched?.rehearsal_at ? fTime(sched.rehearsal_at) : "", rehNotes: sched?.rehearsal_notes || "",
     ask: sched?.ask_confirmation !== false, palettes: (sched?.palettes || []).map((x) => ({ desc: x.desc || "", colors: [...(x.colors || [])] })), view: "main", repeat: "none", until: "",
   };
   // "pedir confirmação" e "paleta de cores" dependem de colunas novas; sem elas (SQL ainda não aplicado) as opções ficam escondidas
   const hasExt = !(await sb.from("schedules").select("ask_confirmation,palettes").limit(1)).error;
+  const hasReh = !(await sb.from("schedules").select("rehearsal_at,rehearsal_notes").limit(1)).error;
+  let cueList = null; // itens do roteiro em edição (carregados ao abrir a aba)
+  let cueMount = null;
   const hasVer = !(await sb.from("schedule_songs").select("version_id,version_name,bpm").limit(1)).error;
   let cueCount = 0;
   if (scheduleId) cueCount = (await sb.from("schedule_cues").select("id").eq("schedule_id", scheduleId)).data?.length || 0;
@@ -170,6 +174,9 @@ async function editor(el, scheduleId, teamId) {
       ${scheduleId ? "" : `<div class="two"><fieldset class="of"><legend>Repetir</legend><select name="repeat">${REPEATS.map(([k, l]) => `<option value="${k}" ${f.repeat === k ? "selected" : ""}>${l}</option>`).join("")}</select></fieldset>
         ${f.repeat !== "none" ? `<fieldset class="of"><legend>Até</legend><input type="date" name="until" value="${f.until}" min="${f.date}"></fieldset>` : ""}</div>
         ${f.repeat !== "none" ? `<p class="tiny muted" style="margin:-4px 0 12px">${icon("calendar")} Cria uma escala para cada data, com os mesmos participantes e músicas (no máximo ${MAX_REPEAT}).</p>` : ""}`}
+      ${hasReh ? `<div class="dt2"><fieldset class="of"><legend>Ensaio (data)</legend><input type="date" name="rehDate" value="${f.rehDate}"></fieldset>
+        <fieldset class="of"><legend>Ensaio (hora)</legend><input type="time" name="rehTime" value="${f.rehTime}"></fieldset></div>
+        <fieldset class="of"><legend>Observações do ensaio</legend><input name="rehNotes" maxlength="200" value="${attr(f.rehNotes)}" placeholder="Ex.: Passar o repertório novo"></fieldset>` : ""}
       <fieldset class="of"><legend>Observações</legend><textarea name="notes" rows="1" maxlength="500" placeholder="Roupa, passagem de som…">${esc(f.notes)}</textarea><small class="ncount" id="ncount">${(f.notes || "").length}/500</small></fieldset>
       <div class="switchlist">
         ${switchRow("publish", f.publish, "Publicar escala", "Visível para todos os membros", "eye")}
@@ -339,19 +346,22 @@ async function editor(el, scheduleId, teamId) {
     box.addEventListener("pointercancel", (e) => { if (st && e.pointerId === st.id) { if (st.active) finish(e); else cancel(); } });
   }
   function tabCues() {
-    return `<div class="sec">${icon("list")}<h2>Roteiro do culto</h2></div>
-      <div class="card">${scheduleId ? `<p class="small muted" style="margin:0 0 10px">${cueCount ? `${cueCount} item(ns) no roteiro.` : "Ainda não há itens no roteiro."}</p><button class="btn ghost block" id="cues">${icon("edit")} ${cueCount ? "Editar roteiro" : "Montar roteiro"}</button>`
-        : `<p class="small muted" style="margin:0">Salve a escala primeiro; em seguida abra "Editar" para montar a ordem do culto.</p>`}</div>`;
+    return `<div class="sec">${icon("list")}<h2>Roteiro do culto</h2></div><div class="card" id="cuebox"></div>`;
+  }
+  async function mountCues() {
+    const box = el.querySelector("#cuebox"); if (!box) return;
+    if (cueList === null) cueList = scheduleId ? await must(sb.from("schedule_cues").select("*").eq("schedule_id", scheduleId).order("position")) : [];
+    cueMount = mountCueList(box, cueList, fromLocal(f.date, f.time));
   }
 
   function draw() {
     const team = teams.find((t) => t.id === f.team);
     if (f.view === "palette") { el.innerHTML = palettePage(); return; }
-    const showSongs = teamHasRepertoire(team), showCues = team && teamHas(team, "roteiro");
+    const showSongs = teamHasRepertoire(team), showCues = roteiroOn(team);
     if (f.tab === "musicas" && !showSongs) f.tab = "detalhes";
     if (f.tab === "roteiro" && !showCues) f.tab = "detalhes";
     const nPeople = [...f.picks.values()].flat().length;
-    const tabs = [["detalhes", "Detalhes", null], ["participantes", "Participantes", nPeople], ...(showSongs ? [["musicas", "Músicas", f.songs.length]] : []), ...(showCues ? [["roteiro", "Roteiro", cueCount]] : [])];
+    const tabs = [["detalhes", "Detalhes", null], ["participantes", "Participantes", nPeople], ...(showSongs ? [["musicas", "Músicas", f.songs.length]] : []), ...(showCues ? [["roteiro", "Roteiro", cueList ? cueList.length : cueCount]] : [])];
     el.innerHTML = `<div class="pagehead"><a class="back" href="${scheduleId ? `#/escala/${scheduleId}` : `#/times/${f.team}`}">${icon("chevronLeft")}</a><h1>${scheduleId ? "Editar escala" : "Nova escala"}</h1>
       ${sched ? `<span class="tag ${sched.status === "published" ? "ok" : "gray"}">${sched.status === "published" ? "Publicada" : "Rascunho"}</span>` : ""}</div>
     <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-etab="${k}" class="${f.tab === k ? "on" : ""}">${l}${n != null ? ` <i class="cnt">${n}</i>` : ""}</button>`).join("")}</div>
@@ -359,21 +369,22 @@ async function editor(el, scheduleId, teamId) {
     <div style="height:84px"></div>
     <button class="fabsave" id="savebtn" data-save="${f.publish ? "published" : "draft"}">${icon("check")} Salvar</button>`;
     if (f.tab === "musicas") bindSort();
+    if (f.tab === "roteiro") mountCues();
   }
   draw();
 
-  const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date ?? f.date, time: d.time ?? f.time, end: d.end ?? f.end, location: d.location ?? f.location, notes: d.notes ?? f.notes, publish: d.publish === "on", repeat: d.repeat ?? f.repeat, until: d.until ?? f.until }); if (hasExt) f.ask = d.ask === "on"; if (d.team) f.team = d.team; };
+  const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date ?? f.date, time: d.time ?? f.time, end: d.end ?? f.end, location: d.location ?? f.location, rehDate: d.rehDate ?? f.rehDate, rehTime: d.rehTime ?? f.rehTime, rehNotes: d.rehNotes ?? f.rehNotes, notes: d.notes ?? f.notes, publish: d.publish === "on", repeat: d.repeat ?? f.repeat, until: d.until ?? f.until }); if (hasExt) f.ask = d.ask === "on"; if (d.team) f.team = d.team; };
   el.addEventListener("change", async (e) => {
     if (e.target.name === "team") { readForm(); f.picks.clear(); f.slots.clear(); f.preset = null; if (!teamHasRepertoire(teams.find((t) => t.id === e.target.value))) f.songs = []; await loadTeam(); await loadCandidates(); await loadStageData(); draw(); return; }
     if (["date", "time", "end"].includes(e.target.name)) { readForm(); await loadCandidates(); draw(); }
     if (e.target.name === "repeat") { readForm(); if (f.repeat !== "none" && !f.until) f.until = addDays(f.date, f.repeat === "monthly" ? 90 : 28); draw(); }
-    if (["publish", "ask", "until"].includes(e.target.name)) readForm();
+    if (["publish", "ask", "until", "rehDate", "rehTime"].includes(e.target.name)) readForm();
     if (e.target.dataset.key !== undefined) f.songs[Number(e.target.dataset.key)].song_key = e.target.value.trim() || null;
   });
-  el.addEventListener("input", (e) => { if (["title", "location", "notes"].includes(e.target.name)) readForm(); if (e.target.name === "notes") { autosize(e.target); const c = el.querySelector("#ncount"); if (c) c.textContent = `${e.target.value.length}/500`; } if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
+  el.addEventListener("input", (e) => { if (["title", "location", "notes", "rehNotes"].includes(e.target.name)) readForm(); if (e.target.name === "notes") { autosize(e.target); const c = el.querySelector("#ncount"); if (c) c.textContent = `${e.target.value.length}/500`; } if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
   el.addEventListener("click", async (e) => {
     const t = e.target.closest("button, .pcard.pslot, .slot[data-sid]"); if (!t) return;
-    if (t.dataset.etab) { readForm(); f.tab = t.dataset.etab; return draw(); }
+    if (t.dataset.etab) { readForm(); if (cueMount) { cueList = cueMount.read(); cueMount = null; } f.tab = t.dataset.etab; return draw(); }
     if (t.id === "openpal") { readForm(); f.view = "palette"; draw(); return window.scrollTo(0, 0); }
     if (t.dataset.pback !== undefined) { f.view = "main"; return draw(); }
     if (t.id === "padd") { f.palettes.push({ desc: "", colors: [] }); return draw(); }
@@ -381,7 +392,6 @@ async function editor(el, scheduleId, teamId) {
     if (t.dataset.pcolor !== undefined) return colorSheet(Number(t.dataset.pcolor));
     if (t.dataset.prm) { const [i, j] = t.dataset.prm.split(":").map(Number); f.palettes[i].colors.splice(j, 1); return draw(); }
     if (t.id === "psuggest") return suggestSheet();
-    if (t.id === "cues") { const team = teams.find((x) => x.id === f.team); const cues = await must(sb.from("schedule_cues").select("*").eq("schedule_id", scheduleId).order("position")); return cueEditor(sched, team, cues, async () => { cueCount = (await sb.from("schedule_cues").select("id").eq("schedule_id", scheduleId)).data?.length || 0; draw(); }); }
     if (t.id === "addsong") { readForm(); return songPicker(f.songs, () => draw()); }
     if (t.dataset.ver !== undefined) return versionSheet(Number(t.dataset.ver));
     if (t.dataset.pview) { readForm(); f.pview = t.dataset.pview; try { localStorage.setItem(PVIEW_KEY, f.pview); } catch { /* ok */ } return draw(); }
@@ -505,6 +515,8 @@ async function editor(el, scheduleId, teamId) {
       for (let i = 1; dates.length < MAX_REPEAT; i++) { const d = step ? addDays(f.date, step * i) : addMonths(f.date, i); if (d > until) break; dates.push(d); }
       if (dates.length > 1 && !(await confirmDialog(`Criar ${dates.length} escalas, de ${fDate(dates[0] + "T12:00:00")} a ${fDate(dates[dates.length - 1] + "T12:00:00")}?`, "Criar"))) return;
     }
+    if (cueMount) { cueList = cueMount.read(); cueMount = null; }
+    if ((cueList || []).some((c) => !c.title?.trim())) { f.tab = "roteiro"; draw(); return toast("Dê um título a cada item do roteiro.", "err"); }
     busy(btn);
     try {
       const want = [];
@@ -516,6 +528,7 @@ async function editor(el, scheduleId, teamId) {
         if (ends_at && ends_at <= starts_at) ends_at = new Date(new Date(ends_at).getTime() + 864e5).toISOString();
         const row = { org_id: state.org.id, team_id: f.team, title: f.title.trim(), event_type: f.type || null, starts_at, ends_at, location: f.location || null, notes: f.notes || null };
         if (churchEv && !scheduleId) row.church_event_id = churchEv.id;
+        if (hasReh) { row.rehearsal_at = f.rehDate ? fromLocal(f.rehDate, f.rehTime || "19:00") : null; row.rehearsal_notes = f.rehNotes.trim() || null; }
         if (hasExt) { row.ask_confirmation = f.ask; row.palettes = f.palettes.filter((p) => p.colors.length).map((p) => ({ desc: p.desc.trim(), colors: p.colors })); }
         let id = scheduleId;
         // grava como rascunho primeiro e só publica no fim (as notificações saem com a escala completa)
@@ -529,6 +542,10 @@ async function editor(el, scheduleId, teamId) {
         if (del.length) await must(sb.from("schedule_assignments").delete().in("id", del.map((d) => d.id)));
         if (add.length) await must(sb.from("schedule_assignments").insert(add.map((a) => ({ schedule_id: id, org_id: state.org.id, team_id: f.team, user_id: a.user_id, role_id: a.role_id,
           role_name: teamRoles.find((r) => r.id === a.role_id)?.name || null }))));
+        if (cueList !== null) {
+          await must(sb.from("schedule_cues").delete().eq("schedule_id", id));
+          if (cueList.length) await must(sb.from("schedule_cues").insert(cueRows(cueList, { id, org_id: state.org.id, team_id: f.team })));
+        }
         await must(sb.from("schedule_songs").delete().eq("schedule_id", id));
         if (f.songs.length) await must(sb.from("schedule_songs").insert(f.songs.map((s, i) => ({ schedule_id: id, org_id: state.org.id, team_id: f.team, song_id: s.removed ? null : s.song_id,
           position: i, title_snapshot: s.title, artist_snapshot: s.artist || null, song_key: s.song_key || null, notes: s.notes || null,
@@ -585,7 +602,7 @@ async function detail(el, id, tab = "det") {
   el.innerHTML = spinner();
   const s = await must(sb.from("schedules").select("*,teams(*)").eq("id", id).maybeSingle());
   if (!s) { el.innerHTML = empty("alert", "Escala não encontrada", "Ela pode ter sido excluída ou ainda é um rascunho."); return; }
-  const showCues = !!(s.teams && teamHas(s.teams, "roteiro"));
+  const showCues = roteiroOn(s.teams);
   const stage = await loadStage(s.team_id);
   const [assigns, songs, ppl, cues] = await Promise.all([
     must(sb.from("schedule_assignments").select("*").eq("schedule_id", id)),
@@ -622,15 +639,21 @@ async function detail(el, id, tab = "det") {
     return (cells.length ? stageHTML(cells.map((c) => c.sl), (sl) => { const c = cells.find((x) => x.sl.id === sl.id); return { name: c.a.role_name || "Função", who: { avatar: avatar(ppl.get(c.a.user_id), 54, false), label: personName(ppl, c.a.user_id).split(" ")[0] } }; }, { cls: "readonly" }) : `<div class="li muted small">Ninguém escalado nas posições do palco.</div>`)
       + (extra.length ? `<div class="sec"><h3>Fora do palco</h3></div><div class="list">${extra.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(a.role_name || "Sem função")}</span></span></div>`).join("")}</div>` : "");
   };
+  const manageBar = () => manage ? `<div class="row gap mt wrap"><a class="btn ghost grow" href="#/escala/${id}/editar">${icon("edit")} Editar</a>
+        ${s.status === "draft" ? `<button class="btn primary grow" id="pub">${icon("check")} Publicar</button>` : ""}<button class="btn danger" id="del">${icon("trash")}</button></div>` : "";
   const panes = {
-    det: () => `<div class="list">${askConf && s.status === "published" ? row("check", "Confirmados", `${seenN} de ${uniq.length}`, "par") : ""}
+    det: () => `<div class="list">
+        ${row("clock", "Horário", `${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""}`)}
+        ${s.location ? row("pin", "Local", esc(s.location)) : ""}
+        ${s.rehearsal_at ? row("music", "Ensaio", `${esc(cap(fDow(s.rehearsal_at)).replace(/\.$/, ""))} ${fDate(s.rehearsal_at)} · ${fTime(s.rehearsal_at)}`) : ""}
+        ${askConf && s.status === "published" ? row("check", "Confirmados", `${seenN} de ${uniq.length}`, "par") : ""}
+        ${showSongs ? row("music", "Músicas", `${songs.length} ${songs.length === 1 ? "música" : "músicas"}`, "mus") : ""}
         ${showCues ? row("list", "Roteiro", `${cues.length} ${cues.length === 1 ? "item" : "itens"}`, "rot") : ""}${row("users", "Participantes", String(uniq.length), "par")}</div>
+      ${s.rehearsal_notes ? `<div class="sec">${icon("music")}<h2>Ensaio</h2></div><div class="card"><p style="margin:0">${linkify(s.rehearsal_notes)}</p></div>` : ""}
       ${letrasTeamOf() ? row("download", "Pacote do culto", "Letras e slides", "pkg") : ""}
       ${unseen ? `<button class="btn primary block mt" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length && askConf ? `<p class="small ok row gap-s mt">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
       ${s.notes ? `<div class="sec">${icon("edit")}<h2>Observações</h2></div><div class="card"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}
-      ${(s.palettes || []).length ? `<div class="sec">${icon("shirt")}<h2>Vestimentas</h2></div><div class="card">${s.palettes.map((p) => `<div class="palview">${p.desc ? `<b class="small">${esc(p.desc)}</b>` : ""}<div class="pcolors">${(p.colors || []).map((c) => `<span class="pcol big" style="background:${attr(c)}" title="${attr(c)}"></span>`).join("")}</div></div>`).join("")}</div>` : ""}
-      ${manage ? `<div class="row gap mt wrap"><a class="btn ghost grow" href="#/escala/${id}/editar">${icon("edit")} Editar</a>
-        ${s.status === "draft" ? `<button class="btn primary grow" id="pub">${icon("check")} Publicar</button>` : ""}<button class="btn danger" id="del">${icon("trash")}</button></div>` : ""}`,
+      ${(s.palettes || []).length ? `<div class="sec">${icon("shirt")}<h2>Vestimentas</h2></div><div class="card">${s.palettes.map((p) => `<div class="palview">${p.desc ? `<b class="small">${esc(p.desc)}</b>` : ""}<div class="pcolors">${(p.colors || []).map((c) => `<span class="pcol big" style="background:${attr(c)}" title="${attr(c)}"></span>`).join("")}</div></div>`).join("")}</div>` : ""}`,
     mus: () => `<div class="list">${songs.length ? songs.map((x, i) => {
       const live = x.songs && x.songs.status !== "removed";
       return `<div class="song"><span class="cover">${x.songs?.cover_url ? `<img src="${attr(x.songs.cover_url)}" alt="">` : `<b style="font-size:18px">${i + 1}</b>`}</span>
@@ -646,7 +669,8 @@ async function detail(el, id, tab = "det") {
     <p class="dwhen">${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""} · ${esc(cap(fDow(s.starts_at)).replace(/\.$/, ""))} · ${esc(new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Sao_Paulo" }).format(new Date(s.starts_at)))}${today ? ` <span class="tag soft">Hoje</span>` : ""}</p>
     <div class="chips dchips">${pending ? `<span class="chip warnchip">${icon("clock")} Confirmação pendente</span>` : ""}<button class="chip" id="share" type="button">${icon("share")} Compartilhar</button></div>
     <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-dtab="${k}" class="${tab === k ? "on" : ""}">${l}${n != null ? ` <i class="cnt">${n}</i>` : ""}</button>`).join("")}</div>
-    <div id="pane">${panes[tab]()}</div>`;
+    <div id="pane">${panes[tab]()}</div>
+    ${manageBar()}`;
   if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
   el.querySelectorAll("[data-pv]").forEach((b) => b.addEventListener("click", () => { try { localStorage.setItem(PVIEW_KEY, b.dataset.pv); } catch { /* ok */ } detail(el, id, tab); }));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
