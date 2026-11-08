@@ -236,6 +236,7 @@ async function profileView(_, el) {
 
 // ---------------------------------------------------------------- notificações
 const KIND_ICON = { evento: "calendar", devocional: "play", schedule_published: "calendar", schedule_changed: "calendar", rehearsal: "music", announcement: "megaphone", message: "chat", team_joined: "users", invite_accepted: "link", leader: "crown", admin: "shield" };
+const GROUPED = new Set(["team_joined", "invite_accepted"]);
 async function notificationsView(_, el) {
   el.innerHTML = spinner();
   // só as não lidas: ao abrir uma notificação ela sai da lista
@@ -252,8 +253,11 @@ async function notificationsView(_, el) {
   });
   on(el, "click", "[data-n]", async (e, b) => {
     const n = rows.find((x) => x.id === b.dataset.n);
-    b.remove(); // sai da lista na hora
-    sb.from("notifications").update({ read_at: new Date().toISOString() }).eq("id", n.id).then(() => document.dispatchEvent(new Event("badges")));
+    // quem entrou no time, convites aceitos: abrir uma dá baixa em todas do mesmo tipo (e do mesmo time)
+    const same = (x) => x.id === n.id || (GROUPED.has(n.kind) && x.kind === n.kind && x.org_id === n.org_id && (n.kind === "invite_accepted" || x.link === n.link));
+    const ids = rows.filter(same).map((x) => x.id);
+    el.querySelectorAll("[data-n]").forEach((x) => { if (ids.includes(x.dataset.n)) x.remove(); }); // saem da lista na hora
+    sb.from("notifications").update({ read_at: new Date().toISOString() }).in("id", ids).then(() => document.dispatchEvent(new Event("badges")));
     if (n.org_id && n.org_id !== state.org?.id && state.orgs.some((o) => o.org_id === n.org_id)) await selectOrg(n.org_id);
     if (n.link) go(n.link.replace(/^#/, ""));
     else notificationsView(_, el);
