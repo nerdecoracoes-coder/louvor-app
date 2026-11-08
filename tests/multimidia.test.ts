@@ -38,8 +38,8 @@ describe("multimídia", () => {
     expect((await operador.api.post("schedule_cues", { schedule_id: schMidia, org_id: org, team_id: midia, title: "X" })).ok).toBe(false);
     expect((await operador.api.get(`/schedule_cues?schedule_id=eq.${schMidia}`)).data).toHaveLength(2);
     expect((await fora.api.get(`/schedule_cues?schedule_id=eq.${schMidia}`)).data).toHaveLength(0);
-    // roteiro só em time com o recurso
-    expect((await louvorLider.api.post("schedule_cues", { schedule_id: schLouvor, org_id: org, team_id: louvor, title: "X" })).ok).toBe(false);
+    // roteiro também no time de louvor (migração 22)
+    expect((await louvorLider.api.post("schedule_cues", { schedule_id: schLouvor, org_id: org, team_id: louvor, title: "X" })).ok).toBe(true);
   });
 
   test("as músicas do louvor no mesmo culto aparecem para o Multimídia, com a letra (sem acesso ao repertório)", async () => {
