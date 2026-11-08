@@ -58,12 +58,15 @@ async function editor(el, scheduleId, teamId) {
     // por função: [{user_id}]
     picks: new Map(), slots: new Map(), songs: songsSel,
     tab: "detalhes", publish: sched ? sched.status === "published" : true,
-    rehDate: sched?.rehearsal_at ? ymd(sched.rehearsal_at) : "", rehTime: sched?.rehearsal_at ? fTime(sched.rehearsal_at) : "", rehNotes: sched?.rehearsal_notes || "",
+    rehs: [],
     ask: sched?.ask_confirmation !== false, palettes: (sched?.palettes || []).map((x) => ({ desc: x.desc || "", colors: [...(x.colors || [])] })), view: "main", repeat: "none", until: "",
   };
   // "pedir confirmação" e "paleta de cores" dependem de colunas novas; sem elas (SQL ainda não aplicado) as opções ficam escondidas
   const hasExt = !(await sb.from("schedules").select("ask_confirmation,palettes").limit(1)).error;
-  const hasReh = !(await sb.from("schedules").select("rehearsal_at,rehearsal_notes").limit(1)).error;
+  const rehQ = await sb.from("schedule_rehearsals").select("id,starts_at,notes").eq("schedule_id", scheduleId || "00000000-0000-0000-0000-000000000000").order("starts_at");
+  const hasReh = !rehQ.error; // sem o SQL dos ensaios, a seção fica escondida
+  const rehOrig = (rehQ.data || []).map((r) => r.id);
+  f.rehs = (rehQ.data || []).map((r) => ({ id: r.id, date: ymd(r.starts_at), time: fTime(r.starts_at), notes: r.notes || "" }));
   let cueList = null; // itens do roteiro em edição (carregados ao abrir a aba)
   let cueMount = null;
   const hasVer = !(await sb.from("schedule_songs").select("version_id,version_name,bpm").limit(1)).error;
@@ -174,9 +177,13 @@ async function editor(el, scheduleId, teamId) {
       ${scheduleId ? "" : `<div class="two"><fieldset class="of"><legend>Repetir</legend><select name="repeat">${REPEATS.map(([k, l]) => `<option value="${k}" ${f.repeat === k ? "selected" : ""}>${l}</option>`).join("")}</select></fieldset>
         ${f.repeat !== "none" ? `<fieldset class="of"><legend>Até</legend><input type="date" name="until" value="${f.until}" min="${f.date}"></fieldset>` : ""}</div>
         ${f.repeat !== "none" ? `<p class="tiny muted" style="margin:-4px 0 12px">${icon("calendar")} Cria uma escala para cada data, com os mesmos participantes e músicas (no máximo ${MAX_REPEAT}).</p>` : ""}`}
-      ${hasReh ? `<div class="dt2"><fieldset class="of"><legend>Ensaio (data)</legend><input type="date" name="rehDate" value="${f.rehDate}"></fieldset>
-        <fieldset class="of"><legend>Ensaio (hora)</legend><input type="time" name="rehTime" value="${f.rehTime}"></fieldset></div>
-        <fieldset class="of"><legend>Observações do ensaio</legend><input name="rehNotes" maxlength="200" value="${attr(f.rehNotes)}" placeholder="Ex.: Passar o repertório novo"></fieldset>` : ""}
+      ${hasReh ? `<div class="sec"><h3>Ensaios</h3></div>
+        ${f.rehs.length ? f.rehs.map((r, i) => `<div class="reh-edit" data-reh="${i}"><div class="dt2"><fieldset class="of"><legend>Data</legend><input type="date" data-rf="date" value="${r.date}"></fieldset>
+          <fieldset class="of"><legend>Hora</legend><input type="time" data-rf="time" value="${r.time}"></fieldset></div>
+          <div class="row gap-s"><fieldset class="of grow"><legend>Observação</legend><input data-rf="notes" maxlength="200" value="${attr(r.notes)}" placeholder="Ex.: Passar o repertório novo"></fieldset>
+          <button type="button" class="iconbtn" data-rhdel="${i}" aria-label="Remover ensaio">${icon("trash")}</button></div></div>`).join("") : `<p class="small muted" style="margin:0 0 8px">Nenhum ensaio marcado.</p>`}
+        <button type="button" class="btn ghost block" id="rehadd">${icon("plus")} Adicionar ensaio</button>
+        ${f.rehs.length && f.publish ? `<p class="tiny muted" style="margin:6px 0 12px">${icon("bell")} Os escalados recebem um aviso quando um ensaio é marcado, alterado ou cancelado.</p>` : ""}` : ""}
       <fieldset class="of"><legend>Observações</legend><textarea name="notes" rows="1" maxlength="500" placeholder="Roupa, passagem de som…">${esc(f.notes)}</textarea><small class="ncount" id="ncount">${(f.notes || "").length}/500</small></fieldset>
       <div class="switchlist">
         ${switchRow("publish", f.publish, "Publicar escala", "Visível para todos os membros", "eye")}
@@ -373,18 +380,21 @@ async function editor(el, scheduleId, teamId) {
   }
   draw();
 
-  const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date ?? f.date, time: d.time ?? f.time, end: d.end ?? f.end, location: d.location ?? f.location, rehDate: d.rehDate ?? f.rehDate, rehTime: d.rehTime ?? f.rehTime, rehNotes: d.rehNotes ?? f.rehNotes, notes: d.notes ?? f.notes, publish: d.publish === "on", repeat: d.repeat ?? f.repeat, until: d.until ?? f.until }); if (hasExt) f.ask = d.ask === "on"; if (d.team) f.team = d.team; };
+  const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date ?? f.date, time: d.time ?? f.time, end: d.end ?? f.end, location: d.location ?? f.location, notes: d.notes ?? f.notes, publish: d.publish === "on", repeat: d.repeat ?? f.repeat, until: d.until ?? f.until }); if (hasExt) f.ask = d.ask === "on"; if (d.team) f.team = d.team; };
   el.addEventListener("change", async (e) => {
     if (e.target.name === "team") { readForm(); f.picks.clear(); f.slots.clear(); f.preset = null; if (!teamHasRepertoire(teams.find((t) => t.id === e.target.value))) f.songs = []; await loadTeam(); await loadCandidates(); await loadStageData(); draw(); return; }
     if (["date", "time", "end"].includes(e.target.name)) { readForm(); await loadCandidates(); draw(); }
     if (e.target.name === "repeat") { readForm(); if (f.repeat !== "none" && !f.until) f.until = addDays(f.date, f.repeat === "monthly" ? 90 : 28); draw(); }
-    if (["publish", "ask", "until", "rehDate", "rehTime"].includes(e.target.name)) readForm();
+    if (["publish", "ask", "until"].includes(e.target.name)) readForm();
+    if (e.target.dataset.rf) { const r = f.rehs[Number(e.target.closest("[data-reh]").dataset.reh)]; if (r) r[e.target.dataset.rf] = e.target.value; }
     if (e.target.dataset.key !== undefined) f.songs[Number(e.target.dataset.key)].song_key = e.target.value.trim() || null;
   });
-  el.addEventListener("input", (e) => { if (["title", "location", "notes", "rehNotes"].includes(e.target.name)) readForm(); if (e.target.name === "notes") { autosize(e.target); const c = el.querySelector("#ncount"); if (c) c.textContent = `${e.target.value.length}/500`; } if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
+  el.addEventListener("input", (e) => { if (["title", "location", "notes"].includes(e.target.name)) readForm(); if (e.target.dataset.rf) { const r = f.rehs[Number(e.target.closest("[data-reh]").dataset.reh)]; if (r) r[e.target.dataset.rf] = e.target.value; } if (e.target.name === "notes") { autosize(e.target); const c = el.querySelector("#ncount"); if (c) c.textContent = `${e.target.value.length}/500`; } if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
   el.addEventListener("click", async (e) => {
     const t = e.target.closest("button, .pcard.pslot, .slot[data-sid]"); if (!t) return;
     if (t.dataset.etab) { readForm(); if (cueMount) { cueList = cueMount.read(); cueMount = null; } f.tab = t.dataset.etab; return draw(); }
+    if (t.id === "rehadd") { readForm(); const last = f.rehs[f.rehs.length - 1]; f.rehs.push({ date: last?.date || f.date, time: last?.time || "18:00", notes: "" }); return draw(); }
+    if (t.dataset.rhdel !== undefined) { f.rehs.splice(Number(t.dataset.rhdel), 1); return draw(); }
     if (t.id === "openpal") { readForm(); f.view = "palette"; draw(); return window.scrollTo(0, 0); }
     if (t.dataset.pback !== undefined) { f.view = "main"; return draw(); }
     if (t.id === "padd") { f.palettes.push({ desc: "", colors: [] }); return draw(); }
@@ -528,7 +538,6 @@ async function editor(el, scheduleId, teamId) {
         if (ends_at && ends_at <= starts_at) ends_at = new Date(new Date(ends_at).getTime() + 864e5).toISOString();
         const row = { org_id: state.org.id, team_id: f.team, title: f.title.trim(), event_type: f.type || null, starts_at, ends_at, location: f.location || null, notes: f.notes || null };
         if (churchEv && !scheduleId) row.church_event_id = churchEv.id;
-        if (hasReh) { row.rehearsal_at = f.rehDate ? fromLocal(f.rehDate, f.rehTime || "19:00") : null; row.rehearsal_notes = f.rehNotes.trim() || null; }
         if (hasExt) { row.ask_confirmation = f.ask; row.palettes = f.palettes.filter((p) => p.colors.length).map((p) => ({ desc: p.desc.trim(), colors: p.colors })); }
         let id = scheduleId;
         // grava como rascunho primeiro e só publica no fim (as notificações saem com a escala completa)
@@ -542,6 +551,17 @@ async function editor(el, scheduleId, teamId) {
         if (del.length) await must(sb.from("schedule_assignments").delete().in("id", del.map((d) => d.id)));
         if (add.length) await must(sb.from("schedule_assignments").insert(add.map((a) => ({ schedule_id: id, org_id: state.org.id, team_id: f.team, user_id: a.user_id, role_id: a.role_id,
           role_name: teamRoles.find((r) => r.id === a.role_id)?.name || null }))));
+        if (hasReh && date === dates[0]) { // ensaios só na primeira escala (as datas são absolutas)
+          const rows = f.rehs.filter((r) => r.date);
+          const keep = new Set(rows.map((r) => r.id).filter(Boolean));
+          const gone = rehOrig.filter((x) => !keep.has(x));
+          if (scheduleId && gone.length) await must(sb.from("schedule_rehearsals").delete().in("id", gone));
+          for (const r of rows) {
+            const v = { starts_at: fromLocal(r.date, r.time || "18:00"), notes: r.notes.trim() || null };
+            if (r.id && scheduleId) await must(sb.from("schedule_rehearsals").update(v).eq("id", r.id));
+            else await must(sb.from("schedule_rehearsals").insert({ ...v, schedule_id: id, org_id: state.org.id, team_id: f.team }));
+          }
+        }
         if (cueList !== null) {
           await must(sb.from("schedule_cues").delete().eq("schedule_id", id));
           if (cueList.length) await must(sb.from("schedule_cues").insert(cueRows(cueList, { id, org_id: state.org.id, team_id: f.team })));
@@ -560,6 +580,7 @@ async function editor(el, scheduleId, teamId) {
 }
 
 const MAX_REPEAT = 26;
+const rehWhen = (r) => `${cap(fDow(r.starts_at)).replace(/\.$/, "")}, ${fDate(r.starts_at)} às ${fTime(r.starts_at)}`;
 const TABICO = {detalhes:"info",det:"info",participantes:"users",par:"users",musicas:"music",mus:"music",roteiro:"list",rot:"list"};
 const autosize = (t) => { if (!t) return; t.style.height = "auto"; t.style.height = `${t.scrollHeight}px`; };
 const CATALOG = [["Branco", "#ffffff"], ["Off-white", "#f5efe6"], ["Bege", "#d9c3a0"], ["Areia", "#c8ad7f"], ["Caramelo", "#b7773e"], ["Marrom", "#6b4226"], ["Terracota", "#c4673d"], ["Mostarda", "#d9a521"],
@@ -605,11 +626,12 @@ async function detail(el, id, tab = "det") {
   if (!s) { el.innerHTML = empty("alert", "Escala não encontrada", "Ela pode ter sido excluída ou ainda é um rascunho."); return; }
   const showCues = roteiroOn(s.teams);
   const stage = await loadStage(s.team_id);
-  const [assigns, songs, ppl, cues] = await Promise.all([
+  const [assigns, songs, ppl, cues, rehs] = await Promise.all([
     must(sb.from("schedule_assignments").select("*").eq("schedule_id", id)),
     must(sb.from("schedule_songs").select("*,songs(id,status,current_project_id,cover_url,youtube_url,chords_url,bpm,duration_sec)").eq("schedule_id", id).order("position")),
     people(),
     showCues ? sb.from("schedule_cues").select("id").eq("schedule_id", id).then((r) => r.data || []) : Promise.resolve([]),
+    sb.from("schedule_rehearsals").select("id,starts_at,notes").eq("schedule_id", id).order("starts_at").then((r) => r.data || []),
   ]);
   const manage = canManageTeam(s.team_id);
   const mine = assigns.filter((a) => a.user_id === state.user.id);
@@ -646,11 +668,11 @@ async function detail(el, id, tab = "det") {
     det: () => `<div class="list">
         ${row("clock", "Horário", `${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""}`)}
         ${s.location ? row("pin", "Local", esc(s.location)) : ""}
-        ${s.rehearsal_at ? row("music", "Ensaio", `${esc(cap(fDow(s.rehearsal_at)).replace(/\.$/, ""))} ${fDate(s.rehearsal_at)} · ${fTime(s.rehearsal_at)}`) : ""}
+        ${rehs.length ? row("music", rehs.length === 1 ? "Ensaio" : "Ensaios", rehs.length === 1 ? rehWhen(rehs[0]) : `${rehs.length} marcados`) : ""}
         ${askConf && s.status === "published" ? row("check", "Confirmados", `${seenN} de ${uniq.length}`, "par") : ""}
         ${showSongs ? row("music", "Músicas", `${songs.length} ${songs.length === 1 ? "música" : "músicas"}`, "mus") : ""}
         ${showCues ? row("list", "Roteiro", `${cues.length} ${cues.length === 1 ? "item" : "itens"}`, "rot") : ""}${row("users", "Participantes", String(uniq.length), "par")}</div>
-      ${s.rehearsal_notes ? `<div class="sec">${icon("music")}<h2>Ensaio</h2></div><div class="card"><p style="margin:0">${linkify(s.rehearsal_notes)}</p></div>` : ""}
+      ${rehs.length ? `<div class="sec">${icon("music")}<h2>${rehs.length === 1 ? "Ensaio" : "Ensaios"}</h2></div><div class="list">${rehs.map((r) => `<div class="li"><span class="grow"><span class="t">${esc(rehWhen(r))}</span>${r.notes ? `<span class="s">${esc(r.notes)}</span>` : ""}</span>${new Date(r.starts_at) < new Date() ? `<span class="chip">Já passou</span>` : ""}</div>`).join("")}</div>` : ""}
       ${letrasTeamOf() ? row("download", "Pacote do culto", "Letras e slides", "pkg") : ""}
       ${unseen ? `<button class="btn primary block mt" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length && askConf ? `<p class="small ok row gap-s mt">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
       ${s.notes ? `<div class="sec">${icon("edit")}<h2>Observações</h2></div><div class="card"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}

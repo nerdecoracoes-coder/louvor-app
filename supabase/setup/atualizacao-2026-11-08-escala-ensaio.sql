@@ -1,7 +1,3 @@
--- Ensaio da escala: data/horário e observações.
-alter table public.schedules add column if not exists rehearsal_at timestamptz;
-alter table public.schedules add column if not exists rehearsal_notes text;
-
 -- O roteiro também pode ser montado por times de louvor (a aba Roteiro aparece na edição da escala).
 drop policy if exists sc_write on public.schedule_cues;
 create policy sc_write on public.schedule_cues for all to authenticated

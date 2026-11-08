@@ -746,7 +746,7 @@ with sync_playwright() as pw:
         expect(bruno.locator("a.btn", has_text="Editar")).to_be_visible(timeout=10000)
     bruno.locator("[data-dtab=det]").click(); expect(bruno.locator(".menurow", has_text="Horário")).to_be_visible()
     bruno.locator("a.btn", has_text="Editar").click(); bruno.wait_for_url(re.compile(r"/editar$"), timeout=10000)
-    bruno.locator("input[name=rehDate]").fill("2026-12-01"); bruno.locator("input[name=rehNotes]").fill("Passar o repertório novo")
+    bruno.locator("#rehadd").click(); bruno.locator("[data-reh=\"0\"] [data-rf=date]").fill("2026-12-01"); bruno.locator("[data-reh=\"0\"] [data-rf=notes]").fill("Passar o repertório novo")
     bruno.locator("[data-etab=roteiro]").click(); bruno.locator("[data-ctpl]").click()
     expect(bruno.locator(".cue-edit")).to_have_count(6, timeout=10000)
     bruno.locator("#savebtn").click(); bruno.wait_for_timeout(1500); shot(bruno, "08h-salvar-roteiro")
