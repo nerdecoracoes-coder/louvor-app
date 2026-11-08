@@ -451,7 +451,7 @@ with sync_playwright() as pw:
     ana.locator("[data-ptab=texto]").click(); ana.locator("[data-ptog='tx.italic']").click(); ana.locator("[data-p='tx.shadow.on']").check()
     ana.locator("[data-ptab=comp]").click(); ana.locator("[data-ptrans]").select_option("fade")
     ana.locator("#ppresets").click(); expect(ana.locator(".ppbtn", has_text="Louvor Sem opacidade")).to_be_visible(timeout=10000)
-    ana.locator("[data-bp=\"1\"]").click(); expect(ana.locator(".ppsl .thumb").first).to_have_css("background-image", re.compile("gradient"), timeout=10000)
+    ana.locator("[data-bp=\"1\"]").click(); ana.get_by_role("button", name="Mudar a tela").click(); expect(ana.locator(".ppsl .thumb").first).to_have_css("background-image", re.compile("gradient"), timeout=10000)
     ana.locator("#ppresets").click(); ana.fill("#spname", "Meu preset"); ana.locator("#spsave").click(); toast_has(ana, "Preset salvo")
     ana.locator("[data-ptab=texto]").click(); ana.locator("[data-ptog='tx.italic']").click(); ana.locator("[data-ptab=comp]").click(); ana.locator("[data-ptrans]").select_option("fade")
     ana.evaluate("window.scrollTo(0,0)"); assert ana.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), "simulador com rolagem horizontal"; shot(ana, "08j-simulador")

@@ -17,7 +17,7 @@ export function register(route) {
 const SETUP = `<div class="card small">Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-05-letras.sql</b> no SQL Editor do Supabase.</div>`;
 const missing = (e) => /relation|does not exist|schema cache|42P01|PGRST|function/i.test(String(e?.message || e?.code || e));
 const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-export const FONTS = ["Arial", "Calibri", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Impact", "Montserrat", "Roboto", "Open Sans"];
+export const FONTS = ["Gotham", "Arial", "Calibri", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Impact", "Montserrat", "Roboto", "Open Sans"];
 export const DEFAULT_STYLE = { font: "Arial", size: 54, color: "#FFFFFF", bg: "#000000", bgAlpha: 1, per: 2, caps: false, showLabel: true };
 const TEXT_COLORS = ["#FFFFFF", "#FFE066", "#9BD1FF", "#000000"], BG_COLORS = ["#000000", "#0B1F3A", "#1B1B1B", "#12301F", "#FFFFFF"];
 // slides do PowerPoint com o padrão de tela da igreja
@@ -234,12 +234,18 @@ async function editor(teamId, songId, el, alive) {
 
 // ---------------------------------------------------------------- simulador ProPresenter
 // Mesmo desenho do ProPresenter: slides à esquerda, tela no centro e painel Forma / Texto / Compilação à direita.
-// Presets da igreja (do ProPresenter): texto centralizado ocupando a tela toda, Gotham 50 com sombra preta; só o fundo muda.
-const TXT_LOUVOR = { shape: { x: 0, y: 0, w: 1, h: 1 }, tx: { font: "Montserrat", bold: true, align: "ctr", anchor: "ctr", shadow: { on: true, color: "#000000", op: 1, angle: 314.68, off: 8, blur: 6 } }, trans: "none" };
+// Presets da igreja, copiados do ProPresenter: tela 3840x1080; caixa 1519,7 x 181,5 na posição 1160,2 / 158,2 (centrada na largura);
+// Gotham Book 50 branca, centralizada, sombra preta 100% a 314,68° (deslocamento 12, desfocar 10). Só o fundo muda entre os três.
+// Os valores em "pt" são os px da tela x 960 / 3840 (a lâmina do PowerPoint tem 960 pt de largura).
+const PX = 960 / 3840;
+const TXT_LOUVOR = { shape: { x: 1160.2 / 3840, y: 158.2 / 1080, w: 1519.7 / 3840, h: 181.5 / 1080, rot: 0, opacity: 1, fill: { on: false }, stroke: { on: false } },
+  tx: { font: "Gotham", size: 50 * PX, bold: false, italic: false, underline: false, strike: false, caps: "none", align: "ctr", anchor: "ctr", stroke: { on: false },
+    shadow: { on: true, color: "#000000", op: 1, angle: 314.68, off: 12 * PX, blur: 10 * PX } }, trans: "none" };
+const LOUVOR = { font: "Gotham", size: 50 * PX, color: "#FFFFFF", bg: "#000000", per: 2, showLabel: false, ratio: "3840x1080", pp: TXT_LOUVOR };
 export const BUILTIN_PRESETS = [
-  ["Louvor", { font: "Montserrat", size: 32, color: "#FFFFFF", bg: "#000000", bgAlpha: 0.5, per: 2, showLabel: false, pp: TXT_LOUVOR }],
-  ["Louvor 1 mais escuro", { font: "Montserrat", size: 32, color: "#FFFFFF", bg: "#000000", bgAlpha: 0.75, per: 2, showLabel: false, pp: TXT_LOUVOR }],
-  ["Louvor Sem opacidade", { font: "Montserrat", size: 32, color: "#FFFFFF", bg: "#000000", bgAlpha: 1, per: 2, showLabel: false, pp: TXT_LOUVOR }],
+  ["Louvor", { ...LOUVOR, bgAlpha: 0.5 }],
+  ["Louvor 1 mais escuro", { ...LOUVOR, bgAlpha: 0.75 }],
+  ["Louvor Sem opacidade", { ...LOUVOR, bgAlpha: 1 }],
 ];
 const CAPS = [[null, "Padrão"], ["none", "Nenhuma"], ["upper", "MAIÚSCULAS"], ["lower", "minúsculas"], ["title", "Título"]];
 const TRANS = [["none", "Nenhuma"], ["fade", "Esmaecer"], ["push", "Empurrar"], ["wipe", "Revelar"]];
@@ -267,7 +273,9 @@ async function simulator(teamId, songId, el, alive) {
   st.pp = { shape: {}, tx: {}, over: {}, trans: "none", ...(st.pp || {}) };
   st.pp.shape = st.pp.shape || {}; st.pp.tx = st.pp.tx || {}; st.pp.over = st.pp.over || {};
   let sel = 0, tab = "forma", scope = "all", dirty = false, editing = false;
-  const [rw, rh] = ratioOf(st.ratio), resW = /^\d{3,5}\s*[x×]/i.test(String(st.ratio)) ? rw : 1920, resH = Math.round((resW * rh) / rw);
+  let rw = 16, rh = 9, resW = 1920, resH = 1080;
+  const calcRes = () => { [rw, rh] = ratioOf(st.ratio); resW = /^\d{3,5}\s*[x×]/i.test(String(st.ratio)) ? rw : 1920; resH = Math.round((resW * rh) / rw); };
+  calcRes();
   const blocks = () => parseLyricsText(text);
   const slides = () => slidesOf(blocks(), st.per);
   const footer = () => (st.showFooter ? [song.title, song.artist].filter(Boolean).join(" · ") : "");
@@ -278,7 +286,7 @@ async function simulator(teamId, songId, el, alive) {
   const boxesOf = (sl) => letraBoxes({ ...sl, footer: footer() }, st);
   const thumb = (sl, big = false) => thumbOf(boxesOf(sl), { bg: st.bg, bgAlpha: st.bgAlpha, color: st.color, font: st.font, ratio: st.ratio, big });
   const seg = (path, opts, val) => `<div class="segs">${opts.map(([v, t, ic]) => `<button type="button" class="seg${val === v ? " on" : ""}" data-pseg="${path}:${v}" title="${t}">${ic || t}</button>`).join("")}</div>`;
-  const num = (path, label, o = {}) => { const v = get(path) ?? o.dflt ?? 0; return `<label class="ppn"><span>${label}</span><input type="number" data-p="${path}" ${o.ax ? `data-ax="${o.ax}"` : ""} ${o.scale ? `data-scale="${o.scale}"` : ""} step="${o.step || 1}" ${o.min != null ? `min="${o.min}"` : ""} ${o.max != null ? `max="${o.max}"` : ""} value="${o.ax ? Math.round(v * (o.ax === "W" ? resW : resH) * 10) / 10 : o.scale ? Math.round(v * o.scale) : v}"></label>`; };
+  const num = (path, label, o = {}) => { const v = get(path) ?? o.dflt ?? 0; return `<label class="ppn"><span>${label}</span><input type="number" data-p="${path}" ${o.ax ? `data-ax="${o.ax}"` : ""} ${o.scale ? `data-scale="${o.scale}"` : ""} ${o.px ? 'data-px="1"' : ""} step="${o.step || 1}" ${o.min != null ? `min="${o.min}"` : ""} ${o.max != null ? `max="${o.max}"` : ""} value="${o.ax ? Math.round(v * (o.ax === "W" ? resW : resH) * 10) / 10 : o.scale ? Math.round(v * o.scale) : o.px ? Math.round(((v * resW) / 960) * 10) / 10 : v}"></label>`; };
   const chk = (path, label) => `<label class="check ppc"><input type="checkbox" data-p="${path}" ${get(path) ? "checked" : ""}> ${label}</label>`;
   const color = (path, dflt) => `<input type="color" class="ppcolor" data-p="${path}" value="${attr(get(path) || dflt)}">`;
   const formaTab = () => { const sl = slides()[sel]; const b = sl ? boxesOf(sl)[0] : { x: 0, y: 0, w: 1, h: 1 };
@@ -288,20 +296,20 @@ async function simulator(teamId, songId, el, alive) {
       <div class="ppg"><b>Transformar</b>${num("shape.rot", "Rotação (°)", { min: -360, max: 360 })}</div>
       <div class="ppg"><b>Opacidade</b><input type="range" data-p="shape.opacity" data-scale="100" min="0" max="100" value="${Math.round((get("shape.opacity") ?? 1) * 100)}"></div>
       <div class="ppg col">${chk("shape.fill.on", "Preencher")}${get("shape.fill.on") ? `<div class="row gap-s">${color("shape.fill.color", "#000000")}</div>` : ""}</div>
-      <div class="ppg col">${chk("shape.stroke.on", "Traço")}${get("shape.stroke.on") ? `<div class="row gap-s">${color("shape.stroke.color", "#ffffff")}${num("shape.stroke.w", "Espessura", { min: 1, max: 40 })}</div>` : ""}</div>
+      <div class="ppg col">${chk("shape.stroke.on", "Traço")}${get("shape.stroke.on") ? `<div class="row gap-s">${color("shape.stroke.color", "#ffffff")}${num("shape.stroke.w", "Espessura (px)", { min: 0, max: 200, px: 1 })}</div>` : ""}</div>
       <div class="ppg"><b>Fundo</b><input type="color" class="ppcolor" data-st="bg" value="${attr(st.bg)}"><label class="ppn"><span>Opacidade do fundo %</span><input type="number" data-st="bgAlpha" data-scale="100" min="0" max="100" value="${Math.round((st.bgAlpha ?? 1) * 100)}"></label></div>
       <button type="button" class="btn ghost block mt-s" id="boxreset">Restaurar posição e tamanho</button>`; };
   const textoTab = () => { const sl = slides()[sel]; const eff = sl ? boxesOf(sl)[0] : {};
     const fontNow = get("tx.font") || st.font;
     return `<div class="ppg col"><b>Fonte</b><select data-p="tx.font">${FONTS.map((f) => `<option ${fontNow === f ? "selected" : ""}>${f}</option>`).join("")}</select>
-        <div class="row gap-s">${num("tx.size", "Tamanho (pt)", { dflt: eff.size || st.size, min: 12, max: 140 })}
+        <div class="row gap-s">${num("tx.size", "Tamanho (px)", { dflt: eff.size || st.size, min: 4, max: 600, px: 1 })}
         <div class="segs sm"><button type="button" class="seg${get("tx.bold") !== false ? " on" : ""}" data-ptog="tx.bold"><b>B</b></button><button type="button" class="seg${get("tx.italic") ? " on" : ""}" data-ptog="tx.italic"><i>I</i></button><button type="button" class="seg${get("tx.underline") ? " on" : ""}" data-ptog="tx.underline"><u>U</u></button><button type="button" class="seg${get("tx.strike") ? " on" : ""}" data-ptog="tx.strike"><s>S</s></button></div></div></div>
       <div class="ppg"><b>Capitalização</b><select data-pcaps>${CAPS.map(([v, t]) => `<option value="${v ?? ""}" ${(get("tx.caps") ?? null) === v || (v === null && get("tx.caps") == null) ? "selected" : ""}>${t}</option>`).join("")}</select></div>
       <div class="ppg"><b>Cor do texto</b>${color("tx.color", st.color)}<button type="button" class="link small" data-pclear="tx.color">padrão</button></div>
       <div class="ppg col"><b>Alinhamento</b>${seg("tx.align", [["l", "Esquerda"], ["ctr", "Centro"], ["r", "Direita"], ["just", "Justificado"]], get("tx.align") || st.layout.align)}${seg("tx.anchor", [["t", "Em cima"], ["ctr", "Meio"], ["b", "Embaixo"]], get("tx.anchor") || st.layout.anchor)}</div>
-      <div class="ppg col">${chk("tx.stroke.on", "Traço")}${get("tx.stroke.on") ? `<div class="row gap-s">${color("tx.stroke.color", "#000000")}${num("tx.stroke.w", "Espessura", { min: 1, max: 20 })}</div>` : ""}</div>
+      <div class="ppg col">${chk("tx.stroke.on", "Traço")}${get("tx.stroke.on") ? `<div class="row gap-s">${color("tx.stroke.color", "#000000")}${num("tx.stroke.w", "Espessura (px)", { min: 0, max: 80, px: 1 })}</div>` : ""}</div>
       <div class="ppg col">${chk("tx.shadow.on", "Sombra")}${get("tx.shadow.on") ? `<div class="row gap-s">${color("tx.shadow.color", "#000000")}${num("tx.shadow.op", "Opacidade %", { scale: 100, min: 0, max: 100 })}</div>
-        <div class="row gap-s">${num("tx.shadow.angle", "Ângulo (°)", { min: 0, max: 359 })}${num("tx.shadow.off", "Deslocamento", { min: 0, max: 60 })}${num("tx.shadow.blur", "Desfocar", { min: 0, max: 60 })}</div>` : ""}</div>`; };
+        <div class="row gap-s">${num("tx.shadow.angle", "Ângulo (°)", { min: 0, max: 359 })}${num("tx.shadow.off", "Deslocamento", { min: 0, max: 200, px: 1 })}${num("tx.shadow.blur", "Desfocar", { min: 0, max: 200, px: 1 })}</div>` : ""}</div>`; };
   const compTab = () => `<div class="ppg col"><b>Transição ao entrar no slide</b><select data-ptrans>${TRANS.map(([v, t]) => `<option value="${v}" ${(st.pp.trans || "none") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
       <p class="tiny muted" style="margin:6px 0 0">Vale para todos os slides desta música no PowerPoint exportado.</p></div>`;
   const canvasHTML = () => { const sl = slides()[sel]; if (!sl) return `<div class="card small muted">Esta música ainda não tem letra. Escreva na tela de edição.</div>`; return `<div class="ppstage" id="stage">${thumb(sl, true)}<div class="ppsel" id="psel"></div></div>`; };
@@ -354,6 +362,7 @@ async function simulator(teamId, songId, el, alive) {
     if (t.type !== "color" && (t.value === "" || Number.isNaN(v))) return;
     if (t.dataset.ax) v = v / (t.dataset.ax === "W" ? resW : resH);
     else if (t.dataset.scale) v = v / Number(t.dataset.scale);
+    else if (t.dataset.px) v = (v * 960) / resW;
     set(path, v); repaint();
   });
   // arrastar e redimensionar a caixa
@@ -393,10 +402,14 @@ async function simulator(teamId, songId, el, alive) {
   // ---- presets: edições já definidas da igreja + os salvos pelo time
   const PKEYS = ["font", "size", "color", "bg", "bgAlpha", "per", "caps", "showLabel"];
   const snapshot = () => { const c = {}; for (const k of PKEYS) c[k] = st[k]; c.pp = JSON.parse(JSON.stringify({ shape: st.pp.shape, tx: st.pp.tx, trans: st.pp.trans || "none" })); return c; };
-  const applyPreset = (cfg) => { for (const k of PKEYS) if (cfg[k] !== undefined) st[k] = cfg[k]; st.pp = { shape: {}, tx: {}, over: {}, trans: "none", ...JSON.parse(JSON.stringify(cfg.pp || {})) }; st.pp.over = {}; dirty = true; repaint(); paintInsp(); };
+  const applyPreset = async (cfg) => {
+    if (cfg.ratio && cfg.ratio !== st.ratio && canManageTeam(teamId) && (await confirmDialog(`Este preset usa a tela ${cfg.ratio}. Mudar a tela da projeção do time?`, "Mudar a tela"))) {
+      const r = await sb.from("teams").update({ slide_ratio: cfg.ratio }).eq("id", teamId); if (r.error) toast(errMsg(r.error), "err"); else { team.slide_ratio = cfg.ratio; st.ratio = cfg.ratio; calcRes(); }
+    }
+    for (const k of PKEYS) if (cfg[k] !== undefined) st[k] = cfg[k]; st.pp = { shape: {}, tx: {}, over: {}, trans: "none", ...JSON.parse(JSON.stringify(cfg.pp || {})) }; st.pp.over = {}; dirty = true; repaint(); paintInsp(); };
   const loadPresets = async () => { const r = await sb.from("lyric_presets").select("id,name,config").eq("team_id", teamId).order("sort").order("created_at"); return r.error ? null : r.data || []; };
   const presetCard = (name, cfg, extra = "") => { const s2 = { ...st, ...cfg, pp: { shape: {}, tx: {}, over: {}, ...(cfg.pp || {}) } };
-    return `<div class="ppreset">${thumbOf(letraBoxes({ label: "", text: "Line one of text\nLine two of text", footer: "", idx: 0 }, s2), { bg: s2.bg, bgAlpha: s2.bgAlpha, color: s2.color, font: s2.font, ratio: st.ratio })}<div class="row gap-s"><span class="grow t">${esc(name)}</span>${extra}</div></div>`; };
+    return `<div class="ppreset">${thumbOf(letraBoxes({ label: "", text: "Line one of text\nLine two of text", footer: "", idx: 0 }, s2), { bg: s2.bg, bgAlpha: s2.bgAlpha, color: s2.color, font: s2.font, ratio: cfg.ratio || st.ratio })}<div class="row gap-s"><span class="grow t">${esc(name)}</span>${extra}</div></div>`; };
   on(el, "click", "#ppresets", async () => {
     const saved2 = await loadPresets();
     const sh = sheet(`<h3>Presets</h3><p class="small muted">Edições já definidas. Toque para aplicar à música (você ainda pode ajustar e salvar).</p>
@@ -405,8 +418,8 @@ async function simulator(teamId, songId, el, alive) {
       ${saved2 === null ? "" : `<label class="field mt"><span>Salvar os ajustes atuais como preset</span><input id="spname" maxlength="60" placeholder="Ex.: Louvor domingo"></label><button class="btn primary block" id="spsave">${icon("check")} Salvar preset</button>`}`, { wide: true });
     sh.el.addEventListener("click", async (e) => {
       const bp = e.target.closest("[data-bp]"), sp = e.target.closest("[data-sp]"), del = e.target.closest("[data-spd]");
-      if (bp) { applyPreset(BUILTIN_PRESETS[Number(bp.dataset.bp)][1]); sh.close(); toast("Preset aplicado"); }
-      else if (sp) { applyPreset(saved2.find((x) => x.id === sp.dataset.sp).config || {}); sh.close(); toast("Preset aplicado"); }
+      if (bp) { sh.close(); await applyPreset(BUILTIN_PRESETS[Number(bp.dataset.bp)][1]); toast("Preset aplicado"); }
+      else if (sp) { sh.close(); await applyPreset(saved2.find((x) => x.id === sp.dataset.sp).config || {}); toast("Preset aplicado"); }
       else if (del) { if (!(await confirmDialog("Excluir este preset?", "Excluir", true))) return; const r = await sb.from("lyric_presets").delete().eq("id", del.dataset.spd); if (r.error) return toast(errMsg(r.error), "err"); sh.close(); toast("Preset excluído"); }
     });
     sh.el.querySelector("#spsave")?.addEventListener("click", async (e) => {

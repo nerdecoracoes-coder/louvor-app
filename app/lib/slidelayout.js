@@ -38,7 +38,7 @@ function boxStyle(x) {
   const sz = (x.size || 54) / 9.6, al = { l: "left", r: "right", just: "justify" }[x.align] || "center", jc = { t: "flex-start", b: "flex-end" }[x.anchor] || "center";
   const op = (x.opacity ?? 1), css = [`left:${(x.x ?? 0.04) * 100}%`, `top:${(x.y ?? 0.06) * 100}%`, `width:${(x.w ?? 0.92) * 100}%`, `height:${(x.h ?? 0.88) * 100}%`,
     `font-size:${sz}cqw`, `line-height:${1.15 * (x.line || 1)}`, `text-align:${al}`, `justify-content:${jc}`, `font-weight:${x.bold === false ? 400 : 700}`, `opacity:${(x.alpha ?? 1) * op}`];
-  if (x.font) css.push(`font-family:'${attr(x.font)}',sans-serif`);
+  if (x.font) css.push(`font-family:'${attr(x.font)}',${x.font === "Gotham" ? "'Montserrat'," : ""}sans-serif`);
   if (x.color) css.push(`color:${attr(x.color)}`);
   if (x.italic) css.push("font-style:italic");
   const deco = [x.underline && "underline", x.strike && "line-through"].filter(Boolean); if (deco.length) css.push(`text-decoration:${deco.join(" ")}`);
