@@ -1031,3 +1031,13 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .etabs { overflow-x: auto; scrollbar-width: none; max-width: 100%; }
 .etabs::-webkit-scrollbar { display: none; }
 .etabs button { flex: 1 0 auto; padding-left: 10px; padding-right: 10px; }
+
+.etabs { overflow: visible; }
+.etabs button { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 3px; padding: 8px 2px; font-size: 12px; line-height: 1.15; }
+.etabs .tl { display: inline-flex; align-items: center; gap: 4px; }
+.etabs .tl svg { width: 22px; height: 22px; }
+.etabs .tn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+.etabs .cnt { padding: 0; min-width: 0; background: none !important; font-size: 13px; }
+.etabs button { flex: 1 1 auto; padding: 8px 1px; font-size: 11.5px; }
+.etabs .tn { overflow: visible; text-overflow: clip; }
+.etabs .tl svg { width: 21px; height: 21px; }

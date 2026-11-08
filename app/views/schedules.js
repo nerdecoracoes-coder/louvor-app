@@ -364,7 +364,7 @@ async function editor(el, scheduleId, teamId) {
     const tabs = [["detalhes", "Detalhes", null], ["participantes", "Participantes", nPeople], ...(showSongs ? [["musicas", "Músicas", f.songs.length]] : []), ...(showCues ? [["roteiro", "Roteiro", cueList ? cueList.length : cueCount]] : [])];
     el.innerHTML = `<div class="pagehead"><a class="back" href="${scheduleId ? `#/escala/${scheduleId}` : `#/times/${f.team}`}">${icon("chevronLeft")}</a><h1>${scheduleId ? "Editar escala" : "Nova escala"}</h1>
       ${sched ? `<span class="tag ${sched.status === "published" ? "ok" : "gray"}">${sched.status === "published" ? "Publicada" : "Rascunho"}</span>` : ""}</div>
-    <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-etab="${k}" class="${f.tab === k ? "on" : ""}">${l}${n != null ? ` <i class="cnt">${n}</i>` : ""}</button>`).join("")}</div>
+    <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-etab="${k}" class="${f.tab === k ? "on" : ""}"><span class="tl">${icon(TABICO[k])}${n != null ? `<i class="cnt">${n}</i>` : ""}</span><span class="tn">${l}</span></button>`).join("")}</div>
     ${f.tab === "detalhes" ? tabDetails(team) : f.tab === "participantes" ? tabPeople() : f.tab === "musicas" ? tabSongs() : tabCues()}
     <div style="height:84px"></div>
     <button class="fabsave" id="savebtn" data-save="${f.publish ? "published" : "draft"}">${icon("check")} Salvar</button>`;
@@ -560,6 +560,7 @@ async function editor(el, scheduleId, teamId) {
 }
 
 const MAX_REPEAT = 26;
+const TABICO = {detalhes:"info",det:"info",participantes:"users",par:"users",musicas:"music",mus:"music",roteiro:"list",rot:"list"};
 const autosize = (t) => { if (!t) return; t.style.height = "auto"; t.style.height = `${t.scrollHeight}px`; };
 const CATALOG = [["Branco", "#ffffff"], ["Off-white", "#f5efe6"], ["Bege", "#d9c3a0"], ["Areia", "#c8ad7f"], ["Caramelo", "#b7773e"], ["Marrom", "#6b4226"], ["Terracota", "#c4673d"], ["Mostarda", "#d9a521"],
   ["Amarelo", "#f2d03b"], ["Laranja", "#f08a24"], ["Vermelho", "#d1343b"], ["Vinho", "#7a1f35"], ["Rosé", "#e8b4b8"], ["Rosa", "#e0629b"], ["Lilás", "#b79ad6"], ["Roxo", "#6b3fa0"],
@@ -668,7 +669,7 @@ async function detail(el, id, tab = "det") {
       <span class="small muted">${esc(s.teams?.name || "")}</span></div>${s.status === "draft" ? `<span class="tag gray">Rascunho</span>` : ""}</div>
     <p class="dwhen">${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""} · ${esc(cap(fDow(s.starts_at)).replace(/\.$/, ""))} · ${esc(new Intl.DateTimeFormat("pt-BR", { day: "numeric", month: "long", year: "numeric", timeZone: "America/Sao_Paulo" }).format(new Date(s.starts_at)))}${today ? ` <span class="tag soft">Hoje</span>` : ""}</p>
     <div class="chips dchips">${pending ? `<span class="chip warnchip">${icon("clock")} Confirmação pendente</span>` : ""}<button class="chip" id="share" type="button">${icon("share")} Compartilhar</button></div>
-    <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-dtab="${k}" class="${tab === k ? "on" : ""}">${l}${n != null ? ` <i class="cnt">${n}</i>` : ""}</button>`).join("")}</div>
+    <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-dtab="${k}" class="${tab === k ? "on" : ""}"><span class="tl">${icon(TABICO[k])}${n != null ? `<i class="cnt">${n}</i>` : ""}</span><span class="tn">${l}</span></button>`).join("")}</div>
     <div id="pane">${panes[tab]()}</div>
     ${manageBar()}`;
   if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));

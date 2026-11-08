@@ -173,6 +173,7 @@ const P = {
   crown: '<path d="m3 8 4.5 4L12 5l4.5 7L21 8l-2 11H5z"/>', shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>',
   eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
   cloud: '<path d="M7 18a5 5 0 0 1-.6-10A6.5 6.5 0 0 1 19 9.5 4.3 4.3 0 0 1 18 18z"/>',
+  info: '<circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.5h.01"/>',
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>', refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.6L20 9"/><path d="M20 3v6h-6"/>',
   whatsapp: '<path d="M20.5 11.6a8.6 8.6 0 0 1-12.7 7.5L3.5 20.5l1.4-4.2a8.6 8.6 0 1 1 15.6-4.7z"/><path d="M9 8.5c.2 2.6 3.3 5.8 6.2 6.3l1.1-1.5-1.9-1-1 .7c-.9-.4-2-1.5-2.4-2.4l.7-1-1-1.9z"/>',
   youtube: '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10 9.5 5 2.5-5 2.5z" fill="currentColor"/>',
