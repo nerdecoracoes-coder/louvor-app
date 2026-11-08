@@ -41,6 +41,7 @@ export async function timePage(id, el, alive) {
       ${manage ? `<button data-inv>${icon("link")}<span class="grow">Convidar membros<small>Link exclusivo deste time</small></span>${icon("chevronRight", "chev")}</button>` : ""}
       ${row("users", "Integrantes", `#/times/${id}/integrantes`, members.length)}
       ${row("badge", "Funções", `#/times/${id}/funcoes`, roles.length)}
+      ${manage ? row("stage", "Palco e presets", `#/times/${id}/palco`, null, "Posições das funções e modelos de escala") : ""}
       ${row("layers", "Equipes", `#/times/${id}/equipes`, groups ? groups.length : null)}
       ${teamHasRepertoire(team) ? row("tag", "Classificações", `#/times/${id}/classificacoes`, null) : ""}
       ${row("crown", "Liderança", `#/times/${id}/lideranca`, leaders)}

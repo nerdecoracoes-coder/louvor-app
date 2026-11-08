@@ -698,6 +698,40 @@ with sync_playwright() as pw:
     assert bruno.locator(".tlcard", has_text="Ensaio semanal").count() >= 1 and bruno.locator(".tlcard .tag", has_text="Pendente").count() >= 0
     bruno.locator("#modebtn").click()
     ok("escala com repetição semanal, sem confirmação e com cor")
+    # palco do time: o líder monta o modelo padrão e um preset; na escala, escolhe pelo palco
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/palco")
+    bruno.locator("#seed").click(); expect(bruno.locator(".stage.editing .slot").first).to_be_visible(timeout=10000)
+    n_slots = bruno.locator(".stage.editing .slot").count(); assert n_slots >= 3, n_slots
+    bruno.locator("#addpreset").click(); bruno.fill(".sheet #pn", "Domingo")
+    bruno.locator(".sheet .slot").last.click()                                    # tira uma posição do preset
+    bruno.locator(".sheet #psave").click(); expect(bruno.locator("[data-preset]", has_text="Domingo")).to_contain_text(f"{n_slots - 1} posições", timeout=10000)
+    shot(bruno, "08d-palco-editor")
+    bruno.goto(f"{BASE}/#/escala/nova/{louvor_id}")
+    bruno.wait_for_selector("#view:not([hidden]) input[name=title]"); bruno.fill("input[name=title]", "Culto no palco")
+    bruno.locator("[data-etab=participantes]").click(); bruno.locator("[data-pview=palco]").click()
+    expect(bruno.locator(".stage .slot.empty").first).to_be_visible(timeout=10000)
+    bruno.locator(".stage .slot.empty", has_text="Ministro").first.click()
+    bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click()
+    expect(bruno.locator(".stage .slot .sface")).to_have_count(1, timeout=10000); shot(bruno, "08e-palco-escala")
+    bruno.locator("#presetbtn").click(); bruno.locator(".sheet [data-pr]", has_text="Domingo").click()
+    expect(bruno.locator("#presetbtn")).to_contain_text("Domingo")
+    assert bruno.locator(".stage .slot").count() == n_slots - 1
+    # músicas: sem setas; versão por música; segurar 0,5 s e arrastar muda a ordem
+    bruno.locator("[data-etab=musicas]").click(); bruno.locator("#addsong").click()
+    bruno.locator(".sheet [data-s]").nth(0).click(); bruno.locator(".sheet [data-s]").nth(1).click(); bruno.locator(".sheet #ok").click()
+    assert bruno.locator("[data-up]").count() == 0
+    expect(bruno.locator("#songs .vchip").first).to_contain_text("Versão original")
+    bruno.wait_for_timeout(700)     # a janela de escolha ainda está fechando
+    first = bruno.locator("#songs .sli").nth(0).locator(".t").inner_text()
+    box = bruno.locator("#songs .sli").nth(0).bounding_box(); box2 = bruno.locator("#songs .sli").nth(1).bounding_box()
+    y0 = box["y"] + 16; bruno.mouse.move(box["x"] + 60, y0); bruno.mouse.down()
+    bruno.wait_for_timeout(300); assert bruno.locator("#songs .sli.lifted").count() == 0      # antes de 0,5 s ainda não levantou
+    bruno.wait_for_timeout(350); expect(bruno.locator("#songs .sli.lifted")).to_have_count(1)
+    for k in range(1, 13): bruno.mouse.move(box["x"] + 60, y0 + (box2["y"] - box["y"] + 30) * k / 12); bruno.wait_for_timeout(40)
+    bruno.wait_for_timeout(400); bruno.mouse.up(); bruno.wait_for_timeout(500)
+    assert bruno.locator("#songs .sli").nth(1).locator(".t").inner_text() == first, "a música não trocou de lugar"
+    shot(bruno, "08f-musicas-arrastar")
+    ok("palco do time com preset, escolha pelo palco, músicas sem setas, versão e arrastar")
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")
     # modo linha do tempo (ícone ao lado do +), lembrado entre visitas
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")

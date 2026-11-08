@@ -4,6 +4,7 @@ import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName
 import { schedRow } from "./home.js";
 import { scheduleExtras, cueEditor } from "./multimidia.js";
 import { downloadPackage, letrasTeamOf } from "./letras.js";
+import { loadStage, stageHTML, slotFace } from "./palco.js";
 
 export function register(route) {
   route("/escala/nova", (p, el) => editor(el, null, null));
@@ -34,7 +35,7 @@ async function editor(el, scheduleId, teamId) {
     teamId = sched.team_id;
     assigns = await must(sb.from("schedule_assignments").select("*").eq("schedule_id", scheduleId));
     songsSel = (await must(sb.from("schedule_songs").select("*,songs(id,title,artist,song_key,bpm,status,source,current_project_id,cover_url)").eq("schedule_id", scheduleId).order("position")))
-      .map((s) => ({ song_id: s.song_id, title: s.songs?.title || s.title_snapshot, artist: s.songs?.artist || s.artist_snapshot, song_key: s.song_key, notes: s.notes, removed: !s.song_id || s.songs?.status === "removed" }));
+      .map((s) => ({ song_id: s.song_id, title: s.songs?.title || s.title_snapshot, artist: s.songs?.artist || s.artist_snapshot, song_key: s.song_key, notes: s.notes, version_id: s.version_id || null, version_name: s.version_name || null, bpm: s.bpm ?? null, removed: !s.song_id || s.songs?.status === "removed" }));
   }
   if (!teams.length) { el.innerHTML = empty("lock", "Somente líderes e administradores criam escalas."); return; }
   // a escala é criada dentro de um time: usa o time da rota ou o time em que a pessoa está; só pergunta quando não há nenhum
@@ -61,6 +62,7 @@ async function editor(el, scheduleId, teamId) {
   };
   // "pedir confirmação" e "paleta de cores" dependem de colunas novas; sem elas (SQL ainda não aplicado) as opções ficam escondidas
   const hasExt = !(await sb.from("schedules").select("ask_confirmation,palettes").limit(1)).error;
+  const hasVer = !(await sb.from("schedule_songs").select("version_id,version_name,bpm").limit(1)).error;
   let cueCount = 0;
   if (scheduleId) cueCount = (await sb.from("schedule_cues").select("id").eq("schedule_id", scheduleId)).data?.length || 0;
   for (const a of assigns) { const k = a.role_id || "none"; if (!f.picks.has(k)) f.picks.set(k, []); f.picks.get(k).push(a.user_id); }
@@ -84,8 +86,18 @@ async function editor(el, scheduleId, teamId) {
     candidates = r.error ? [] : r.data;
     return candidates;
   }
+  let stage = { slots: [], presets: [], missing: false }, roleNames = new Map();
+  async function loadStageData() {
+    stage = await loadStage(f.team);
+    try { for (const r of await must(sb.from("music_roles").select("id,name").eq("org_id", state.org.id))) roleNames.set(r.id, r.name); } catch { /* sem nomes */ }
+    if (f.preset && !stage.presets.some((p) => p.id === f.preset)) f.preset = null;
+  }
+  const PVIEW_KEY = "somos.sched.pview";
+  f.pview = "lista"; try { f.pview = localStorage.getItem(PVIEW_KEY) === "palco" ? "palco" : "lista"; } catch { /* sem armazenamento */ }
+  f.preset = null;
   await loadTeam();
   await loadCandidates();
+  await loadStageData();
 
   // pessoas já escaladas em OUTRO time no mesmo evento (mesmo evento da agenda ou mesmo horário)
   const evLink = churchEv?.id || sched?.church_event_id || null, okElsewhere = new Set();
@@ -178,18 +190,153 @@ async function editor(el, scheduleId, teamId) {
       const empties = Array.from({ length: n - picked.length }, () => `<div class="pcard pslot" data-pick="${r.id}" role="button" tabindex="0"><span class="cover" style="width:46px;height:46px">${icon(roleIcon(r.name))}</span>
           <span class="grow"><b style="display:block">${esc(r.name)}</b><small>Toque para escolher</small></span>
           ${n > 1 ? `<button type="button" class="iconbtn" data-slot="${r.id}" data-d="-1" aria-label="Tirar uma vaga de ${attr(r.name)}">${icon("minus")}</button>` : ""}${icon("chevronRight", "chev")}</div>`);
-      return `<div class="rolegrp">${filled.join("")}${empties.join("")}</div>`;
+      return filled.length || empties.length ? `<div class="rolegrp">${filled.join("")}${empties.join("")}</div>` : "";
     };
-    return `<div class="sec">${icon("users")}<h2>Participantes</h2><button class="more" id="addrole" title="Acrescentar função" aria-label="Acrescentar função">${icon("plus")} Função</button><button class="more" id="suggest">${icon("sparkle")} Sugerir escala</button></div>
-    ${teamRoles.length ? `<div class="rolelist">${teamRoles.map(cards).join("")}</div>` : `<div class="card">${empty("users", "Nenhum integrante com função neste time", `Defina as funções musicais dos integrantes em <a class="link" href="#/times/${f.team}/integrantes">Integrantes</a>.`)}</div>`}`;
+    const presetName = stage.presets.find((p) => p.id === f.preset)?.name;
+    const bar = `<div class="pbar"><div class="seg" role="tablist"><button type="button" data-pview="lista" class="${f.pview === "lista" ? "on" : ""}">${icon("list")} Lista</button><button type="button" data-pview="palco" class="${f.pview === "palco" ? "on" : ""}">${icon("stage")} Palco</button></div>
+      ${stage.presets.length ? `<button type="button" class="chip" id="presetbtn">${icon("layers")} ${presetName ? esc(presetName) : "Todas as posições"}</button>` : ""}</div>`;
+    const head = `<div class="sec">${icon("users")}<h2>Participantes</h2><button class="more" id="addrole" title="Acrescentar função" aria-label="Acrescentar função">${icon("plus")} Função</button><button class="more" id="suggest">${icon("sparkle")} Sugerir escala</button></div>${bar}`;
+    if (f.pview === "palco") return head + stageView();
+    return head + `${teamRoles.length ? `<div class="rolelist">${teamRoles.map(cards).join("")}</div>` : `<div class="card">${empty("users", "Nenhum integrante com função neste time", `Defina as funções musicais dos integrantes em <a class="link" href="#/times/${f.team}/integrantes">Integrantes</a>.`)}</div>`}`;
+  }
+
+  // ---- palco: cada posição recebe, na ordem, as pessoas escaladas na função dela
+  const stageSlots = () => { const ids = f.preset ? new Set(stage.presets.find((p) => p.id === f.preset)?.slot_ids || []) : null; return stage.slots.filter((s) => !ids || ids.has(s.id)); };
+  const roleLabel = (id) => teamRoles.find((r) => r.id === id)?.name || roleNames.get(id) || "Função";
+  function stageCells() {
+    const seen = new Map(), cells = [];
+    for (const s of stageSlots()) { const i = seen.get(s.role_id) || 0; seen.set(s.role_id, i + 1); cells.push({ s, i, uid: (f.picks.get(s.role_id) || [])[i] || null }); }
+    const extra = [];
+    for (const [rid, users] of f.picks) users.slice(seen.get(rid) || 0).forEach((u) => extra.push({ rid, u }));
+    return { cells, extra };
+  }
+  function stageView() {
+    if (stage.missing) return `<div class="card"><p class="small" style="margin:0">O palco precisa da atualização do banco de dados (arquivo <b>atualizacao-2026-11-07-palco-presets.sql</b>).</p></div>`;
+    if (!stage.slots.length) return `<div class="card">${empty("stage", "O palco deste time ainda não foi montado", `Monte as posições em <a class="link" href="#/times/${f.team}/palco">Time › Palco e presets</a>. Depois é só tocar em cada posição para escolher quem toca.`)}</div>`;
+    const { cells, extra } = stageCells();
+    const warns = cells.filter((c) => c.uid).map((c) => ({ u: c.uid, w: warnFor(c.uid, c.s.role_id) })).filter((x) => x.w.length);
+    const first = (u) => personName(ppl, u).split(" ")[0];
+    return stageHTML(stage.slots.length ? cells.map((c) => c.s) : [], (s) => {
+      const c = cells.find((x) => x.s.id === s.id), name = roleLabel(s.role_id);
+      if (!c.uid) return { cls: "empty", inner: slotFace(name) };
+      return { cls: warnFor(c.uid, s.role_id).length ? "warn" : "", inner: `<span class="sface">${avatar(ppl.get(c.uid), 54, false)}</span><b class="swho">${esc(first(c.uid))}</b><small class="sname">${esc(name)}</small>` };
+    }) + (cells.length ? "" : `<p class="small muted">Este preset não tem posições. Escolha outro preset.</p>`)
+      + (warns.length ? `<div class="card mt">${warns.map((x) => `<div class="small warn" style="margin:2px 0">${icon("alert")} <b>${esc(personName(ppl, x.u))}</b>: ${esc(x.w.join(" · "))}</div>`).join("")}</div>` : "")
+      + (extra.length ? `<div class="sec"><h3>Fora do palco</h3></div><div class="chips">${extra.map((x) => `<button type="button" class="chip" data-unpick="${x.rid}:${x.u}">${esc(personName(ppl, x.u))} · ${esc(roleLabel(x.rid))} ${icon("x")}</button>`).join("")}</div>` : "");
+  }
+  function applyPreset(id) {
+    f.preset = id || null;
+    if (!id) { f.slots.clear(); return; }
+    const counts = new Map();
+    for (const s of stageSlots()) counts.set(s.role_id, (counts.get(s.role_id) || 0) + 1);
+    for (const r of teamRoles) f.slots.set(r.id, counts.get(r.id) || 0);
+  }
+  function presetSheet() {
+    const sh = sheet(`<h3>Preset da escala</h3><p class="small muted" style="margin-top:-6px">Define quais posições entram nesta escala.</p>
+      <div class="list"><button class="li" data-pr=""><span class="cover" style="width:38px;height:38px">${icon("stage")}</span><span class="grow"><span class="t">Todas as posições</span></span>${!f.preset ? icon("check", "chev") : ""}</button>
+      ${stage.presets.map((p) => `<button class="li" data-pr="${p.id}"><span class="cover" style="width:38px;height:38px">${icon("layers")}</span><span class="grow"><span class="t">${esc(p.name)}</span><span class="s">${p.slot_ids.length} posições</span></span>${f.preset === p.id ? icon("check", "chev") : ""}</button>`).join("")}</div>`);
+    on(sh.el, "click", "[data-pr]", (e, b) => { applyPreset(b.dataset.pr); sh.close(); draw(); });
+  }
+  // toque numa posição do palco: escolhe (ou troca) a pessoa daquela posição
+  function slotPicker(roleId, index) {
+    const role = teamRoles.find((r) => r.id === roleId);
+    if (!role) return toast("Ninguém deste time tem esta função cadastrada.", "err");
+    const cur = f.picks.get(roleId) || [], now = cur[index] || null;
+    const withRole = memberRoles.filter((r) => r.role_id === roleId).map((r) => r.user_id).filter((u) => u === now || !cur.includes(u));
+    const s = sheet(`<h3>${esc(role.name)}</h3><p class="small muted">Quem toca nesta posição.</p><div class="list" style="max-height:60vh;overflow:auto">
+      ${withRole.map((u) => { const w = warnFor(u, roleId); const c = candInfo(u, roleId); return `<button class="li" data-u="${u}">${avatar(ppl.get(u), 40, false)}
+        <span class="grow"><span class="t">${esc(personName(ppl, u))}</span><span class="s">${c ? `${c.month_count} escala(s) no mês${c.monthly_limit != null ? ` · limite ${c.monthly_limit}` : ""}` : ""}</span>
+        ${w.map((x) => `<span class="tiny ${/Indispon/.test(x) ? "danger-t" : "warn"}" style="display:block">${esc(x)}</span>`).join("")}</span>
+        ${u === now ? icon("check", "chev") : ""}</button>`; }).join("") || `<div class="li muted small">Ninguém mais tem esta função.</div>`}</div>
+      ${now ? `<button class="btn ghost block mt" id="clr">${icon("x")} Deixar vazia</button>` : ""}`);
+    on(s.el, "click", "[data-u]", async (e, b) => {
+      const u = b.dataset.u;
+      if (u !== now && !(await okToAdd(u, roleId))) return;
+      const arr = [...(f.picks.get(roleId) || [])];
+      if (index < arr.length) arr[index] = u; else arr.push(u);
+      f.picks.set(roleId, arr); s.close(); draw();
+    });
+    s.el.querySelector("#clr")?.addEventListener("click", () => { const arr = [...(f.picks.get(roleId) || [])]; arr.splice(index, 1); f.picks.set(roleId, arr); s.close(); draw(); });
   }
   function tabSongs() {
+    const bpmOf = (x) => x.bpm != null ? Number(x.bpm) : null;
     return `<div class="sec">${icon("music")}<h2>Músicas</h2><button class="more" id="addsong">${icon("plus")} Adicionar</button></div>
-    <div class="list" id="songs">${f.songs.length ? f.songs.map((s, i) => `<div class="li"><span class="dim small" style="width:18px">${i + 1}</span>
-      <span class="grow" style="min-width:0"><span class="t ellipsis" style="display:block">${esc(s.title)}${s.removed ? ` <span class="tag gray">fora do repertório</span>` : ""}</span><span class="s">${esc(s.artist || "")}</span></span>
+    ${f.songs.length > 1 ? `<p class="draghint">Para mudar a ordem, segure uma música por meio segundo e arraste.</p>` : ""}
+    <div class="list" id="songs">${f.songs.length ? f.songs.map((s, i) => `<div class="li sli" data-i="${i}"><span class="dim small" style="width:18px">${i + 1}</span>
+      <span class="grow" style="min-width:0"><span class="t ellipsis" style="display:block">${esc(s.title)}${s.removed ? ` <span class="tag gray">fora do repertório</span>` : ""}</span><span class="s">${esc(s.artist || "")}</span>
+        ${hasVer && !s.removed ? `<button type="button" class="vchip ${s.version_name ? "" : "none"}" data-ver="${i}" aria-label="Trocar a versão">${icon("layers")} ${s.version_name ? esc(s.version_name) : "Versão original"}${bpmOf(s) ? ` · ${bpmOf(s)} BPM` : ""}</button>` : ""}</span>
       <input class="input" style="width:66px;height:38px;padding:0 8px;text-align:center" data-key="${i}" value="${attr(s.song_key || "")}" placeholder="Tom" aria-label="Tom">
-      <button class="iconbtn" data-up="${i}" aria-label="Subir" ${i === 0 ? "disabled" : ""}>${icon("chevronUp")}</button>
       <button class="iconbtn" data-rm="${i}" aria-label="Remover">${icon("x")}</button></div>`).join("") : `<div class="li muted small">Nenhuma música selecionada.</div>`}</div>`;
+  }
+
+  // escolher a versão da música nesta escala: tom e BPM acompanham a versão
+  async function versionSheet(i) {
+    const s = f.songs[i]; if (!s?.song_id) return toast("Esta música saiu do repertório.", "err");
+    const [vr, sr] = await Promise.all([sb.from("song_versions").select("*").eq("song_id", s.song_id).order("position"), sb.from("songs").select("song_key,bpm").eq("id", s.song_id).maybeSingle()]);
+    const vs = vr.error ? [] : vr.data || [], base = sr.data || {};
+    const line = (k, b) => [k ? `Tom ${esc(k)}` : "", b ? `${Number(b)} BPM` : ""].filter(Boolean).join(" · ");
+    const sh = sheet(`<h3>${esc(s.title)}</h3><p class="small muted" style="margin-top:-6px">Escolha a versão desta escala. O tom e o BPM mudam junto.</p>
+      <div class="list" style="max-height:58vh;overflow:auto">
+        <button class="li" data-v=""><span class="cover" style="width:38px;height:38px">${icon("music")}</span><span class="grow"><span class="t">Versão original</span><span class="s">${line(base.song_key, base.bpm) || "Sem tom definido"}</span></span>${!s.version_id ? icon("check", "chev") : ""}</button>
+        ${vs.map((v) => `<button class="li" data-v="${v.id}"><span class="cover" style="width:38px;height:38px">${icon("mic")}</span><span class="grow"><span class="t">${esc(v.name)}</span><span class="s">${[v.singer_id ? esc(personName(ppl, v.singer_id)) : "", line(v.song_key, v.bpm)].filter(Boolean).join(" · ") || "Sem tom definido"}</span></span>${s.version_id === v.id ? icon("check", "chev") : ""}</button>`).join("")}
+      </div>${vs.length ? "" : `<p class="small muted mt">Esta música ainda não tem versões. Cadastre na página da música quem canta em qual tom.</p>`}`, { wide: true });
+    on(sh.el, "click", "[data-v]", (e, b) => {
+      const v = vs.find((x) => x.id === b.dataset.v);
+      if (v) Object.assign(s, { version_id: v.id, version_name: v.name, song_key: v.song_key || base.song_key || null, bpm: v.bpm ?? base.bpm ?? null });
+      else Object.assign(s, { version_id: null, version_name: null, song_key: base.song_key || null, bpm: base.bpm ?? null });
+      sh.close(); draw();
+    });
+  }
+
+  // segurar 0,5 s e arrastar: a música levantada acompanha o dedo devagar e as outras abrem espaço
+  function bindSort() {
+    const box = el.querySelector("#songs"); if (!box || f.songs.length < 2) return;
+    let st = null;
+    const rows = () => [...box.querySelectorAll(".sli")];
+    const reset = () => { rows().forEach((r) => { r.style.transform = ""; r.style.transition = ""; r.classList.remove("lifted", "armed"); }); box.classList.remove("sorting"); };
+    const cancel = () => { if (!st) return; clearTimeout(st.timer); cancelAnimationFrame(st.raf); st = null; reset(); };
+    const overIndex = () => { const n = st.rows.length; const c = st.cur + st.rect.top + st.scroll0 + st.rect.height / 2 - st.top0; return Math.max(0, Math.min(n - 1, Math.floor(c / st.pitch))); };
+    function activate() {
+      const all = rows(); const rects = all.map((r) => r.getBoundingClientRect());
+      st.active = true; st.rows = all; st.rect = rects[st.idx]; st.scroll0 = window.scrollY; st.top0 = rects[0].top + window.scrollY - 0;
+      st.pitch = (rects[rects.length - 1].bottom - rects[0].top) / all.length; st.h = st.pitch; st.cur = 0; st.over = st.idx; st.py = st.y;
+      st.row.classList.remove("armed"); st.row.classList.add("lifted"); box.classList.add("sorting");
+      try { st.row.setPointerCapture(st.id); } catch { /* ok */ } navigator.vibrate?.(18);
+      const loop = () => {
+        if (!st?.active) return;
+        if (st.py < 110) window.scrollBy(0, -3); else if (st.py > innerHeight - 150) window.scrollBy(0, 3);
+        const target = st.py - st.y + (window.scrollY - st.scroll0);
+        st.cur += (target - st.cur) * 0.2;   // acompanha o dedo com suavidade
+        st.row.style.transform = `translateY(${st.cur}px) scale(1.02)`;
+        const over = overIndex();
+        if (over !== st.over) st.over = over;
+        st.rows.forEach((r, j) => { if (j === st.idx) return; const sh = st.idx < st.over && j > st.idx && j <= st.over ? -st.pitch : st.idx > st.over && j < st.idx && j >= st.over ? st.pitch : 0; r.style.transform = sh ? `translateY(${sh}px)` : ""; });
+        st.raf = requestAnimationFrame(loop);
+      };
+      st.raf = requestAnimationFrame(loop);
+    }
+    box.addEventListener("pointerdown", (e) => {
+      const row = e.target.closest(".sli"); if (!row || e.target.closest("input, button") || st) return;
+      st = { row, idx: Number(row.dataset.i), x: e.clientX, y: e.clientY, id: e.pointerId, active: false };
+      row.classList.add("armed"); st.timer = setTimeout(activate, 500);
+    });
+    box.addEventListener("pointermove", (e) => {
+      if (!st || e.pointerId !== st.id) return;
+      if (!st.active) { if (Math.hypot(e.clientX - st.x, e.clientY - st.y) > 10) cancel(); return; }
+      st.py = e.clientY; e.preventDefault();
+    });
+    box.addEventListener("touchmove", (e) => { if (st?.active) e.preventDefault(); }, { passive: false });
+    box.addEventListener("contextmenu", (e) => e.preventDefault());
+    const finish = (e) => {
+      if (!st || e.pointerId !== st.id) return;
+      if (!st.active) return cancel();
+      cancelAnimationFrame(st.raf);
+      const { idx, over, row, pitch } = st; st.active = false;
+      row.style.transition = "transform .22s cubic-bezier(.2,.8,.2,1)"; row.style.transform = `translateY(${(over - idx) * pitch}px)`;
+      setTimeout(() => { st = null; if (over !== idx) { const [m] = f.songs.splice(idx, 1); f.songs.splice(over, 0, m); } draw(); }, 230);
+    };
+    box.addEventListener("pointerup", finish);
+    box.addEventListener("pointercancel", (e) => { if (st && e.pointerId === st.id) { if (st.active) finish(e); else cancel(); } });
   }
   function tabCues() {
     return `<div class="sec">${icon("list")}<h2>Roteiro do culto</h2></div>
@@ -211,12 +358,13 @@ async function editor(el, scheduleId, teamId) {
     ${f.tab === "detalhes" ? tabDetails(team) : f.tab === "participantes" ? tabPeople() : f.tab === "musicas" ? tabSongs() : tabCues()}
     <div style="height:84px"></div>
     <button class="fabsave" id="savebtn" data-save="${f.publish ? "published" : "draft"}">${icon("check")} Salvar</button>`;
+    if (f.tab === "musicas") bindSort();
   }
   draw();
 
   const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date ?? f.date, time: d.time ?? f.time, end: d.end ?? f.end, location: d.location ?? f.location, notes: d.notes ?? f.notes, publish: d.publish === "on", repeat: d.repeat ?? f.repeat, until: d.until ?? f.until }); if (hasExt) f.ask = d.ask === "on"; if (d.team) f.team = d.team; };
   el.addEventListener("change", async (e) => {
-    if (e.target.name === "team") { readForm(); f.picks.clear(); if (!teamHasRepertoire(teams.find((t) => t.id === e.target.value))) f.songs = []; await loadTeam(); await loadCandidates(); draw(); return; }
+    if (e.target.name === "team") { readForm(); f.picks.clear(); f.slots.clear(); f.preset = null; if (!teamHasRepertoire(teams.find((t) => t.id === e.target.value))) f.songs = []; await loadTeam(); await loadCandidates(); await loadStageData(); draw(); return; }
     if (["date", "time", "end"].includes(e.target.name)) { readForm(); await loadCandidates(); draw(); }
     if (e.target.name === "repeat") { readForm(); if (f.repeat !== "none" && !f.until) f.until = addDays(f.date, f.repeat === "monthly" ? 90 : 28); draw(); }
     if (["publish", "ask", "until"].includes(e.target.name)) readForm();
@@ -235,7 +383,10 @@ async function editor(el, scheduleId, teamId) {
     if (t.id === "psuggest") return suggestSheet();
     if (t.id === "cues") { const team = teams.find((x) => x.id === f.team); const cues = await must(sb.from("schedule_cues").select("*").eq("schedule_id", scheduleId).order("position")); return cueEditor(sched, team, cues, async () => { cueCount = (await sb.from("schedule_cues").select("id").eq("schedule_id", scheduleId)).data?.length || 0; draw(); }); }
     if (t.id === "addsong") { readForm(); return songPicker(f.songs, () => draw()); }
-    if (t.dataset.up) { const i = Number(t.dataset.up); [f.songs[i - 1], f.songs[i]] = [f.songs[i], f.songs[i - 1]]; return draw(); }
+    if (t.dataset.ver !== undefined) return versionSheet(Number(t.dataset.ver));
+    if (t.dataset.pview) { readForm(); f.pview = t.dataset.pview; try { localStorage.setItem(PVIEW_KEY, f.pview); } catch { /* ok */ } return draw(); }
+    if (t.id === "presetbtn") return presetSheet();
+    if (t.dataset.sid) { readForm(); const { cells } = stageCells(); const c = cells.find((x) => x.s.id === t.dataset.sid); return c && slotPicker(c.s.role_id, c.i); }
     if (t.dataset.rm) { f.songs.splice(Number(t.dataset.rm), 1); return draw(); }
     if (t.dataset.slot) { e.stopPropagation(); const v = Math.max(1, Math.min(8, (f.slots.get(t.dataset.slot) ?? 1) + Number(t.dataset.d))); f.slots.set(t.dataset.slot, v); return draw(); }
     if (t.dataset.unpick) { const [rid, uid] = t.dataset.unpick.split(":"); f.picks.set(rid, (f.picks.get(rid) || []).filter((x) => x !== uid)); return draw(); }
@@ -272,6 +423,18 @@ async function editor(el, scheduleId, teamId) {
     };
   }
 
+  // regras: a mesma pessoa em duas funções do time, ou já escalada em outro time no mesmo evento, pedem confirmação de quem escala
+  async function okToAdd(u, roleId) {
+    const role = teamRoles.find((r) => r.id === roleId);
+    const other = rolesOf(u).filter((rid) => rid !== roleId).map((rid) => teamRoles.find((r) => r.id === rid)?.name).filter(Boolean);
+    if (other.length && !(await confirmDialog(`${personName(ppl, u)} já está escalado(a) neste evento como ${other.join(" e ")} aqui no time. Escalar também como ${role?.name || "esta função"}?`, "Escalar nas duas funções"))) return false;
+    if (!okElsewhere.has(u)) {
+      const el2 = await elsewhere([u]);
+      if (el2.length) { if (!(await confirmDialog(`${personName(ppl, u)} já está escalado(a) neste evento ${elsewhereText(el2)}. Escalar também no ${teamName()}?`, "Escalar mesmo assim"))) return false; okElsewhere.add(u); }
+    }
+    return true;
+  }
+
   function memberPicker(roleId) {
     const role = teamRoles.find((r) => r.id === roleId);
     const withRole = memberRoles.filter((r) => r.role_id === roleId).map((r) => r.user_id);
@@ -285,13 +448,7 @@ async function editor(el, scheduleId, teamId) {
     on(s.el, "click", "[data-u]", async (e, b) => {
       const u = b.dataset.u;
       if (!sel.has(u)) {
-        // regra: a mesma pessoa em mais de uma função precisa de confirmação de quem está escalando
-        const other = rolesOf(u).filter((rid) => rid !== roleId).map((rid) => teamRoles.find((r) => r.id === rid)?.name).filter(Boolean);
-        if (other.length && !(await confirmDialog(`${personName(ppl, u)} já está escalado(a) neste evento como ${other.join(" e ")} aqui no time. Escalar também como ${role.name}?`, "Escalar nas duas funções"))) return;
-        if (!okElsewhere.has(u)) {
-          const el2 = await elsewhere([u]);
-          if (el2.length) { if (!(await confirmDialog(`${personName(ppl, u)} já está escalado(a) neste evento ${elsewhereText(el2)}. Escalar também no ${teamName()}?`, "Escalar mesmo assim"))) return; okElsewhere.add(u); }
-        }
+        if (!(await okToAdd(u, roleId))) return;
         sel.add(u);
       } else sel.delete(u);
       b.querySelector(".selbox").classList.toggle("on", sel.has(u));
@@ -374,7 +531,8 @@ async function editor(el, scheduleId, teamId) {
           role_name: teamRoles.find((r) => r.id === a.role_id)?.name || null }))));
         await must(sb.from("schedule_songs").delete().eq("schedule_id", id));
         if (f.songs.length) await must(sb.from("schedule_songs").insert(f.songs.map((s, i) => ({ schedule_id: id, org_id: state.org.id, team_id: f.team, song_id: s.removed ? null : s.song_id,
-          position: i, title_snapshot: s.title, artist_snapshot: s.artist || null, song_key: s.song_key || null, notes: s.notes || null }))));
+          position: i, title_snapshot: s.title, artist_snapshot: s.artist || null, song_key: s.song_key || null, notes: s.notes || null,
+          ...(hasVer ? { version_id: s.version_id || null, version_name: s.version_name || null, bpm: s.bpm ?? null } : {}) }))));
         await must(sb.from("schedules").update({ status }).eq("id", id));
         created.push(id);
       }
@@ -416,7 +574,7 @@ export function songPicker(selected, done, { title = "Adicionar músicas", multi
     const r = rows.find((x) => x.id === b.dataset.s);
     if (!multi) { s.close(); return done(r); }
     const i = selected.findIndex((x) => x.song_id === r.id);
-    if (i >= 0) selected.splice(i, 1); else selected.push({ song_id: r.id, title: r.title, artist: r.artist, song_key: r.song_key });
+    if (i >= 0) selected.splice(i, 1); else selected.push({ song_id: r.id, title: r.title, artist: r.artist, song_key: r.song_key, bpm: r.bpm ?? null });
     b.querySelector(".selbox").classList.toggle("on", i < 0);
   });
   s.el.querySelector("#ok")?.addEventListener("click", () => { s.close(); done(); });
@@ -462,7 +620,7 @@ async function detail(el, id, tab = "det") {
       const live = x.songs && x.songs.status !== "removed";
       return `<div class="song"><span class="cover">${x.songs?.cover_url ? `<img src="${attr(x.songs.cover_url)}" alt="">` : `<b style="font-size:18px">${i + 1}</b>`}</span>
         <a class="grow" style="color:inherit;min-width:0" ${live ? `href="#/musica/${x.song_id}"` : ""}><div class="t ellipsis">${esc(x.title_snapshot)}</div>
-          <div class="s">${esc(x.artist_snapshot || "")}${x.song_key ? `<span>Tom ${esc(x.song_key)}</span>` : ""}${x.songs?.bpm ? `<span>${Number(x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
+          <div class="s">${esc(x.artist_snapshot || "")}${x.version_name ? `<span>${esc(x.version_name)}</span>` : ""}${x.song_key ? `<span>Tom ${esc(x.song_key)}</span>` : ""}${(x.bpm ?? x.songs?.bpm) ? `<span>${Number(x.bpm ?? x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
         ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
     }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>`,
     par: () => `<div class="list">${[...byRole.entries()].map(([role, list]) => list.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(role)}</span></span>

@@ -5,12 +5,14 @@ import { schedRow } from "./home.js";
 import { checklistEditor } from "./multimidia.js";
 import { noticeForm } from "./home.js";
 import * as timepage from "./timepage.js";
+import * as palco from "./palco.js";
 
 export function register(route) {
   route("/times", teamsList);
   route("/times/novo", newTeam);
   route("/convidar", inviteChooser);
   timepage.register(route);
+  palco.register(route);
   route("/times/:id", (p, el, a) => (state.space?.id === p.id ? timepage.timePage(p.id, el, a) : teamView(p.id, "escalas", el, a)));
   route("/times/:id/config", (p, el) => teamSettings(p.id, el));
   route("/times/:id/aviso", (p, el) => noticeForm(el, p.id));
