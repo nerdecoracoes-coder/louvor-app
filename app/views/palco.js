@@ -9,7 +9,7 @@ export function register(route) {
 
 const missingTable = (e) => /relation|does not exist|schema cache|42P01|PGRST205/i.test(String(e?.message || e?.code || e));
 const SETUP_MSG = `Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-07-palco-presets.sql</b> (e depois o <b>palco-giro</b>) no SQL Editor do Supabase.`;
-export const Y_MIN = 17, Y_MAX = 84, X_MIN = 7, X_MAX = 93;
+export const Y_MIN = 20, Y_MAX = 84, X_MIN = 7, X_MAX = 93;
 
 // ---------------------------------------------------------------- dados
 export async function loadStage(teamId) {
@@ -46,12 +46,22 @@ export function defaultLayout(roles) {
 // render(slot) devolve { cls, name, who: { avatar, label } | null, attrs }. Quanto mais à frente, maior o instrumento.
 export function stageHTML(slots, render, { cls = "" } = {}) {
   return `<div class="stage ${cls}">
-    <svg class="stage-bg" viewBox="0 0 100 62" preserveAspectRatio="none" aria-hidden="true"><defs>
-      <linearGradient id="stfl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1b20"/><stop offset="1" stop-color="#2a2a30"/></linearGradient>
-      <linearGradient id="stwd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c46a22"/><stop offset="1" stop-color="#7a3a10"/></linearGradient></defs>
-      <rect width="100" height="62" fill="#0a0a0c"/>
-      <polygon points="8,10.5 92,10.5 100,55 0,55" fill="url(#stfl)" stroke="rgba(255,255,255,.85)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
-      <polygon points="0,55 100,55 100,59.5 0,59.5" fill="url(#stwd)"/></svg>
+    <svg class="stage-bg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs>
+      <linearGradient id="stwall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14141a"/><stop offset="1" stop-color="#0a0a0d"/></linearGradient>
+      <radialGradient id="stspot1" cx=".3" cy="0" r=".7"><stop offset="0" stop-color="rgba(255,190,120,.30)"/><stop offset="1" stop-color="rgba(255,190,120,0)"/></radialGradient>
+      <radialGradient id="stspot2" cx=".72" cy="0" r=".7"><stop offset="0" stop-color="rgba(150,190,255,.26)"/><stop offset="1" stop-color="rgba(150,190,255,0)"/></radialGradient>
+      <linearGradient id="stfl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1c22"/><stop offset=".55" stop-color="#2b2b32"/><stop offset="1" stop-color="#202026"/></linearGradient>
+      <linearGradient id="stgloss" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="rgba(255,255,255,0)"/><stop offset=".5" stop-color="rgba(255,255,255,.07)"/><stop offset="1" stop-color="rgba(255,255,255,0)"/></linearGradient>
+      <linearGradient id="stwd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e28a3a"/><stop offset=".22" stop-color="#b9611f"/><stop offset="1" stop-color="#6a300d"/></linearGradient></defs>
+      <rect width="100" height="100" fill="url(#stwall)"/><rect width="100" height="100" fill="url(#stspot1)"/><rect width="100" height="100" fill="url(#stspot2)"/>
+      <polygon points="8,17 92,17 100,88 0,88" fill="url(#stfl)"/>
+      <polygon points="8,17 92,17 100,88 0,88" fill="url(#stgloss)"/>
+      <g stroke="rgba(255,255,255,.05)" stroke-width="1" vector-effect="non-scaling-stroke">
+        ${[14, 26, 38, 50, 62, 74, 86].map((xt) => `<line x1="${xt}" y1="17" x2="${(50 + (xt - 50) * 1.19).toFixed(1)}" y2="88"/>`).join("")}
+        ${[28, 42, 58, 76].map((y) => `<line x1="${8 - (y - 17) * .11}" y1="${y}" x2="${92 + (y - 17) * .11}" y2="${y}"/>`).join("")}</g>
+      <polygon points="8,17 92,17 100,88 0,88" fill="none" stroke="rgba(255,255,255,.88)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
+      <polygon points="0,88 100,88 100,96 0,96" fill="url(#stwd)"/><line x1="0" y1="88.4" x2="100" y2="88.4" stroke="rgba(255,225,170,.7)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      <rect y="96" width="100" height="4" fill="#06060a"/></svg>
     ${slots.map((s) => {
       const r = render(s) || {}; const k = 0.72 + 0.4 * ((Number(s.y) - Y_MIN) / (Y_MAX - Y_MIN));
       return `<div class="slot ${r.cls || ""}" data-sid="${s.id}" style="left:${Number(s.x)}%;top:${Number(s.y)}%;--k:${k.toFixed(3)};z-index:${Math.round(Number(s.y))}" ${r.attrs || ""}>
