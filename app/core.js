@@ -392,8 +392,8 @@ export function waLink(phone, text = "") {
 }
 // ícones que dá para escolher ao criar uma função (louvor e música primeiro)
 export const ROLE_ICONS = [["mic", "Microfone"], ["guitar", "Violão"], ["piano", "Teclas"], ["drum", "Bateria"], ["music", "Nota"], ["wave", "Onda"], ["sliders", "Mesa"], ["headphones", "Fones"],
-  ["speaker", "Caixa de som"], ["horn", "Sopro"], ["disc", "Disco"], ["lyrics", "Letra"], ["users", "Coral"], ["hand", "Mãos"], ["heart", "Coração"], ["star", "Estrela"],
-  ["crown", "Coroa"], ["sparkle", "Brilho"], ["volume", "Som"], ["bell", "Sino"], ["camera", "Câmera"], ["play", "Play"], ["layers", "Camadas"], ["megaphone", "Aviso"]];
+  ["speaker", "Caixa de som"], ["disc", "Disco"], ["lyrics", "Letra"], ["users", "Coral"], ["hand", "Mãos"], ["heart", "Coração"], ["star", "Estrela"],
+  ["crown", "Coroa"], ["sparkle", "Brilho"], ["bell", "Sino"], ["camera", "Câmera"], ["play", "Play"], ["layers", "Camadas"], ["moon", "Noite"], ["cloud", "Nuvem"]];
 export const roleIcons = new Map(); // nome da função -> ícone escolhido
 export function roleIcon(name = "") {
   const chosen = roleIcons.get(name); if (chosen && P[chosen]) return chosen;
