@@ -668,7 +668,7 @@ async function detail(el, id, tab = "det") {
     det: () => `<div class="list">
         ${row("clock", "Horário", `${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""}`)}
         ${s.location ? row("pin", "Local", esc(s.location)) : ""}
-        ${rehs.length ? row("music", rehs.length === 1 ? "Ensaio" : "Ensaios", rehs.length === 1 ? rehWhen(rehs[0]) : `${rehs.length} marcados`) : ""}
+        ${rehs.length ? row("music", rehs.length === 1 ? "Ensaio" : "Ensaios", rehs.length === 1 ? rehWhen(rehs[0]) : `${rehs.length} marcados`) : row("music", "Ensaio", manage ? "Marcar ensaio" : "Não marcado", manage ? "edit" : null)}
         ${askConf && s.status === "published" ? row("check", "Confirmados", `${seenN} de ${uniq.length}`, "par") : ""}
         ${showSongs ? row("music", "Músicas", `${songs.length} ${songs.length === 1 ? "música" : "músicas"}`, "mus") : ""}
         ${showCues ? row("list", "Roteiro", `${cues.length} ${cues.length === 1 ? "item" : "itens"}`, "rot") : ""}${row("users", "Participantes", String(uniq.length), "par")}</div>
@@ -698,6 +698,7 @@ async function detail(el, id, tab = "det") {
   el.querySelectorAll("[data-pv]").forEach((b) => b.addEventListener("click", () => { try { localStorage.setItem(PVIEW_KEY, b.dataset.pv); } catch { /* ok */ } detail(el, id, tab); }));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
   el.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", async () => {
+    if (b.dataset.goto === "edit") return go(`/escala/${id}/editar`);
     if (b.dataset.goto !== "pkg") return detail(el, id, b.dataset.goto);
     busy(b);
     try { const n = await downloadPackage(s); toast(`Pacote gerado com ${n} ${n === 1 ? "música" : "músicas"}`); } catch (e) { toast(errMsg(e), "err"); }
