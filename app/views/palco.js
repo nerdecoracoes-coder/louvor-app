@@ -1,13 +1,15 @@
-// Palco do time: o desenho padrão do app (retângulo com as posições das funções) e os presets de escala.
+// Palco do time: o desenho padrão do app (palco em perspectiva com os instrumentos) e os presets de escala.
 // O líder monta o palco e os presets na aba "Time"; na escala, as posições viram o jeito visual de escalar.
 import { sb, state, must, esc, attr, icon, canManageTeam, sheet, toast, errMsg, busy, on, empty, spinner, confirmDialog, roleIcon } from "../core.js";
+import { instrumentArt } from "./palco-art.js";
 
 export function register(route) {
   route("/times/:id/palco", (p, el, a) => stagePage(p.id, el, a));
 }
 
 const missingTable = (e) => /relation|does not exist|schema cache|42P01|PGRST205/i.test(String(e?.message || e?.code || e));
-const SETUP_MSG = `Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-07-palco-presets.sql</b> no SQL Editor do Supabase.`;
+const SETUP_MSG = `Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-07-palco-presets.sql</b> (e depois o <b>palco-giro</b>) no SQL Editor do Supabase.`;
+export const Y_MIN = 17, Y_MAX = 84, X_MIN = 7, X_MAX = 93;
 
 // ---------------------------------------------------------------- dados
 export async function loadStage(teamId) {
@@ -27,46 +29,63 @@ const rowOf = (name = "") => {
   return 1;
 };
 export function defaultLayout(roles) {
-  const rows = [[], [], []];
-  for (const r of roles) rows[rowOf(r.name)].push(r);
-  const ys = [20, 48, 78], out = [];
-  rows.forEach((list, ri) => list.forEach((r, i) => out.push({ role_id: r.id, x: Math.round(((i + 1) / (list.length + 1)) * 100), y: ys[ri] })));
+  // fundo → frente: bateria, instrumentos, vozes; no máximo 3 por fileira para ninguém ficar em cima do outro
+  const groups = [[], [], []];
+  for (const r of roles) groups[rowOf(r.name)].push(r);
+  const rows = [];
+  for (const g of groups) for (let i = 0; i < g.length; i += 3) rows.push(g.slice(i, i + 3));
+  const out = [];
+  rows.forEach((list, ri) => {
+    const y = rows.length === 1 ? 50 : Math.round(26 + (ri / (rows.length - 1)) * 54);
+    list.forEach((r, i) => out.push({ role_id: r.id, x: Math.round(((i + 1) / (list.length + 1)) * 78 + 11), y }));
+  });
   return out;
 }
 
 // ---------------------------------------------------------------- desenho
-// render(slot) devolve { cls, inner, attrs } de cada posição
+// render(slot) devolve { cls, name, who: { avatar, label } | null, attrs }. Quanto mais à frente, maior o instrumento.
 export function stageHTML(slots, render, { cls = "" } = {}) {
-  return `<div class="stage ${cls}"><div class="stage-floor"></div>
-    ${slots.map((s) => { const r = render(s) || {}; return `<button type="button" class="slot ${r.cls || ""}" data-sid="${s.id}" style="left:${Number(s.x)}%;top:${Number(s.y)}%" ${r.attrs || ""}>${r.inner || ""}</button>`; }).join("")}
-    <span class="stage-front">Plateia</span></div>`;
+  return `<div class="stage ${cls}">
+    <svg class="stage-bg" viewBox="0 0 100 62" preserveAspectRatio="none" aria-hidden="true"><defs>
+      <linearGradient id="stfl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1b20"/><stop offset="1" stop-color="#2a2a30"/></linearGradient>
+      <linearGradient id="stwd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#c46a22"/><stop offset="1" stop-color="#7a3a10"/></linearGradient></defs>
+      <rect width="100" height="62" fill="#0a0a0c"/>
+      <polygon points="8,10.5 92,10.5 100,55 0,55" fill="url(#stfl)" stroke="rgba(255,255,255,.85)" stroke-width="1.2" vector-effect="non-scaling-stroke"/>
+      <polygon points="0,55 100,55 100,59.5 0,59.5" fill="url(#stwd)"/></svg>
+    ${slots.map((s) => {
+      const r = render(s) || {}; const k = 0.72 + 0.4 * ((Number(s.y) - Y_MIN) / (Y_MAX - Y_MIN));
+      return `<div class="slot ${r.cls || ""}" data-sid="${s.id}" style="left:${Number(s.x)}%;top:${Number(s.y)}%;--k:${k.toFixed(3)};z-index:${Math.round(Number(s.y))}" ${r.attrs || ""}>
+        <span class="art" style="transform:rotate(${Number(s.rot) || 0}deg)">${instrumentArt(r.name)}</span>
+        ${r.who ? `<span class="sface">${r.who.avatar}</span>` : ""}
+        <span class="slabel">${r.who ? `<b class="swho">${esc(r.who.label)}</b>` : ""}<small class="sname">${esc(r.name)}</small></span>
+        ${r.tools || ""}</div>`;
+    }).join("")}</div>`;
 }
-export const slotFace = (name, extra = "") => `<span class="sicon">${icon(roleIcon(name))}</span><small class="sname">${esc(name)}</small>${extra}`;
 
 // ---------------------------------------------------------------- página do líder
 async function stagePage(teamId, el, alive) {
   el.innerHTML = spinner();
   const team = await must(sb.from("teams").select("*").eq("id", teamId).maybeSingle());
-  const back = `<div class="pagehead"><a class="back" href="#/times/${teamId}" aria-label="Voltar para Time">${icon("chevronLeft")}</a><h1>Palco e presets</h1></div>`;
+  const head = (extra = "") => `<div class="pagehead"><a class="back" href="#/times/${teamId}" aria-label="Voltar para Time">${icon("chevronLeft")}</a><h1>Mapa de palco</h1>${extra}</div>`;
   if (!team || team.org_id !== state.org.id) { el.innerHTML = empty("alert", "Time não encontrado"); return; }
-  if (!canManageTeam(teamId)) { el.innerHTML = back + empty("lock", "Somente líderes e administradores editam o palco."); return; }
+  if (!canManageTeam(teamId)) { el.innerHTML = head() + empty("lock", "Somente líderes e administradores editam o palco."); return; }
   let roles = [];
-  try { roles = (await must(sb.from("music_roles").select("id,name,sort,team_type").eq("org_id", state.org.id))).filter((r) => !r.team_type || r.team_type === team.team_type).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)); } catch (e) { el.innerHTML = back + `<div class="card">${esc(String(e.message || e))}</div>`; return; }
+  try { roles = (await must(sb.from("music_roles").select("id,name,sort,team_type").eq("org_id", state.org.id))).filter((r) => !r.team_type || r.team_type === team.team_type).sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name)); } catch (e) { el.innerHTML = head() + `<div class="card">${esc(String(e.message || e))}</div>`; return; }
   const data = await loadStage(teamId);
   if (!alive()) return;
-  if (data.missing) { el.innerHTML = back + `<div class="card"><p class="small" style="margin:0">${SETUP_MSG}</p></div>`; return; }
+  if (data.missing) { el.innerHTML = head() + `<div class="card"><p class="small" style="margin:0">${SETUP_MSG}</p></div>`; return; }
   let { slots, presets } = data;
+  let selected = null;
   const roleName = (id) => roles.find((r) => r.id === id)?.name || "Função";
 
   function draw() {
-    el.innerHTML = `${back}
-      <p class="small muted" style="margin:0 0 12px">Este é o palco do time. Arraste cada posição para onde ela fica; toque para trocar a função ou tirar. Ao escalar, é nele que você escolhe as pessoas.</p>
-      ${slots.length ? stageHTML(slots, (s) => ({ cls: "edit", inner: slotFace(roleName(s.role_id)) }), { cls: "editing" })
-        : `<div class="card">${empty("users", "Palco ainda vazio", "Comece pelo modelo padrão (uma posição para cada função) e depois ajuste do seu jeito.")}</div>`}
-      <div class="row gap mt wrap">
-        <button class="btn primary grow" id="addslot">${icon("plus")} Adicionar posição</button>
-        ${slots.length ? "" : `<button class="btn ghost grow" id="seed">${icon("sparkle")} Usar modelo padrão</button>`}
-      </div>
+    el.innerHTML = `${head(`<button class="btn primary sm" id="addslot">${icon("plus")} Adicionar</button>`)}
+      <p class="small muted" style="margin:0 0 10px">Toque num instrumento para escolher; arraste para mudar de lugar. Ao escalar, é neste palco que você escolhe as pessoas.</p>
+      ${slots.length ? stageHTML(slots, (s) => ({ cls: `edit${selected === s.id ? " sel" : ""}`, name: roleName(s.role_id),
+        tools: selected === s.id ? `<span class="handles"><i></i><i></i><i></i><i></i></span><span class="stools" data-tools ${s.x > 62 ? 'style="left:auto;right:calc(100% + 12px)"' : ""}>
+          <button type="button" data-act="rot" aria-label="Girar">${icon("refresh")}</button><button type="button" data-act="role" aria-label="Trocar a função">${icon("badge")}</button><button type="button" class="del" data-act="del" aria-label="Tirar do palco">${icon("trash")}</button></span>` : "" }), { cls: "editing" })
+        : `<div class="card">${empty("stage", "Palco ainda vazio", "Comece pelo modelo padrão (uma posição para cada função) e depois ajuste do seu jeito.")}</div>`}
+      ${slots.length ? "" : `<button class="btn primary block mt" id="seed">${icon("sparkle")} Usar modelo padrão</button>`}
       <div class="sec">${icon("layers")}<h2>Presets de escala</h2><span class="cnt2">${presets.length}</span><button class="more" id="addpreset" ${slots.length ? "" : "disabled"}>${icon("plus")} Novo</button></div>
       <p class="small muted" style="margin:-4px 0 10px">Um preset diz quais posições entram numa escala. Exemplo: o culto de domingo usa todas, o de quinta usa só voz e violão.</p>
       <div class="list">${presets.length ? presets.map((p) => { const n = p.slot_ids.filter((id) => slots.some((s) => s.id === id)).length; return `<button class="li" data-preset="${p.id}"><span class="cover" style="width:40px;height:40px">${icon("layers")}</span><span class="grow"><span class="t">${esc(p.name)}</span><span class="s">${n} ${n === 1 ? "posição" : "posições"}</span></span>${icon("chevronRight", "chev")}</button>`; }).join("")
@@ -74,62 +93,72 @@ async function stagePage(teamId, el, alive) {
     bindDrag();
   }
 
-  // arrastar posições no palco
+  // selecionar e arrastar instrumentos no palco
   function bindDrag() {
     const stage = el.querySelector(".stage.editing"); if (!stage) return;
+    stage.addEventListener("pointerdown", (e) => { if (!e.target.closest(".slot")) { if (selected) { selected = null; draw(); } } });
     stage.querySelectorAll(".slot").forEach((node) => {
       let start = null, moved = false;
-      node.addEventListener("pointerdown", (e) => { start = { x: e.clientX, y: e.clientY }; moved = false; node.setPointerCapture(e.pointerId); node.classList.add("drag"); });
+      node.addEventListener("pointerdown", (e) => {
+        if (e.target.closest("[data-tools]")) return;
+        e.stopPropagation(); start = { x: e.clientX, y: e.clientY }; moved = false; node.setPointerCapture(e.pointerId); node.classList.add("drag");
+      });
       node.addEventListener("pointermove", (e) => {
         if (!start) return;
         if (Math.hypot(e.clientX - start.x, e.clientY - start.y) > 5) moved = true;
         if (!moved) return;
         const r = stage.getBoundingClientRect();
-        const x = Math.min(94, Math.max(6, ((e.clientX - r.left) / r.width) * 100)), y = Math.min(92, Math.max(8, ((e.clientY - r.top) / r.height) * 100));
-        node.style.left = `${x}%`; node.style.top = `${y}%`;
+        const x = Math.min(X_MAX, Math.max(X_MIN, ((e.clientX - r.left) / r.width) * 100)), y = Math.min(Y_MAX, Math.max(Y_MIN, ((e.clientY - r.top) / r.height) * 100));
+        node.style.left = `${x}%`; node.style.top = `${y}%`; node.style.zIndex = Math.round(y);
+        node.style.setProperty("--k", (0.72 + 0.4 * ((y - Y_MIN) / (Y_MAX - Y_MIN))).toFixed(3));
       });
-      const end = async (e) => {
+      node.addEventListener("pointerup", async () => {
         if (!start) return; start = null; node.classList.remove("drag");
         const s = slots.find((x) => x.id === node.dataset.sid);
-        if (!moved) return slotSheet(s);
+        if (!moved) { selected = selected === s.id ? selected : s.id; return draw(); }
         const x = Math.round(parseFloat(node.style.left) * 10) / 10, y = Math.round(parseFloat(node.style.top) * 10) / 10;
-        s.x = x; s.y = y;
+        s.x = x; s.y = y; selected = s.id;
         const r = await sb.from("team_stage_slots").update({ x, y }).eq("id", s.id);
         if (r.error) toast(errMsg(r.error), "err");
-      };
-      node.addEventListener("pointerup", end);
+        draw();
+      });
       node.addEventListener("pointercancel", () => { start = null; node.classList.remove("drag"); });
     });
   }
 
-  function slotSheet(s) {
-    const sh = sheet(`<h3>${esc(roleName(s.role_id))}</h3><p class="small muted" style="margin-top:-6px">Trocar a função desta posição ou tirá-la do palco.</p>
-      <div class="list" style="max-height:48vh;overflow:auto">${roles.map((r) => `<button class="li" data-r="${r.id}"><span class="cover" style="width:38px;height:38px">${icon(roleIcon(r.name))}</span><span class="grow"><span class="t">${esc(r.name)}</span></span>${r.id === s.role_id ? icon("check", "chev") : ""}</button>`).join("")}</div>
-      <button class="btn danger block mt" id="rm">${icon("trash")} Tirar do palco</button>`, { wide: true });
+  async function rotate(s) {
+    const rot = ((Number(s.rot) || 0) + 45) % 360;
+    const r = await sb.from("team_stage_slots").update({ rot }).eq("id", s.id);
+    if (r.error) return toast(missingTable(r.error) || /rot/.test(r.error.message || "") ? "Para girar, rode o SQL palco-giro no Supabase." : errMsg(r.error), "err");
+    s.rot = rot; draw();
+  }
+
+  function roleSheet(s) {
+    const sh = sheet(`<h3>Função desta posição</h3><p class="small muted" style="margin-top:-6px">Atual: ${esc(roleName(s.role_id))}</p>
+      <div class="list" style="max-height:52vh;overflow:auto">${roles.map((r) => `<button class="li" data-r="${r.id}"><span class="cover" style="width:38px;height:38px">${icon(roleIcon(r.name))}</span><span class="grow"><span class="t">${esc(r.name)}</span></span>${r.id === s.role_id ? icon("check", "chev") : ""}</button>`).join("")}</div>`, { wide: true });
     on(sh.el, "click", "[data-r]", async (e, b) => {
       const r = await sb.from("team_stage_slots").update({ role_id: b.dataset.r }).eq("id", s.id);
       if (r.error) return toast(errMsg(r.error), "err");
       s.role_id = b.dataset.r; sh.close(); draw();
     });
-    sh.el.querySelector("#rm").onclick = async () => {
-      sh.close();
-      if (!(await confirmDialog(`Tirar ${roleName(s.role_id)} do palco?`, "Tirar", true))) return;
-      const r = await sb.from("team_stage_slots").delete().eq("id", s.id);
-      if (r.error) return toast(errMsg(r.error), "err");
-      slots = slots.filter((x) => x.id !== s.id);
-      for (const p of presets.filter((p) => p.slot_ids.includes(s.id))) { p.slot_ids = p.slot_ids.filter((x) => x !== s.id); await sb.from("team_presets").update({ slot_ids: p.slot_ids }).eq("id", p.id); }
-      draw();
-    };
+  }
+  async function removeSlot(s) {
+    if (!(await confirmDialog(`Tirar ${roleName(s.role_id)} do palco?`, "Tirar", true))) return;
+    const r = await sb.from("team_stage_slots").delete().eq("id", s.id);
+    if (r.error) return toast(errMsg(r.error), "err");
+    slots = slots.filter((x) => x.id !== s.id); selected = null;
+    for (const p of presets.filter((p) => p.slot_ids.includes(s.id))) { p.slot_ids = p.slot_ids.filter((x) => x !== s.id); await sb.from("team_presets").update({ slot_ids: p.slot_ids }).eq("id", p.id); }
+    draw();
   }
 
   function addSheet() {
-    const sh = sheet(`<h3>Adicionar posição</h3><p class="small muted" style="margin-top:-6px">Escolha a função. Para ter duas vozes, por exemplo, adicione o Vocal duas vezes.</p>
-      <div class="list" style="max-height:55vh;overflow:auto">${roles.map((r) => `<button class="li" data-r="${r.id}"><span class="cover" style="width:38px;height:38px">${icon(roleIcon(r.name))}</span><span class="grow"><span class="t">${esc(r.name)}</span></span>${icon("plus", "chev")}</button>`).join("") || `<div class="li muted small">Este time ainda não tem funções. Cadastre em Funções.</div>`}</div>`, { wide: true });
+    const sh = sheet(`<h3>Adicionar ao palco</h3><p class="small muted" style="margin-top:-6px">Escolha a função. Para ter duas vozes, por exemplo, adicione o Vocal duas vezes.</p>
+      <div class="list" style="max-height:55vh;overflow:auto">${roles.map((r) => `<button class="li" data-r="${r.id}"><span class="cover art-mini" style="width:46px;height:46px">${instrumentArt(r.name)}</span><span class="grow"><span class="t">${esc(r.name)}</span></span>${icon("plus", "chev")}</button>`).join("") || `<div class="li muted small">Este time ainda não tem funções. Cadastre em Funções.</div>`}</div>`, { wide: true });
     on(sh.el, "click", "[data-r]", async (e, b) => {
-      const jitter = (slots.length % 5) * 6;
-      const r = await sb.from("team_stage_slots").insert({ org_id: state.org.id, team_id: teamId, role_id: b.dataset.r, x: 44 + jitter, y: 44 + jitter, sort: slots.length }).select("*").single();
+      const jitter = (slots.length % 5) * 5;
+      const r = await sb.from("team_stage_slots").insert({ org_id: state.org.id, team_id: teamId, role_id: b.dataset.r, x: 42 + jitter, y: 44 + jitter, sort: slots.length }).select("*").single();
       if (r.error) return toast(errMsg(r.error), "err");
-      slots.push(r.data); sh.close(); draw(); toast("Posição adicionada. Arraste para o lugar certo.");
+      slots.push(r.data); selected = r.data.id; sh.close(); draw(); toast("Adicionado. Arraste para o lugar certo.");
     });
   }
 
@@ -137,8 +166,8 @@ async function stagePage(teamId, el, alive) {
     const on_ = new Set(p ? p.slot_ids : slots.map((s) => s.id));
     const sh = sheet(`<h3>${p ? "Editar preset" : "Novo preset"}</h3>
       <label class="field"><span>Nome *</span><input class="input" id="pn" maxlength="60" placeholder="Ex.: Culto de domingo" value="${attr(p?.name || "")}"></label>
-      <p class="small muted">Toque nas posições que entram neste preset.</p>
-      <div id="pst">${stageHTML(slots, (s) => ({ cls: on_.has(s.id) ? "on" : "off", inner: slotFace(roleName(s.role_id)) }))}</div>
+      <p class="small muted">Toque nos instrumentos que entram neste preset.</p>
+      <div id="pst">${stageHTML(slots, (s) => ({ cls: on_.has(s.id) ? "on" : "off", name: roleName(s.role_id) }))}</div>
       <div class="row gap mt">${p ? `<button class="btn danger" id="pdel" aria-label="Excluir preset">${icon("trash")}</button>` : ""}<button class="btn primary grow" id="psave">Salvar preset</button></div>`, { wide: true });
     on(sh.el, "click", ".slot", (e, b) => { const id = b.dataset.sid; on_.has(id) ? on_.delete(id) : on_.add(id); b.classList.toggle("on", on_.has(id)); b.classList.toggle("off", !on_.has(id)); });
     sh.el.querySelector("#psave").onclick = async (e) => {
@@ -162,6 +191,10 @@ async function stagePage(teamId, el, alive) {
     });
   }
 
+  on(el, "click", "[data-act]", (e, b) => {
+    const s = slots.find((x) => x.id === selected); if (!s) return;
+    const a = b.dataset.act; if (a === "rot") rotate(s); else if (a === "role") roleSheet(s); else if (a === "del") removeSlot(s);
+  });
   on(el, "click", "#addslot", () => addSheet());
   on(el, "click", "#seed", async (e, b) => {
     busy(b);

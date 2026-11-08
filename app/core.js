@@ -176,6 +176,7 @@ const P = {
   alert: '<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/>', refresh: '<path d="M20 12a8 8 0 1 1-2.3-5.6L20 9"/><path d="M20 3v6h-6"/>',
   whatsapp: '<path d="M20.5 11.6a8.6 8.6 0 0 1-12.7 7.5L3.5 20.5l1.4-4.2a8.6 8.6 0 1 1 15.6-4.7z"/><path d="M9 8.5c.2 2.6 3.3 5.8 6.2 6.3l1.1-1.5-1.9-1-1 .7c-.9-.4-2-1.5-2.4-2.4l.7-1-1-1.9z"/>',
   youtube: '<rect x="2.5" y="5.5" width="19" height="13" rx="4"/><path d="m10 9.5 5 2.5-5 2.5z" fill="currentColor"/>',
+  refresh: '<path d="M20 11a8 8 0 1 0-2.3 5.7M20 4.5V11h-6.5"/>',
   stage: '<rect x="3" y="4" width="18" height="13" rx="2.5"/><path d="M8 9.5h.01M16 9.5h.01M12 13h.01M6 21h12"/>',
   wave: '<path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M21 12h0"/>', drag: '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>', lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>',

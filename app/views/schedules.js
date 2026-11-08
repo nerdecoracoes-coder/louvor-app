@@ -4,7 +4,7 @@ import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName
 import { schedRow } from "./home.js";
 import { scheduleExtras, cueEditor } from "./multimidia.js";
 import { downloadPackage, letrasTeamOf } from "./letras.js";
-import { loadStage, stageHTML, slotFace } from "./palco.js";
+import { loadStage, stageHTML } from "./palco.js";
 
 export function register(route) {
   route("/escala/nova", (p, el) => editor(el, null, null));
@@ -218,8 +218,8 @@ async function editor(el, scheduleId, teamId) {
     const first = (u) => personName(ppl, u).split(" ")[0];
     return stageHTML(stage.slots.length ? cells.map((c) => c.s) : [], (s) => {
       const c = cells.find((x) => x.s.id === s.id), name = roleLabel(s.role_id);
-      if (!c.uid) return { cls: "empty", inner: slotFace(name) };
-      return { cls: warnFor(c.uid, s.role_id).length ? "warn" : "", inner: `<span class="sface">${avatar(ppl.get(c.uid), 54, false)}</span><b class="swho">${esc(first(c.uid))}</b><small class="sname">${esc(name)}</small>` };
+      if (!c.uid) return { cls: "empty", name };
+      return { cls: warnFor(c.uid, s.role_id).length ? "warn" : "", name, who: { avatar: avatar(ppl.get(c.uid), 54, false), label: first(c.uid) } };
     }) + (cells.length ? "" : `<p class="small muted">Este preset não tem posições. Escolha outro preset.</p>`)
       + (warns.length ? `<div class="card mt">${warns.map((x) => `<div class="small warn" style="margin:2px 0">${icon("alert")} <b>${esc(personName(ppl, x.u))}</b>: ${esc(x.w.join(" · "))}</div>`).join("")}</div>` : "")
       + (extra.length ? `<div class="sec"><h3>Fora do palco</h3></div><div class="chips">${extra.map((x) => `<button type="button" class="chip" data-unpick="${x.rid}:${x.u}">${esc(personName(ppl, x.u))} · ${esc(roleLabel(x.rid))} ${icon("x")}</button>`).join("")}</div>` : "");
@@ -372,7 +372,7 @@ async function editor(el, scheduleId, teamId) {
   });
   el.addEventListener("input", (e) => { if (["title", "location", "notes"].includes(e.target.name)) readForm(); if (e.target.name === "notes") { autosize(e.target); const c = el.querySelector("#ncount"); if (c) c.textContent = `${e.target.value.length}/500`; } if (e.target.dataset.pdesc !== undefined) f.palettes[Number(e.target.dataset.pdesc)].desc = e.target.value; });
   el.addEventListener("click", async (e) => {
-    const t = e.target.closest("button, .pcard.pslot"); if (!t) return;
+    const t = e.target.closest("button, .pcard.pslot, .slot[data-sid]"); if (!t) return;
     if (t.dataset.etab) { readForm(); f.tab = t.dataset.etab; return draw(); }
     if (t.id === "openpal") { readForm(); f.view = "palette"; draw(); return window.scrollTo(0, 0); }
     if (t.dataset.pback !== undefined) { f.view = "main"; return draw(); }
@@ -586,6 +586,7 @@ async function detail(el, id, tab = "det") {
   const s = await must(sb.from("schedules").select("*,teams(*)").eq("id", id).maybeSingle());
   if (!s) { el.innerHTML = empty("alert", "Escala não encontrada", "Ela pode ter sido excluída ou ainda é um rascunho."); return; }
   const showCues = !!(s.teams && teamHas(s.teams, "roteiro"));
+  const stage = await loadStage(s.team_id);
   const [assigns, songs, ppl, cues] = await Promise.all([
     must(sb.from("schedule_assignments").select("*").eq("schedule_id", id)),
     must(sb.from("schedule_songs").select("*,songs(id,status,current_project_id,cover_url,youtube_url,chords_url,bpm,duration_sec)").eq("schedule_id", id).order("position")),
@@ -607,6 +608,20 @@ async function detail(el, id, tab = "det") {
   const today = ymd(s.starts_at) === ymd(new Date());
   const pending = askConf && s.status === "published" && uniq.length > 0 && seenN < uniq.length;
   const row = (ic, label, value, go2) => `<${go2 ? `button type="button" data-goto="${go2}"` : "div"} class="menurow">${icon(ic)}<span class="grow">${label}</span><span class="muted small">${value}</span>${go2 ? icon("chevronRight") : ""}</${go2 ? "button" : "div"}>`;
+  const PVIEW_KEY = "somos.sched.pview";
+  let pv = "lista"; try { pv = localStorage.getItem(PVIEW_KEY) === "palco" ? "palco" : "lista"; } catch { /* sem armazenamento */ }
+  const parList = () => `<div class="list">${[...byRole.entries()].map(([role, list]) => list.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(role)}</span></span>
+      ${s.status === "published" && askConf ? (a.seen_at ? `<span class="tiny ok row gap-s">${icon("check")} Visto</span>` : `<span class="tiny muted">Não visto</span>`) : ""}</div>`).join("")).join("") || `<div class="li muted small">Ninguém escalado ainda.</div>`}</div>`;
+  const parBar = () => stage.slots.length ? `<div class="pbar"><div class="seg"><button type="button" data-pv="lista" class="${pv === "lista" ? "on" : ""}">${icon("list")} Lista</button><button type="button" data-pv="palco" class="${pv === "palco" ? "on" : ""}">${icon("stage")} Palco</button></div></div>` : "";
+  // visualizador do palco: o mesmo desenho do editor, só com quem foi escalado e sem opções de edição
+  const stagePane = () => {
+    const byRid = new Map(); for (const a of assigns) { const k = a.role_id || "none"; if (!byRid.has(k)) byRid.set(k, []); byRid.get(k).push(a); }
+    const seen = new Map(), cells = [];
+    for (const sl of stage.slots) { const list = byRid.get(sl.role_id) || [], i = seen.get(sl.role_id) || 0; if (i < list.length) { cells.push({ sl, a: list[i] }); seen.set(sl.role_id, i + 1); } }
+    const used = new Set(cells.map((c) => c.a.id)), extra = assigns.filter((a) => !used.has(a.id));
+    return (cells.length ? stageHTML(cells.map((c) => c.sl), (sl) => { const c = cells.find((x) => x.sl.id === sl.id); return { name: c.a.role_name || "Função", who: { avatar: avatar(ppl.get(c.a.user_id), 54, false), label: personName(ppl, c.a.user_id).split(" ")[0] } }; }, { cls: "readonly" }) : `<div class="li muted small">Ninguém escalado nas posições do palco.</div>`)
+      + (extra.length ? `<div class="sec"><h3>Fora do palco</h3></div><div class="list">${extra.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(a.role_name || "Sem função")}</span></span></div>`).join("")}</div>` : "");
+  };
   const panes = {
     det: () => `<div class="list">${askConf && s.status === "published" ? row("check", "Confirmados", `${seenN} de ${uniq.length}`, "par") : ""}
         ${showCues ? row("list", "Roteiro", `${cues.length} ${cues.length === 1 ? "item" : "itens"}`, "rot") : ""}${row("users", "Participantes", String(uniq.length), "par")}</div>
@@ -623,8 +638,7 @@ async function detail(el, id, tab = "det") {
           <div class="s">${esc(x.artist_snapshot || "")}${x.version_name ? `<span>${esc(x.version_name)}</span>` : ""}${x.song_key ? `<span>Tom ${esc(x.song_key)}</span>` : ""}${(x.bpm ?? x.songs?.bpm) ? `<span>${Number(x.bpm ?? x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
         ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
     }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>`,
-    par: () => `<div class="list">${[...byRole.entries()].map(([role, list]) => list.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(role)}</span></span>
-      ${s.status === "published" && askConf ? (a.seen_at ? `<span class="tiny ok row gap-s">${icon("check")} Visto</span>` : `<span class="tiny muted">Não visto</span>`) : ""}</div>`).join("")).join("") || `<div class="li muted small">Ninguém escalado ainda.</div>`}</div>`,
+    par: () => parBar() + (pv === "palco" && stage.slots.length ? stagePane() : parList()),
     rot: () => `<div id="extras"></div>`,
   };
   el.innerHTML = `<div class="pagehead"><a class="back" href="javascript:history.back()">${icon("chevronLeft")}</a><div class="grow"><h1 class="dtitle">${esc(s.title)}</h1>
@@ -634,6 +648,7 @@ async function detail(el, id, tab = "det") {
     <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-dtab="${k}" class="${tab === k ? "on" : ""}">${l}${n != null ? ` <i class="cnt">${n}</i>` : ""}</button>`).join("")}</div>
     <div id="pane">${panes[tab]()}</div>`;
   if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
+  el.querySelectorAll("[data-pv]").forEach((b) => b.addEventListener("click", () => { try { localStorage.setItem(PVIEW_KEY, b.dataset.pv); } catch { /* ok */ } detail(el, id, tab); }));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
   el.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", async () => {
     if (b.dataset.goto !== "pkg") return detail(el, id, b.dataset.goto);

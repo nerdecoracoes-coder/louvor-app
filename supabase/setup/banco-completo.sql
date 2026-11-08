@@ -3247,3 +3247,7 @@ alter table public.schedule_songs
   add column if not exists version_id uuid references public.song_versions(id) on delete set null,
   add column if not exists version_name text,
   add column if not exists bpm numeric(6,2);
+
+-- >>> supabase/migrations/20261107000021_palco_giro.sql
+-- Giro dos instrumentos no palco (em graus).
+alter table public.team_stage_slots add column if not exists rot smallint not null default 0 check (rot between 0 and 359);

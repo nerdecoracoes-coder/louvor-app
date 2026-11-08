@@ -441,7 +441,7 @@ with sync_playwright() as pw:
     ana.locator("#reset").click(); ana.locator("#ok").click(); toast_has(ana, "Padrão salvo")
     ok("Padrão da letra na tela editável (alinhamento, margens, rodapé) e salvo pelo time")
     # ------------------------------------------------------------------ eventos do time e devocional
-    ana.goto(f"{BASE}/#/times/{louvor_id}/eventos"); ana.locator("#new").click(); ana.fill("#ef [name=title]", "Fraternização do louvor"); ana.fill("#ef [name=location]", "Casa do João")
+    ana.goto(f"{BASE}/#/times/{louvor_id}/eventos"); ana.locator("#new").click(); ana.fill("#ef [name=title]", "Fraternização do louvor"); ana.fill("#ef [name=location]", "Casa do João"); ana.fill("#ef [name=date]", time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400)))
     ana.locator("#esave").click(); expect(ana.locator(".evt", has_text="Fraternização do louvor")).to_be_visible(timeout=10000)
     ana.goto(f"{BASE}/#/times/{louvor_id}/devocional"); ana.locator("#post").click(); ana.fill("#dtl", "Devocional: perseverança"); ana.fill("#dlink", "https://example.com/video")
     ana.locator("#dok").click(); expect(ana.locator(".li", has_text="Devocional: perseverança")).to_be_visible(timeout=10000)
@@ -564,7 +564,7 @@ with sync_playwright() as pw:
     bruno.goto(BASE + "/#/igreja"); bruno.reload(); expect(bruno.locator(".notice", has_text="Ensaio Geral")).to_be_visible(timeout=10000)  # avisos gerais ficam na área da igreja
     shot(bruno, "17-inicio-lider"); ok("aviso da organização publicado e exibido")
     expect(bruno.get_by_text("Agenda da igreja").first).to_be_visible(); expect(bruno.get_by_text("Minhas próximas escalas")).to_have_count(0)
-    ana.goto(BASE + "/#/agenda"); ana.locator("#newev").click(); ana.fill(".sheet input[name=title]", "Culto de celebração"); ana.select_option(".sheet select[name=kind]", "culto")
+    ana.goto(BASE + "/#/agenda"); ana.locator("#newev").click(); ana.fill(".sheet input[name=title]", "Culto de celebração"); ana.select_option(".sheet select[name=kind]", "culto"); ana.fill(".sheet input[name=start]", "23:59")
     ana.locator(".sheet label.li", has_text="Louvor Domingo").locator("input").check(); ana.locator("#esave").click()
     expect(ana.locator(".evt", has_text="Culto de celebração").first).to_be_visible(timeout=10000)
     ok("agenda da igreja: evento criado com tipo e ministério de serviço")
@@ -702,6 +702,9 @@ with sync_playwright() as pw:
     bruno.goto(f"{BASE}/#/times/{louvor_id}/palco")
     bruno.locator("#seed").click(); expect(bruno.locator(".stage.editing .slot").first).to_be_visible(timeout=10000)
     n_slots = bruno.locator(".stage.editing .slot").count(); assert n_slots >= 3, n_slots
+    bruno.locator(".stage.editing .slot").first.click(); expect(bruno.locator(".slot.sel .stools")).to_be_visible(timeout=5000)   # toque seleciona e mostra girar/trocar/apagar
+    bruno.locator(".slot.sel [data-act=rot]").click(); expect(bruno.locator(".slot.sel .art")).to_have_attribute("style", re.compile(r"rotate\(45deg\)"), timeout=5000)
+    shot(bruno, "08d0-palco-selecionado")
     bruno.locator("#addpreset").click(); bruno.fill(".sheet #pn", "Domingo")
     bruno.locator(".sheet .slot").last.click()                                    # tira uma posição do preset
     bruno.locator(".sheet #psave").click(); expect(bruno.locator("[data-preset]", has_text="Domingo")).to_contain_text(f"{n_slots - 1} posições", timeout=10000)
@@ -731,6 +734,11 @@ with sync_playwright() as pw:
     bruno.wait_for_timeout(400); bruno.mouse.up(); bruno.wait_for_timeout(500)
     assert bruno.locator("#songs .sli").nth(1).locator(".t").inner_text() == first, "a música não trocou de lugar"
     shot(bruno, "08f-musicas-arrastar")
+    bruno.locator("#savebtn").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=15000)
+    bruno.locator("[data-dtab=par]").click(); bruno.locator("[data-pv=palco]").click()
+    expect(bruno.locator(".stage.readonly .slot")).to_have_count(1, timeout=10000)
+    assert bruno.locator(".stage.readonly .stools, .stage.readonly .handles").count() == 0
+    shot(bruno, "08g-palco-visualizador")
     ok("palco do time com preset, escolha pelo palco, músicas sem setas, versão e arrastar")
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")
     # modo linha do tempo (ícone ao lado do +), lembrado entre visitas
