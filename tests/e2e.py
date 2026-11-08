@@ -440,6 +440,22 @@ with sync_playwright() as pw:
     ana.goto(f"{BASE}/#/times/{jovens_id}/letras/modelo"); ana.reload(); expect(ana.locator("[data-seg='align:l'].on")).to_be_visible(timeout=10000)
     ana.locator("#reset").click(); ana.locator("#ok").click(); toast_has(ana, "Padrão salvo")
     ok("Padrão da letra na tela editável (alinhamento, margens, rodapé) e salvo pelo time")
+    # simulador ProPresenter: slides, caixa arrastável, abas Forma/Texto/Compilação, salvar e PowerPoint com os ajustes
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); ana.locator("#ll .li", has_text="Música da mídia").click()
+    expect(ana.locator("#tosim")).to_be_visible(timeout=10000); ana.locator("#tosim").click()
+    expect(ana.locator("#psel")).to_be_visible(timeout=10000)
+    assert ana.locator(".ppsl").count() >= 2
+    bx = ana.locator("#psel").bounding_box(); ana.mouse.move(bx["x"] + bx["width"] / 2, bx["y"] + bx["height"] / 2); ana.mouse.down(); ana.mouse.move(bx["x"] + bx["width"] / 2 + 8, bx["y"] + bx["height"] / 2 + 8, steps=6); ana.mouse.up()
+    assert abs(ana.locator("#psel").bounding_box()["x"] - bx["x"] - 8) < 3, "caixa não moveu"
+    ana.locator("[data-ptab=texto]").click(); ana.locator("[data-ptog='tx.italic']").click(); ana.locator("[data-p='tx.shadow.on']").check()
+    ana.locator("[data-ptab=comp]").click(); ana.locator("[data-ptrans]").select_option("fade")
+    ana.evaluate("window.scrollTo(0,0)"); assert ana.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), "simulador com rolagem horizontal"; shot(ana, "08j-simulador")
+    ana.locator("#psave").click(); toast_has(ana, "Versão salva")
+    with ana.expect_download() as dsim: ana.locator("#ppptx").click()
+    zs = zipfile.ZipFile(dsim.value.path()); sx = "".join(zs.read(n).decode() for n in zs.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml"))
+    assert 'i="1"' in sx and "outerShdw" in sx and "<p:fade/>" in sx, "ajustes do simulador não chegaram ao PowerPoint"
+    ana.reload(); expect(ana.locator("#psel")).to_be_visible(timeout=10000)
+    ok("simulador ProPresenter: caixa arrastável, aba Texto e Compilação, salvo e aplicado no PowerPoint")
     # ------------------------------------------------------------------ eventos do time e devocional
     ana.goto(f"{BASE}/#/times/{louvor_id}/eventos"); ana.locator("#new").click(); ana.fill("#ef [name=title]", "Fraternização do louvor"); ana.fill("#ef [name=location]", "Casa do João"); ana.fill("#ef [name=date]", time.strftime("%Y-%m-%d", time.localtime(time.time() + 86400)))
     ana.locator("#esave").click(); expect(ana.locator(".evt", has_text="Fraternização do louvor")).to_be_visible(timeout=10000)

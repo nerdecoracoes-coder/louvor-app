@@ -4,11 +4,12 @@ import { sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, empty
 import { parseLyricsText, lyricsToText } from "./songs.js";
 import { buildPptx, zipStore, RATIOS, ratioOf } from "../lib/pptx.js";
 import { fDate, fTime } from "../core.js";
-import { letraBoxes, titleBoxes, thumbOf, layoutOf, DEFAULT_LAYOUT } from "../lib/slidelayout.js";
+import { letraBoxes, titleBoxes, thumbOf, layoutOf, DEFAULT_LAYOUT, ppOf } from "../lib/slidelayout.js";
 
 export function register(route) {
   route("/times/:id/letras", (p, el, a) => library(p.id, el, a));
   route("/times/:id/letras/modelo", (p, el, a) => layoutPage(p.id, el, a));
+  route("/times/:id/letras/:song/simulador", (p, el, a) => simulator(p.id, p.song, el, a));
   route("/times/:id/letras/:song", (p, el, a) => editor(p.id, p.song, el, a));
 }
 
@@ -19,16 +20,16 @@ export const FONTS = ["Arial", "Calibri", "Verdana", "Tahoma", "Trebuchet MS", "
 export const DEFAULT_STYLE = { font: "Arial", size: 54, color: "#FFFFFF", bg: "#000000", per: 2, caps: false, showLabel: true };
 const TEXT_COLORS = ["#FFFFFF", "#FFE066", "#9BD1FF", "#000000"], BG_COLORS = ["#000000", "#0B1F3A", "#1B1B1B", "#12301F", "#FFFFFF"];
 // slides do PowerPoint com o padrão de tela da igreja
-const pptxSlides = (title, artist, sl, st, footer) => [{ boxes: titleBoxes(title, artist, st), bg: st.bg, color: st.color }, ...sl.map((x) => ({ boxes: letraBoxes({ ...x, footer }, st), bg: st.bg, color: st.color }))];
+const pptxSlides = (title, artist, sl, st, footer) => [{ boxes: titleBoxes(title, artist, st), bg: st.bg, color: st.color, trans: st.pp?.trans }, ...sl.map((x) => ({ boxes: letraBoxes({ ...x, footer }, st), bg: st.bg, color: st.color, trans: st.pp?.trans }))];
 const layoutFor = (team, style) => ({ ...(team.slide_layout || {}), ...(style?.layout || {}) });
 const aspect = (r) => ratioOf(r).join(" / ");
 const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "musica";
 
 export function slidesOf(blocks, per = 2) {
-  const out = [];
+  const out = []; blocks = blocks || [];
   for (const b of blocks || []) {
     const lines = String(b.text || "").split(/\n+/).map((l) => l.trim()).filter(Boolean);
-    for (let i = 0; i < lines.length; i += per) out.push({ label: i === 0 ? b.label || "" : "", text: lines.slice(i, i + per).join("\n") });
+    for (let i = 0; i < lines.length; i += per) out.push({ label: i === 0 ? b.label || "" : "", text: lines.slice(i, i + per).join("\n"), idx: out.length, bi: blocks.indexOf(b), from: i, n: Math.min(per, lines.length - i), part: b.label || "" });
   }
   return out;
 }
@@ -173,6 +174,7 @@ async function editor(teamId, songId, el, alive) {
       <div class="sec"><h2>Slides <small class="muted">${slidesOf(blocks(), st.per).length}</small></h2></div><div id="pv">${preview()}</div>
       <div class="row gap mt wrap"><button class="btn primary grow" id="dpptx">${icon("download")} PowerPoint (.pptx)</button><button class="btn ghost grow" id="dtxt">${icon("file")} Texto (.txt)</button></div>
       <button class="btn ghost block mt-s" id="save">${icon("check")} Salvar minha versão</button>
+      <button class="btn ghost block mt-s" id="tosim">${icon("layers")} Abrir no simulador ProPresenter</button>
       <p class="tiny muted" style="margin-top:8px">${song.own ? "Esta letra é da Multimídia." : saved ? "Você já tem uma versão própria desta música." : "Ainda não salvou uma versão própria. A letra do Louvor não é alterada."}</p>
       ${song.own ? `<button class="btn ghost danger block mt-s" id="delown">${icon("trash")} Excluir esta letra</button>` : ""}`;
   };
@@ -207,25 +209,186 @@ async function editor(teamId, songId, el, alive) {
     download(buildPptx(pptxSlides(song.title, song.artist, sl, st, st.showFooter ? [song.title, song.artist].filter(Boolean).join(" · ") : ""), st), `${slug(song.title)}.pptx`); toast("PowerPoint gerado");
   });
   on(el, "click", "#dtxt", () => { download(new Blob([textOf(song.title, blocks())], { type: "text/plain;charset=utf-8" }), `${slug(song.title)}.txt`); toast("Texto gerado"); });
-  on(el, "click", "#save", async (e, b) => {
+  const doSave = async (b) => {
     busy(b);
     const bl = blocks();
     if (song.own) {
       song.title = el.querySelector("#otitle")?.value.trim() || song.title; song.artist = el.querySelector("#oartist")?.value.trim() || null;
       const u = await sb.from("media_lyrics").update({ title: song.title, artist: song.artist, blocks: bl.length ? bl : null, style: styleToSave(), updated_by: state.user.id, updated_at: new Date().toISOString() }).eq("id", songId);
-      busy(b, false); if (u.error) return toast(errMsg(u.error), "err"); saved = true; return toast("Letra salva");
+      busy(b, false); if (u.error) { toast(errMsg(u.error), "err"); return false; } saved = true; toast("Letra salva"); return true;
     }
     const r = await sb.from("lyric_slides").upsert({ team_id: teamId, song_id: songId, org_id: team.org_id, blocks: bl.length ? bl : null, style: styleToSave(), updated_by: state.user.id, updated_at: new Date().toISOString() }, { onConflict: "team_id,song_id" });
     busy(b, false);
-    if (r.error) return toast(errMsg(r.error), "err");
-    saved = true; toast("Versão salva");
-  });
+    if (r.error) { toast(errMsg(r.error), "err"); return false; }
+    saved = true; toast("Versão salva"); return true;
+  };
+  on(el, "click", "#save", (e, b) => doSave(b));
+  on(el, "click", "#tosim", async (e, b) => { if (await doSave(b)) location.hash = `#/times/${teamId}/letras/${songId}/simulador`; });
   on(el, "click", "#delown", async () => {
     if (!(await confirmDialog("Excluir esta letra?", "Excluir", true))) return;
     const d = await sb.from("media_lyrics").delete().eq("id", songId); if (d.error) return toast(errMsg(d.error), "err");
     toast("Letra excluída"); location.hash = `#/times/${teamId}/letras`;
   });
   void canManageTeam;
+}
+
+// ---------------------------------------------------------------- simulador ProPresenter
+// Mesmo desenho do ProPresenter: slides à esquerda, tela no centro e painel Forma / Texto / Compilação à direita.
+const CAPS = [[null, "Padrão"], ["none", "Nenhuma"], ["upper", "MAIÚSCULAS"], ["lower", "minúsculas"], ["title", "Título"]];
+const TRANS = [["none", "Nenhuma"], ["fade", "Esmaecer"], ["push", "Empurrar"], ["wipe", "Revelar"]];
+async function simulator(teamId, songId, el, alive) {
+  el.innerHTML = spinner();
+  const team = await getTeam(teamId);
+  if (!team || !teamHas(team, "letras")) { el.innerHTML = empty("lyrics", "Este time não usa letras para a mídia."); return; }
+  let song, saved;
+  try {
+    song = (await loadLibrary(teamId)).find((s) => s.id === songId);
+    saved = await must(sb.from("lyric_slides").select("*").eq("team_id", teamId).eq("song_id", songId).maybeSingle());
+    if (song?.own) saved = { blocks: song.lyrics?.blocks || [], style: song.style };
+  } catch (e) { el.innerHTML = missing(e) ? SETUP : empty("alert", "Não foi possível carregar", errMsg(e)); return; }
+  if (!alive()) return;
+  if (!song) { el.innerHTML = empty("lyrics", "Letra não encontrada"); return; }
+  const original = song.lyrics?.blocks || [];
+  let text = lyricsToText(saved?.blocks?.length ? saved.blocks : original);
+  const custom = !!saved?.style?.layout;
+  const st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9", layout: layoutFor(team, saved?.style) };
+  st.pp = { shape: {}, tx: {}, over: {}, trans: "none", ...(st.pp || {}) };
+  st.pp.shape = st.pp.shape || {}; st.pp.tx = st.pp.tx || {}; st.pp.over = st.pp.over || {};
+  let sel = 0, tab = "forma", scope = "all", dirty = false, editing = false;
+  const [rw, rh] = ratioOf(st.ratio), resW = /^\d{3,5}\s*[x×]/i.test(String(st.ratio)) ? rw : 1920, resH = Math.round((resW * rh) / rw);
+  const blocks = () => parseLyricsText(text);
+  const slides = () => slidesOf(blocks(), st.per);
+  const footer = () => (st.showFooter ? [song.title, song.artist].filter(Boolean).join(" · ") : "");
+  const cur = () => ppOf(st.pp, sel);
+  const target = () => (scope === "one" ? (st.pp.over[sel] ||= {}) : st.pp);
+  const get = (path) => path.split(".").reduce((o, k) => o?.[k], cur());
+  const set = (path, v) => { const ks = path.split("."); let o = target(); for (const k of ks.slice(0, -1)) o = (o[k] ||= {}); o[ks.at(-1)] = v; dirty = true; };
+  const boxesOf = (sl) => letraBoxes({ ...sl, footer: footer() }, st);
+  const thumb = (sl, big = false) => thumbOf(boxesOf(sl), { bg: st.bg, color: st.color, font: st.font, ratio: st.ratio, big });
+  const seg = (path, opts, val) => `<div class="segs">${opts.map(([v, t, ic]) => `<button type="button" class="seg${val === v ? " on" : ""}" data-pseg="${path}:${v}" title="${t}">${ic || t}</button>`).join("")}</div>`;
+  const num = (path, label, o = {}) => { const v = get(path) ?? o.dflt ?? 0; return `<label class="ppn"><span>${label}</span><input type="number" data-p="${path}" ${o.ax ? `data-ax="${o.ax}"` : ""} ${o.scale ? `data-scale="${o.scale}"` : ""} step="${o.step || 1}" ${o.min != null ? `min="${o.min}"` : ""} ${o.max != null ? `max="${o.max}"` : ""} value="${o.ax ? Math.round(v * (o.ax === "W" ? resW : resH) * 10) / 10 : o.scale ? Math.round(v * o.scale) : v}"></label>`; };
+  const chk = (path, label) => `<label class="check ppc"><input type="checkbox" data-p="${path}" ${get(path) ? "checked" : ""}> ${label}</label>`;
+  const color = (path, dflt) => `<input type="color" class="ppcolor" data-p="${path}" value="${attr(get(path) || dflt)}">`;
+  const formaTab = () => { const sl = slides()[sel]; const b = sl ? boxesOf(sl)[0] : { x: 0, y: 0, w: 1, h: 1 };
+    const sh = { x: b.x, y: b.y, w: b.w, h: b.h };
+    return `<div class="ppg"><b>Posição</b>${[["x", "X", "W"], ["y", "Y", "H"]].map(([k, l, ax]) => `<label class="ppn"><span>${l}</span><input type="number" data-p="shape.${k}" data-ax="${ax}" step="1" value="${Math.round(sh[k] * (ax === "W" ? resW : resH) * 10) / 10}"></label>`).join("")}</div>
+      <div class="ppg"><b>Tamanho</b>${[["w", "Largura", "W"], ["h", "Altura", "H"]].map(([k, l, ax]) => `<label class="ppn"><span>${l}</span><input type="number" data-p="shape.${k}" data-ax="${ax}" step="1" min="1" value="${Math.round(sh[k] * (ax === "W" ? resW : resH) * 10) / 10}"></label>`).join("")}</div>
+      <div class="ppg"><b>Transformar</b>${num("shape.rot", "Rotação (°)", { min: -360, max: 360 })}</div>
+      <div class="ppg"><b>Opacidade</b><input type="range" data-p="shape.opacity" data-scale="100" min="0" max="100" value="${Math.round((get("shape.opacity") ?? 1) * 100)}"></div>
+      <div class="ppg col">${chk("shape.fill.on", "Preencher")}${get("shape.fill.on") ? `<div class="row gap-s">${color("shape.fill.color", "#000000")}</div>` : ""}</div>
+      <div class="ppg col">${chk("shape.stroke.on", "Traço")}${get("shape.stroke.on") ? `<div class="row gap-s">${color("shape.stroke.color", "#ffffff")}${num("shape.stroke.w", "Espessura", { min: 1, max: 40 })}</div>` : ""}</div>
+      <button type="button" class="btn ghost block mt-s" id="boxreset">Restaurar posição e tamanho</button>`; };
+  const textoTab = () => { const sl = slides()[sel]; const eff = sl ? boxesOf(sl)[0] : {};
+    const fontNow = get("tx.font") || st.font;
+    return `<div class="ppg col"><b>Fonte</b><select data-p="tx.font">${FONTS.map((f) => `<option ${fontNow === f ? "selected" : ""}>${f}</option>`).join("")}</select>
+        <div class="row gap-s">${num("tx.size", "Tamanho (pt)", { dflt: eff.size || st.size, min: 12, max: 140 })}
+        <div class="segs sm"><button type="button" class="seg${get("tx.bold") !== false ? " on" : ""}" data-ptog="tx.bold"><b>B</b></button><button type="button" class="seg${get("tx.italic") ? " on" : ""}" data-ptog="tx.italic"><i>I</i></button><button type="button" class="seg${get("tx.underline") ? " on" : ""}" data-ptog="tx.underline"><u>U</u></button><button type="button" class="seg${get("tx.strike") ? " on" : ""}" data-ptog="tx.strike"><s>S</s></button></div></div></div>
+      <div class="ppg"><b>Capitalização</b><select data-pcaps>${CAPS.map(([v, t]) => `<option value="${v ?? ""}" ${(get("tx.caps") ?? null) === v || (v === null && get("tx.caps") == null) ? "selected" : ""}>${t}</option>`).join("")}</select></div>
+      <div class="ppg"><b>Cor do texto</b>${color("tx.color", st.color)}<button type="button" class="link small" data-pclear="tx.color">padrão</button></div>
+      <div class="ppg col"><b>Alinhamento</b>${seg("tx.align", [["l", "Esquerda"], ["ctr", "Centro"], ["r", "Direita"], ["just", "Justificado"]], get("tx.align") || st.layout.align)}${seg("tx.anchor", [["t", "Em cima"], ["ctr", "Meio"], ["b", "Embaixo"]], get("tx.anchor") || st.layout.anchor)}</div>
+      <div class="ppg col">${chk("tx.stroke.on", "Traço")}${get("tx.stroke.on") ? `<div class="row gap-s">${color("tx.stroke.color", "#000000")}${num("tx.stroke.w", "Espessura", { min: 1, max: 20 })}</div>` : ""}</div>
+      <div class="ppg col">${chk("tx.shadow.on", "Sombra")}${get("tx.shadow.on") ? `<div class="row gap-s">${color("tx.shadow.color", "#000000")}${num("tx.shadow.op", "Opacidade %", { scale: 100, min: 0, max: 100 })}</div>
+        <div class="row gap-s">${num("tx.shadow.angle", "Ângulo (°)", { min: 0, max: 359 })}${num("tx.shadow.off", "Deslocamento", { min: 0, max: 60 })}${num("tx.shadow.blur", "Desfocar", { min: 0, max: 60 })}</div>` : ""}</div>`; };
+  const compTab = () => `<div class="ppg col"><b>Transição ao entrar no slide</b><select data-ptrans>${TRANS.map(([v, t]) => `<option value="${v}" ${(st.pp.trans || "none") === v ? "selected" : ""}>${t}</option>`).join("")}</select>
+      <p class="tiny muted" style="margin:6px 0 0">Vale para todos os slides desta música no PowerPoint exportado.</p></div>`;
+  const canvasHTML = () => { const sl = slides()[sel]; if (!sl) return `<div class="card small muted">Esta música ainda não tem letra. Escreva na tela de edição.</div>`; return `<div class="ppstage" id="stage">${thumb(sl, true)}<div class="ppsel" id="psel"></div></div>`; };
+  const listHTML = () => { const sl = slides(); let last = null; return sl.map((x) => { const head = x.label && x.label !== last ? (last = x.label, `<div class="pphead">${esc(x.label)}</div>`) : ""; return `${head}<button type="button" class="ppsl${x.idx === sel ? " on" : ""}" data-sl="${x.idx}">${thumb(x)}<small>${x.idx + 1}</small></button>`; }).join("") || `<p class="tiny muted">Sem slides.</p>`; };
+  const place = () => { // caixa de seleção sobre o texto
+    const stg = el.querySelector("#stage"), box = stg?.querySelector("[data-main]"), ov = el.querySelector("#psel"); if (!stg || !box || !ov) return;
+    const sl = slides()[sel], b = boxesOf(sl)[0];
+    ov.style.cssText = `left:${b.x * 100}%;top:${b.y * 100}%;width:${b.w * 100}%;height:${b.h * 100}%;transform:rotate(${b.rot || 0}deg)`;
+    if (!ov.querySelector(".hd")) ov.innerHTML = `<i class="hd" data-h="nw"></i><i class="hd" data-h="n"></i><i class="hd" data-h="ne"></i><i class="hd" data-h="e"></i><i class="hd" data-h="se"></i><i class="hd" data-h="s"></i><i class="hd" data-h="sw"></i><i class="hd" data-h="w"></i><span class="dims"></span>`;
+    ov.querySelector(".dims").textContent = `${Math.round(b.w * resW)} × ${Math.round(b.h * resH)}`;
+  };
+  const paintCanvas = () => { // troca só o desenho do slide, para a caixa de seleção continuar viva durante o arraste
+    const c = el.querySelector("#cv"); if (!c || editing) return; const sl = slides()[sel], stg = c.querySelector("#stage");
+    if (stg && sl) { stg.querySelector(".thumb").outerHTML = thumb(sl, true); place(); return; }
+    c.innerHTML = canvasHTML(); place(); };
+  const paintList = () => { const l = el.querySelector("#sl"); if (l) l.innerHTML = listHTML(); };
+  const paintInsp = () => { const i = el.querySelector("#insp"); if (i) i.innerHTML = tab === "forma" ? formaTab() : tab === "texto" ? textoTab() : compTab(); el.querySelectorAll("[data-ptab]").forEach((b) => b.classList.toggle("on", b.dataset.ptab === tab)); };
+  const repaint = () => { paintCanvas(); paintList(); };
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras/${songId}">${icon("chevronLeft")}</a><div class="grow"><h1 style="margin:0">${esc(song.title)}</h1><div class="tiny muted">Simulador ProPresenter${song.artist ? " · " + esc(song.artist) : ""}</div></div></div>
+    <div class="pp"><div class="ppsl-col"><div id="sl"></div></div>
+      <div class="ppmid"><div id="cv"></div>
+        <div class="row gap mt wrap"><button class="btn primary grow" id="psave">${icon("check")} Salvar</button><button class="btn ghost grow" id="ppptx">${icon("download")} PowerPoint</button></div>
+        <p class="tiny muted" style="margin:8px 0 0">Arraste a caixa para mover, os pontos para redimensionar e toque duas vezes no texto para editar.</p></div>
+      <div class="ppside"><div class="segs ppscope"><button type="button" class="seg on" data-pscope="all">Todos os slides</button><button type="button" class="seg" data-pscope="one">Só este slide</button></div>
+        <div class="pptabs"><button type="button" class="on" data-ptab="forma">Forma</button><button type="button" data-ptab="texto">Texto</button><button type="button" data-ptab="comp">Compilação</button></div><div id="insp" class="ppinsp"></div></div></div>`;
+  repaint(); paintInsp();
+
+  // ---- interação
+  on(el, "click", "[data-sl]", (e, b) => { sel = Number(b.dataset.sl); repaint(); paintInsp(); });
+  on(el, "click", "[data-ptab]", (e, b) => { tab = b.dataset.ptab; paintInsp(); });
+  on(el, "click", "[data-pscope]", (e, b) => { scope = b.dataset.pscope; el.querySelectorAll("[data-pscope]").forEach((x) => x.classList.toggle("on", x === b)); paintInsp(); });
+  on(el, "click", "[data-pseg]", (e, b) => { const [path, v] = b.dataset.pseg.split(":"); set(path, v); repaint(); paintInsp(); });
+  on(el, "click", "[data-ptog]", (e, b) => { const p = b.dataset.ptog; set(p, p === "tx.bold" ? get(p) === false : !get(p)); repaint(); paintInsp(); });
+  on(el, "click", "[data-pclear]", (e, b) => { set(b.dataset.pclear, null); repaint(); paintInsp(); });
+  on(el, "click", "#boxreset", () => { for (const k of ["x", "y", "w", "h"]) set(`shape.${k}`, null); set("shape.rot", 0); repaint(); paintInsp(); });
+  el.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.dataset.pcaps !== undefined) { set("tx.caps", t.value || null); repaint(); }
+    else if (t.dataset.ptrans !== undefined) { st.pp.trans = t.value; dirty = true; }
+    else if (t.dataset.p && (t.type === "checkbox")) { set(t.dataset.p, t.checked); repaint(); paintInsp(); }
+    else if (t.dataset.p && t.tagName === "SELECT") { set(t.dataset.p, t.value); repaint(); }
+  });
+  el.addEventListener("input", (e) => {
+    const t = e.target, path = t.dataset?.p; if (!path || t.type === "checkbox" || t.tagName === "SELECT") return;
+    let v = t.type === "number" || t.type === "range" ? Number(t.value) : t.value;
+    if (t.type !== "color" && (t.value === "" || Number.isNaN(v))) return;
+    if (t.dataset.ax) v = v / (t.dataset.ax === "W" ? resW : resH);
+    else if (t.dataset.scale) v = v / Number(t.dataset.scale);
+    set(path, v); repaint();
+  });
+  // arrastar e redimensionar a caixa
+  el.addEventListener("pointerdown", (e) => {
+    const ov = e.target.closest("#psel"); if (!ov || editing) return;
+    const stg = el.querySelector("#stage").getBoundingClientRect(), b0 = boxesOf(slides()[sel])[0], h = e.target.dataset.h || "move";
+    const start = { x: e.clientX, y: e.clientY }, g = { x: b0.x, y: b0.y, w: b0.w, h: b0.h };
+    ov.setPointerCapture(e.pointerId); e.preventDefault();
+    const move = (ev) => {
+      const dx = (ev.clientX - start.x) / stg.width, dy = (ev.clientY - start.y) / stg.height; let { x, y, w, h: hh } = g;
+      if (h === "move") { x = g.x + dx; y = g.y + dy; }
+      else { if (h.includes("e")) w = g.w + dx; if (h.includes("s")) hh = g.h + dy; if (h.includes("w")) { x = g.x + dx; w = g.w - dx; } if (h.includes("n")) { y = g.y + dy; hh = g.h - dy; } }
+      w = Math.max(0.05, w); hh = Math.max(0.05, hh);
+      if (h === "move") { x = Math.min(1 - w, Math.max(0, x)); y = Math.min(1 - hh, Math.max(0, y)); }
+      Object.entries({ x, y, w, h: hh }).forEach(([k, v]) => set(`shape.${k}`, Math.round(v * 10000) / 10000));
+      paintCanvas();
+    };
+    const up = () => { ov.removeEventListener("pointermove", move); ov.removeEventListener("pointerup", up); ov.removeEventListener("pointercancel", up); paintInsp(); paintList(); };
+    ov.addEventListener("pointermove", move); ov.addEventListener("pointerup", up); ov.addEventListener("pointercancel", up);
+  });
+  // editar o texto do slide na própria tela
+  el.addEventListener("dblclick", (e) => {
+    const ov = e.target.closest("#psel"); if (!ov || editing) return;
+    const sl = slides()[sel]; editing = true;
+    const ta = document.createElement("textarea"); ta.className = "ppedit"; ta.value = sl.text;
+    ta.style.cssText = ov.style.cssText.replace(/transform:[^;]*/, ""); ov.parentElement.appendChild(ta); ta.focus(); ta.select();
+    const done = () => {
+      if (!editing) return; editing = false;
+      const lines = ta.value.split(/\n+/).map((l) => l.trim()).filter(Boolean); ta.remove();
+      const bl = blocks(), b = bl[sl.bi]; if (!b) return;
+      const all = String(b.text || "").split(/\n+/).map((l) => l.trim()).filter(Boolean);
+      all.splice(sl.from, sl.n, ...lines); b.text = all.join("\n"); text = lyricsToText(bl); dirty = true;
+      repaint(); paintInsp();
+    };
+    ta.addEventListener("blur", done); ta.addEventListener("keydown", (k) => { if (k.key === "Escape") { ta.value = sl.text; ta.blur(); } });
+  });
+  const persist = async (b) => {
+    busy(b);
+    const bl = blocks(), style = { ...st }; delete style.ratio; if (!custom) delete style.layout;
+    let err;
+    if (song.own) err = (await sb.from("media_lyrics").update({ blocks: bl.length ? bl : null, style, updated_by: state.user.id, updated_at: new Date().toISOString() }).eq("id", songId)).error;
+    else err = (await sb.from("lyric_slides").upsert({ team_id: teamId, song_id: songId, org_id: team.org_id, blocks: bl.length ? bl : null, style, updated_by: state.user.id, updated_at: new Date().toISOString() }, { onConflict: "team_id,song_id" })).error;
+    busy(b, false);
+    if (err) { toast(errMsg(err), "err"); return false; }
+    dirty = false; toast("Versão salva"); return true;
+  };
+  on(el, "click", "#psave", (e, b) => persist(b));
+  on(el, "click", "#ppptx", () => {
+    const sl = slides(); if (!sl.length) return toast("Escreva a letra primeiro.", "err");
+    download(buildPptx(pptxSlides(song.title, song.artist, sl, st, footer()), st), `${slug(song.title)}.pptx`); toast("PowerPoint gerado");
+  });
+  void original;
 }
 
 // ---------------------------------------------------------------- pacote do culto

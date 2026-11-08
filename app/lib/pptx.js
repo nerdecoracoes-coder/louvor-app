@@ -35,18 +35,31 @@ const NS = `xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmln
 const HEAD = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n`;
 const REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
+// transformações de maiúsculas/minúsculas ("upper", "lower", "title"); b.caps === true equivale a "upper"
+export const applyCaps = (t, m) => { const mode = m === true ? "upper" : m; const v = String(t ?? ""); return mode === "upper" ? v.toUpperCase() : mode === "lower" ? v.toLowerCase() : mode === "title" ? v.toLowerCase().replace(/(^|\s)(\S)/g, (_, a, c) => a + c.toUpperCase()) : v; };
+const alphaXml = (a) => (a != null && a < 1 ? `<a:alpha val="${Math.round(Math.max(0, a) * 100000)}"/>` : "");
+const pt = (v) => Math.round((v || 0) * 12700);
 function boxXml(b, id, H, st) {
   const font = x(b.font || st.font || "Arial"), color = hex(b.color || st.color, "FFFFFF"), size = Math.round((b.size || st.size || 54) * 100);
-  const algn = { l: "l", r: "r", ctr: "ctr", c: "ctr" }[b.align] || "ctr", anchor = { t: "t", b: "b", ctr: "ctr", c: "ctr" }[b.anchor] || "ctr";
-  const paras = String(b.text || "").split("\n").map((l) => `<a:p><a:pPr algn="${algn}">${b.line && b.line !== 1 ? `<a:lnSpc><a:spcPct val="${Math.round(b.line * 100000)}"/></a:lnSpc>` : ""}</a:pPr><a:r><a:rPr lang="pt-BR" sz="${size}" b="${b.bold === false ? 0 : 1}" dirty="0"><a:solidFill><a:srgbClr val="${color}">${b.alpha ? `<a:alpha val="${Math.round(b.alpha * 100000)}"/>` : ""}</a:srgbClr></a:solidFill><a:latin typeface="${font}"/><a:cs typeface="${font}"/></a:rPr><a:t>${x(b.caps ? l.toUpperCase() : l)}</a:t></a:r></a:p>`).join("");
+  const algn = { l: "l", r: "r", ctr: "ctr", c: "ctr", just: "just" }[b.align] || "ctr", anchor = { t: "t", b: "b", ctr: "ctr", c: "ctr" }[b.anchor] || "ctr";
+  const ta = (b.alpha ?? 1) * (b.opacity ?? 1);
+  const tstroke = b.tstroke?.on ? `<a:ln w="${pt(b.tstroke.w || 2)}"><a:solidFill><a:srgbClr val="${hex(b.tstroke.color, "000000")}"/></a:solidFill></a:ln>` : "";
+  const sh = b.shadow?.on ? `<a:effectLst><a:outerShdw blurRad="${pt(b.shadow.blur)}" dist="${pt(b.shadow.off)}" dir="${Math.round((((360 - (b.shadow.angle || 0)) % 360) + 360) % 360 * 60000)}" algn="ctr" rotWithShape="0"><a:srgbClr val="${hex(b.shadow.color, "000000")}">${alphaXml(b.shadow.op ?? 1)}</a:srgbClr></a:outerShdw></a:effectLst>` : "";
+  const attrs = `lang="pt-BR" sz="${size}" b="${b.bold === false ? 0 : 1}"${b.italic ? ' i="1"' : ""}${b.underline ? ' u="sng"' : ""}${b.strike ? ' strike="sngStrike"' : ""} dirty="0"`;
+  const paras = String(b.text || "").split("\n").map((l) => `<a:p><a:pPr algn="${algn}">${b.line && b.line !== 1 ? `<a:lnSpc><a:spcPct val="${Math.round(b.line * 100000)}"/></a:lnSpc>` : ""}</a:pPr><a:r><a:rPr ${attrs}>${tstroke}<a:solidFill><a:srgbClr val="${color}">${alphaXml(ta)}</a:srgbClr></a:solidFill>${sh}<a:latin typeface="${font}"/><a:cs typeface="${font}"/></a:rPr><a:t>${x(applyCaps(l, b.caps))}</a:t></a:r></a:p>`).join("");
   const X = Math.round(W * (b.x ?? 0.04)), Y = Math.round(H * (b.y ?? 0.06)), CX = Math.round(W * (b.w ?? 0.92)), CY = Math.round(H * (b.h ?? 0.88));
-  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Texto ${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="${X}" y="${Y}"/><a:ext cx="${CX}" cy="${CY}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:noFill/></p:spPr><p:txBody><a:bodyPr wrap="square" anchor="${anchor}"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>`;
+  const fill = b.fill?.on ? `<a:solidFill><a:srgbClr val="${hex(b.fill.color, "000000")}">${alphaXml(b.opacity ?? 1)}</a:srgbClr></a:solidFill>` : "<a:noFill/>";
+  const ln = b.stroke?.on ? `<a:ln w="${pt(b.stroke.w || 2)}"><a:solidFill><a:srgbClr val="${hex(b.stroke.color, "FFFFFF")}">${alphaXml(b.opacity ?? 1)}</a:srgbClr></a:solidFill></a:ln>` : "";
+  const rot = b.rot ? ` rot="${Math.round((((b.rot % 360) + 360) % 360) * 60000)}"` : "";
+  return `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="Texto ${id}"/><p:cNvSpPr txBox="1"/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm${rot}><a:off x="${X}" y="${Y}"/><a:ext cx="${CX}" cy="${CY}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom>${fill}${ln}</p:spPr><p:txBody><a:bodyPr wrap="square" anchor="${anchor}"><a:normAutofit/></a:bodyPr><a:lstStyle/>${paras}</p:txBody></p:sp>`;
 }
+const TRANS = { fade: "<p:fade/>", push: '<p:push dir="u"/>', wipe: '<p:wipe dir="l"/>' };
+const transXml = (t) => (TRANS[t] ? `<p:transition spd="med">${TRANS[t]}</p:transition>` : "");
 function slideXml(s, st, H, imgRid) {
   const bgFill = imgRid ? `<a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="${imgRid}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>` : `<a:solidFill><a:srgbClr val="${hex(s.bg || st.bg, "000000")}"/></a:solidFill>`;
   if (s.boxes) {
     const dim = s.dim ? `<p:sp><p:nvSpPr><p:cNvPr id="90" name="Escurecer"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${W}" cy="${H}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="000000"><a:alpha val="${Math.round(s.dim * 100000)}"/></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>` : "";
-    return `${HEAD}<p:sld ${NS}><p:cSld><p:bg><p:bgPr>${bgFill}<a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${dim}${s.boxes.map((b, i) => boxXml(b, 2 + i, H, st)).join("")}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sld>`;
+    return `${HEAD}<p:sld ${NS}><p:cSld><p:bg><p:bgPr>${bgFill}<a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${dim}${s.boxes.map((b, i) => boxXml(b, 2 + i, H, st)).join("")}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${transXml(s.trans)}</p:sld>`;
   }
   const font = x(st.font || "Arial"), color = hex(st.color, "FFFFFF"), size = Math.round((st.size || 54) * 100);
   const lines = String(s.text || "").split("\n");

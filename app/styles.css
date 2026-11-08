@@ -1049,3 +1049,46 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .iconpick button { aspect-ratio: 1; display: grid; place-items: center; border-radius: 12px; background: var(--raised); color: var(--muted); border: 1px solid transparent; }
 .iconpick button svg { width: 28px; height: 28px; }
 .iconpick button.on { color: var(--text); background: rgba(var(--accent-rgb), .22); border-color: rgba(var(--accent-rgb), .7); }
+
+/* ---- Simulador ProPresenter */
+.pp { display: grid; grid-template-columns: 1fr; gap: 12px; }
+.pp .ppmid { order: 1; } .pp .ppsl-col { order: 2; } .pp .ppside { order: 3; }
+.ppsl-col #sl { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: thin; }
+.ppsl-col .pphead { flex: none; align-self: center; font-size: 12px; font-weight: 600; color: var(--muted); writing-mode: horizontal-tb; padding: 0 4px; }
+.ppsl { position: relative; flex: none; width: 140px; padding: 0; border: 2px solid transparent; border-radius: 10px; background: none; }
+.ppsl.on { border-color: #f5c518; }
+.ppsl .thumb { pointer-events: none; }
+.ppsl small { position: absolute; left: 6px; bottom: 4px; font-size: 11px; color: #fff; text-shadow: 0 0 3px #000; }
+.ppstage { position: relative; border-radius: 10px; overflow: visible; background: repeating-conic-gradient(#2a2d34 0 25%, #1e2026 0 50%) 0 0 / 18px 18px; touch-action: none; }
+.ppstage .thumb.st { overflow: hidden; }
+.ppsel { position: absolute; outline: 1.5px solid #5b6dff; cursor: move; touch-action: none; }
+.ppsel .hd { position: absolute; width: 11px; height: 11px; background: #fff; border: 1.5px solid #5b6dff; border-radius: 2px; margin: -6px 0 0 -6px; }
+.ppsel .hd[data-h=nw] { left: 0; top: 0; cursor: nwse-resize; } .ppsel .hd[data-h=n] { left: 50%; top: 0; cursor: ns-resize; } .ppsel .hd[data-h=ne] { left: 100%; top: 0; cursor: nesw-resize; }
+.ppsel .hd[data-h=e] { left: 100%; top: 50%; cursor: ew-resize; } .ppsel .hd[data-h=se] { left: 100%; top: 100%; cursor: nwse-resize; } .ppsel .hd[data-h=s] { left: 50%; top: 100%; cursor: ns-resize; }
+.ppsel .hd[data-h=sw] { left: 0; top: 100%; cursor: nesw-resize; } .ppsel .hd[data-h=w] { left: 0; top: 50%; cursor: ew-resize; }
+.ppsel .dims { position: absolute; left: 50%; top: 100%; transform: translate(-50%, 8px); font-size: 11px; background: #000a; color: #fff; padding: 1px 6px; border-radius: 6px; white-space: nowrap; pointer-events: none; }
+.ppedit { position: absolute; background: #000c; color: #fff; border: 1.5px solid #f5c518; text-align: center; font: inherit; font-size: 15px; resize: none; z-index: 5; }
+.ppside { background: var(--raised); border-radius: 14px; padding: 10px; }
+.ppscope { margin-bottom: 8px; }
+.pptabs { display: flex; gap: 4px; margin-bottom: 8px; }
+.pptabs button { flex: 1; padding: 8px 4px; border-radius: 8px; font-size: 13px; color: var(--muted); background: var(--raised-2, #22252c); }
+.pptabs button.on { background: #1b8cff; color: #fff; }
+.ppinsp .ppg { display: flex; align-items: center; gap: 8px; padding: 9px 0; border-top: 1px solid var(--line-2, #ffffff14); flex-wrap: wrap; }
+.ppinsp .ppg.col { flex-direction: column; align-items: stretch; }
+.ppinsp .ppg > b { font-size: 12px; min-width: 76px; color: var(--muted); font-weight: 600; }
+.ppinsp .ppn { display: flex; flex-direction: column; font-size: 11px; color: var(--muted); gap: 2px; flex: 1; min-width: 70px; }
+.ppinsp input[type=number], .ppinsp select { width: 100%; min-width: 0; box-sizing: border-box; padding: 7px 8px; border-radius: 8px; background: var(--bg, #0e1014); color: var(--text); border: 1px solid var(--line-2, #ffffff1f); font-size: 14px; }
+.ppinsp input[type=range] { flex: 1; }
+.ppcolor { width: 44px; height: 32px; padding: 0; border: 1px solid var(--line-2, #fff3); border-radius: 8px; background: none; }
+.ppinsp .ppc { padding: 0; }
+.segs.sm .seg { min-width: 32px; padding: 6px 8px; }
+@media (min-width: 900px) {
+  .pp { grid-template-columns: 170px minmax(0, 1fr) 290px; align-items: start; }
+  .pp .ppsl-col { order: 1; } .pp .ppmid { order: 2; } .pp .ppside { order: 3; }
+  .ppsl-col #sl { flex-direction: column; overflow: visible; max-height: 74vh; overflow-y: auto; }
+  .ppsl { width: 100%; }
+  .ppsl-col .pphead { align-self: stretch; padding: 6px 2px 0; }
+}
+.pp { grid-template-columns: minmax(0, 1fr); max-width: 100%; }
+.pp > * { min-width: 0; }
+.ppsl-col #sl { max-width: 100%; }
