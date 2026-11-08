@@ -49,8 +49,8 @@ function boxStyle(x) {
   if (x.shadow?.on) { const r = ((x.shadow.angle || 0) * Math.PI) / 180, o = x.shadow.off || 0; css.push(`text-shadow:${cq(Math.cos(r) * o)} ${cq(-Math.sin(r) * o)} ${cq(x.shadow.blur)} ${rgba(x.shadow.color, x.shadow.op ?? 1)}`); }
   return css.join(";");
 }
-export function thumbOf(boxes, { bg = "#000", color = "#fff", font = "Arial", ratio = "16:9", img = "", dim = 0, big = false } = {}) {
+export function thumbOf(boxes, { bg = "#000", bgAlpha = 1, color = "#fff", font = "Arial", ratio = "16:9", img = "", dim = 0, big = false } = {}) {
   const [a, b] = ratioOf(ratio);
   const inner = boxes.map((x, i) => `<div class="tb" ${x.main ? 'data-main="1"' : ""} style="${boxStyle(x)}"><span>${esc(applyCaps(x.text || "", x.caps))}</span></div>`).join("");
-  return `<div class="thumb st" style="aspect-ratio:${a} / ${b};background:${attr(bg)};color:${attr(color)};font-family:'${attr(font)}',sans-serif${big ? ";width:100%" : ""}">${img ? `<img src="${attr(img)}" alt="" loading="lazy">` : ""}${dim ? `<i class="dim" style="opacity:${dim}"></i>` : ""}${inner}</div>`;
+  return `<div class="thumb st" style="aspect-ratio:${a} / ${b};${bgAlpha < 1 ? `background:linear-gradient(${rgba(bg, bgAlpha)},${rgba(bg, bgAlpha)}),repeating-conic-gradient(#5a5e68 0 25%,#383b43 0 50%) 0 0/14px 14px` : `background:${attr(bg)}`};color:${attr(color)};font-family:'${attr(font)}',sans-serif${big ? ";width:100%" : ""}">${img ? `<img src="${attr(img)}" alt="" loading="lazy">` : ""}${dim ? `<i class="dim" style="opacity:${dim}"></i>` : ""}${inner}</div>`;
 }

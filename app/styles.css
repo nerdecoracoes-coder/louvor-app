@@ -1092,3 +1092,13 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .pp { grid-template-columns: minmax(0, 1fr); max-width: 100%; }
 .pp > * { min-width: 0; }
 .ppsl-col #sl { max-width: 100%; }
+
+.ppsong { width: 100%; text-align: left; margin: 0 0 8px; }
+.ppbar { margin-bottom: 12px; }
+.ppresets { display: grid; grid-template-columns: 1fr; gap: 10px; }
+.ppbtn { text-align: left; padding: 8px; border-radius: 12px; background: var(--raised); width: 100%; }
+.ppbtn:active { filter: brightness(1.15); }
+.ppreset .thumb { pointer-events: none; margin-bottom: 6px; }
+.ppwrap { position: relative; }
+.ppwrap .ppdel { position: absolute; right: 8px; bottom: 8px; }
+@media (min-width: 600px) { .ppresets { grid-template-columns: 1fr 1fr; } }

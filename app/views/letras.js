@@ -7,7 +7,8 @@ import { fDate, fTime } from "../core.js";
 import { letraBoxes, titleBoxes, thumbOf, layoutOf, DEFAULT_LAYOUT, ppOf } from "../lib/slidelayout.js";
 
 export function register(route) {
-  route("/times/:id/letras", (p, el, a) => library(p.id, el, a));
+  route("/times/:id/letras", (p, el, a) => simulator(p.id, null, el, a));
+  route("/times/:id/letras/biblioteca", (p, el, a) => library(p.id, el, a));
   route("/times/:id/letras/modelo", (p, el, a) => layoutPage(p.id, el, a));
   route("/times/:id/letras/:song/simulador", (p, el, a) => simulator(p.id, p.song, el, a));
   route("/times/:id/letras/:song", (p, el, a) => editor(p.id, p.song, el, a));
@@ -17,10 +18,10 @@ const SETUP = `<div class="card small">Esta parte precisa da atualização do ba
 const missing = (e) => /relation|does not exist|schema cache|42P01|PGRST|function/i.test(String(e?.message || e?.code || e));
 const norm = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
 export const FONTS = ["Arial", "Calibri", "Verdana", "Tahoma", "Trebuchet MS", "Georgia", "Impact", "Montserrat", "Roboto", "Open Sans"];
-export const DEFAULT_STYLE = { font: "Arial", size: 54, color: "#FFFFFF", bg: "#000000", per: 2, caps: false, showLabel: true };
+export const DEFAULT_STYLE = { font: "Arial", size: 54, color: "#FFFFFF", bg: "#000000", bgAlpha: 1, per: 2, caps: false, showLabel: true };
 const TEXT_COLORS = ["#FFFFFF", "#FFE066", "#9BD1FF", "#000000"], BG_COLORS = ["#000000", "#0B1F3A", "#1B1B1B", "#12301F", "#FFFFFF"];
 // slides do PowerPoint com o padrão de tela da igreja
-const pptxSlides = (title, artist, sl, st, footer) => [{ boxes: titleBoxes(title, artist, st), bg: st.bg, color: st.color, trans: st.pp?.trans }, ...sl.map((x) => ({ boxes: letraBoxes({ ...x, footer }, st), bg: st.bg, color: st.color, trans: st.pp?.trans }))];
+const pptxSlides = (title, artist, sl, st, footer) => [{ boxes: titleBoxes(title, artist, st), bg: st.bg, bgAlpha: st.bgAlpha, color: st.color, trans: st.pp?.trans }, ...sl.map((x) => ({ boxes: letraBoxes({ ...x, footer }, st), bg: st.bg, bgAlpha: st.bgAlpha, color: st.color, trans: st.pp?.trans }))];
 const layoutFor = (team, style) => ({ ...(team.slide_layout || {}), ...(style?.layout || {}) });
 const aspect = (r) => ratioOf(r).join(" / ");
 const slug = (s) => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "musica";
@@ -56,7 +57,7 @@ function askRatio() {
     s.el.querySelector("#rok").onclick = () => {
       const v = s.el.querySelector("#rv").value.trim().replace(/\s+/g, "");
       if (!/^\d{1,5}[x:×]\d{1,5}$/i.test(v)) return toast("Use o formato 1920x1080 ou 21:9", "err");
-      const [a, b] = ratioOf(v); if (a / b > 6 || a / b < 0.5) return toast("Proporção fora do comum. Confira os números.", "err");
+      const [a, b] = ratioOf(v); if (a / b > 10 || a / b < 0.5) return toast("Proporção fora do comum. Confira os números.", "err");
       done = true; res(v.replace("×", "x")); s.close();
     };
   });
@@ -131,6 +132,7 @@ async function editor(teamId, songId, el, alive) {
   } catch (e) { el.innerHTML = missing(e) ? SETUP : empty("alert", "Não foi possível carregar", errMsg(e)); return; }
   if (!alive()) return;
   if (!song) { el.innerHTML = empty("lyrics", "Letra não encontrada", "A música pode ter sido removida ou ainda não tem letra."); return; }
+  try { localStorage.setItem(`somos.letra.${teamId}`, songId); } catch {}
   const original = song.lyrics?.blocks || [];
   let text = lyricsToText(saved?.blocks?.length ? saved.blocks : original);
   let custom = !!saved?.style?.layout, st = { ...DEFAULT_STYLE, ...(saved?.style || {}), ratio: team.slide_ratio || "16:9", layout: layoutFor(team, saved?.style) };
@@ -165,8 +167,7 @@ async function editor(teamId, songId, el, alive) {
       : `<div class="card small muted">Escreva a letra acima para ver os slides.</div>`;
   };
   const draw = () => {
-    el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras">${icon("chevronLeft")}</a><div class="grow">${song.own ? `<input class="input" id="otitle" value="${attr(song.title)}" maxlength="160" aria-label="Título" style="font-size:20px;font-weight:700"><input class="input" id="oartist" value="${attr(song.artist || "")}" maxlength="160" placeholder="Artista ou autor" aria-label="Artista" style="margin-top:6px">` : `<h1 style="font-size:22px">${esc(song.title)}</h1>`}<span class="small muted">${esc(song.artist || "")}${song.song_key ? ` · Tom ${esc(song.song_key)}` : ""}</span></div></div>
-      <button class="btn primary block" id="tosim2">${icon("layers")} Abrir no simulador ProPresenter</button>
+    el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras/biblioteca">${icon("chevronLeft")}</a><div class="grow">${song.own ? `<input class="input" id="otitle" value="${attr(song.title)}" maxlength="160" aria-label="Título" style="font-size:20px;font-weight:700"><input class="input" id="oartist" value="${attr(song.artist || "")}" maxlength="160" placeholder="Artista ou autor" aria-label="Artista" style="margin-top:6px">` : `<h1 style="font-size:22px">${esc(song.title)}</h1>`}<span class="small muted">${esc(song.artist || "")}${song.song_key ? ` · Tom ${esc(song.song_key)}` : ""}</span></div></div>
       <div class="sec"><h2>Partes da letra</h2>${song.own ? "" : `<button class="more" id="restore">Restaurar original</button>`}</div>
       <p class="tiny muted" style="margin:0 0 8px">Separe as partes com uma linha em branco. Para nomear, escreva na primeira linha entre colchetes, como <b>[Refrão]</b>.</p>
       <label class="field"><textarea id="ltxt" style="min-height:240px;font-size:16px;line-height:1.5">${esc(text)}</textarea></label>
@@ -175,7 +176,6 @@ async function editor(teamId, songId, el, alive) {
       <div class="sec"><h2>Slides <small class="muted">${slidesOf(blocks(), st.per).length}</small></h2></div><div id="pv">${preview()}</div>
       <div class="row gap mt wrap"><button class="btn primary grow" id="dpptx">${icon("download")} PowerPoint (.pptx)</button><button class="btn ghost grow" id="dtxt">${icon("file")} Texto (.txt)</button></div>
       <button class="btn ghost block mt-s" id="save">${icon("check")} Salvar minha versão</button>
-      <button class="btn ghost block mt-s" id="tosim">${icon("layers")} Abrir no simulador ProPresenter</button>
       <p class="tiny muted" style="margin-top:8px">${song.own ? "Esta letra é da Multimídia." : saved ? "Você já tem uma versão própria desta música." : "Ainda não salvou uma versão própria. A letra do Louvor não é alterada."}</p>
       ${song.own ? `<button class="btn ghost danger block mt-s" id="delown">${icon("trash")} Excluir esta letra</button>` : ""}`;
   };
@@ -224,31 +224,42 @@ async function editor(teamId, songId, el, alive) {
     saved = true; toast("Versão salva"); return true;
   };
   on(el, "click", "#save", (e, b) => doSave(b));
-  on(el, "click", "#tosim, #tosim2", async (e, b) => { if (await doSave(b)) location.hash = `#/times/${teamId}/letras/${songId}/simulador`; });
   on(el, "click", "#delown", async () => {
     if (!(await confirmDialog("Excluir esta letra?", "Excluir", true))) return;
     const d = await sb.from("media_lyrics").delete().eq("id", songId); if (d.error) return toast(errMsg(d.error), "err");
-    toast("Letra excluída"); location.hash = `#/times/${teamId}/letras`;
+    toast("Letra excluída"); location.hash = `#/times/${teamId}/letras/biblioteca`;
   });
   void canManageTeam;
 }
 
 // ---------------------------------------------------------------- simulador ProPresenter
 // Mesmo desenho do ProPresenter: slides à esquerda, tela no centro e painel Forma / Texto / Compilação à direita.
+// Presets da igreja (do ProPresenter): texto centralizado ocupando a tela toda, Gotham 50 com sombra preta; só o fundo muda.
+const TXT_LOUVOR = { shape: { x: 0, y: 0, w: 1, h: 1 }, tx: { font: "Montserrat", bold: true, align: "ctr", anchor: "ctr", shadow: { on: true, color: "#000000", op: 1, angle: 314.68, off: 8, blur: 6 } }, trans: "none" };
+export const BUILTIN_PRESETS = [
+  ["Louvor", { font: "Montserrat", size: 32, color: "#FFFFFF", bg: "#000000", bgAlpha: 0.5, per: 2, showLabel: false, pp: TXT_LOUVOR }],
+  ["Louvor 1 mais escuro", { font: "Montserrat", size: 32, color: "#FFFFFF", bg: "#000000", bgAlpha: 0.75, per: 2, showLabel: false, pp: TXT_LOUVOR }],
+  ["Louvor Sem opacidade", { font: "Montserrat", size: 32, color: "#FFFFFF", bg: "#000000", bgAlpha: 1, per: 2, showLabel: false, pp: TXT_LOUVOR }],
+];
 const CAPS = [[null, "Padrão"], ["none", "Nenhuma"], ["upper", "MAIÚSCULAS"], ["lower", "minúsculas"], ["title", "Título"]];
 const TRANS = [["none", "Nenhuma"], ["fade", "Esmaecer"], ["push", "Empurrar"], ["wipe", "Revelar"]];
 async function simulator(teamId, songId, el, alive) {
   el.innerHTML = spinner();
   const team = await getTeam(teamId);
   if (!team || !teamHas(team, "letras")) { el.innerHTML = empty("lyrics", "Este time não usa letras para a mídia."); return; }
-  let song, saved;
+  let song, saved, lib = [];
   try {
-    song = (await loadLibrary(teamId)).find((s) => s.id === songId);
-    saved = await must(sb.from("lyric_slides").select("*").eq("team_id", teamId).eq("song_id", songId).maybeSingle());
-    if (song?.own) saved = { blocks: song.lyrics?.blocks || [], style: song.style };
+    lib = await loadLibrary(teamId);
+    if (!songId) { let last = null; try { last = localStorage.getItem(`somos.letra.${teamId}`); } catch {} songId = (lib.find((x) => x.id === last) || lib[0])?.id || null; }
+    song = lib.find((x) => x.id === songId);
+    if (song) {
+      saved = await must(sb.from("lyric_slides").select("*").eq("team_id", teamId).eq("song_id", songId).maybeSingle());
+      if (song.own) saved = { blocks: song.lyrics?.blocks || [], style: song.style };
+    }
   } catch (e) { el.innerHTML = missing(e) ? SETUP : empty("alert", "Não foi possível carregar", errMsg(e)); return; }
   if (!alive()) return;
-  if (!song) { el.innerHTML = empty("lyrics", "Letra não encontrada"); return; }
+  if (!song) { el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}">${icon("chevronLeft")}</a><h1>Letras</h1></div><div class="card">${empty("lyrics", lib.length ? "Letra não encontrada" : "Nenhuma letra cadastrada", "Crie uma letra ou espere o Louvor cadastrar as músicas.")}<a class="btn primary block mt" href="#/times/${teamId}/letras/biblioteca">${icon("plus")} Biblioteca de letras</a></div>`; return; }
+  try { localStorage.setItem(`somos.letra.${teamId}`, songId); } catch {}
   const original = song.lyrics?.blocks || [];
   let text = lyricsToText(saved?.blocks?.length ? saved.blocks : original);
   const custom = !!saved?.style?.layout;
@@ -265,7 +276,7 @@ async function simulator(teamId, songId, el, alive) {
   const get = (path) => path.split(".").reduce((o, k) => o?.[k], cur());
   const set = (path, v) => { const ks = path.split("."); let o = target(); for (const k of ks.slice(0, -1)) o = (o[k] ||= {}); o[ks.at(-1)] = v; dirty = true; };
   const boxesOf = (sl) => letraBoxes({ ...sl, footer: footer() }, st);
-  const thumb = (sl, big = false) => thumbOf(boxesOf(sl), { bg: st.bg, color: st.color, font: st.font, ratio: st.ratio, big });
+  const thumb = (sl, big = false) => thumbOf(boxesOf(sl), { bg: st.bg, bgAlpha: st.bgAlpha, color: st.color, font: st.font, ratio: st.ratio, big });
   const seg = (path, opts, val) => `<div class="segs">${opts.map(([v, t, ic]) => `<button type="button" class="seg${val === v ? " on" : ""}" data-pseg="${path}:${v}" title="${t}">${ic || t}</button>`).join("")}</div>`;
   const num = (path, label, o = {}) => { const v = get(path) ?? o.dflt ?? 0; return `<label class="ppn"><span>${label}</span><input type="number" data-p="${path}" ${o.ax ? `data-ax="${o.ax}"` : ""} ${o.scale ? `data-scale="${o.scale}"` : ""} step="${o.step || 1}" ${o.min != null ? `min="${o.min}"` : ""} ${o.max != null ? `max="${o.max}"` : ""} value="${o.ax ? Math.round(v * (o.ax === "W" ? resW : resH) * 10) / 10 : o.scale ? Math.round(v * o.scale) : v}"></label>`; };
   const chk = (path, label) => `<label class="check ppc"><input type="checkbox" data-p="${path}" ${get(path) ? "checked" : ""}> ${label}</label>`;
@@ -278,6 +289,7 @@ async function simulator(teamId, songId, el, alive) {
       <div class="ppg"><b>Opacidade</b><input type="range" data-p="shape.opacity" data-scale="100" min="0" max="100" value="${Math.round((get("shape.opacity") ?? 1) * 100)}"></div>
       <div class="ppg col">${chk("shape.fill.on", "Preencher")}${get("shape.fill.on") ? `<div class="row gap-s">${color("shape.fill.color", "#000000")}</div>` : ""}</div>
       <div class="ppg col">${chk("shape.stroke.on", "Traço")}${get("shape.stroke.on") ? `<div class="row gap-s">${color("shape.stroke.color", "#ffffff")}${num("shape.stroke.w", "Espessura", { min: 1, max: 40 })}</div>` : ""}</div>
+      <div class="ppg"><b>Fundo</b><input type="color" class="ppcolor" data-st="bg" value="${attr(st.bg)}"><label class="ppn"><span>Opacidade do fundo %</span><input type="number" data-st="bgAlpha" data-scale="100" min="0" max="100" value="${Math.round((st.bgAlpha ?? 1) * 100)}"></label></div>
       <button type="button" class="btn ghost block mt-s" id="boxreset">Restaurar posição e tamanho</button>`; };
   const textoTab = () => { const sl = slides()[sel]; const eff = sl ? boxesOf(sl)[0] : {};
     const fontNow = get("tx.font") || st.font;
@@ -308,7 +320,9 @@ async function simulator(teamId, songId, el, alive) {
   const paintList = () => { const l = el.querySelector("#sl"); if (l) l.innerHTML = listHTML(); };
   const paintInsp = () => { const i = el.querySelector("#insp"); if (i) i.innerHTML = tab === "forma" ? formaTab() : tab === "texto" ? textoTab() : compTab(); el.querySelectorAll("[data-ptab]").forEach((b) => b.classList.toggle("on", b.dataset.ptab === tab)); };
   const repaint = () => { paintCanvas(); paintList(); };
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras/${songId}">${icon("chevronLeft")}</a><div class="grow"><h1 style="margin:0">${esc(song.title)}</h1><div class="tiny muted">Simulador ProPresenter${song.artist ? " · " + esc(song.artist) : ""}</div></div></div>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}">${icon("chevronLeft")}</a><div class="grow"><h1 style="margin:0">Letras</h1><div class="tiny muted">Simulador ProPresenter</div></div></div>
+    <button class="li ppsong" id="psongs" type="button"><span class="cover">${icon("lyrics")}</span><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(song.title)}</span><span class="s">${esc(song.artist || "Toque para trocar de música")}</span></span>${icon("chevronRight", "chev")}</button>
+    <div class="row gap-s wrap ppbar"><button class="btn ghost sm" id="ppresets">${icon("layers")} Presets</button><a class="btn ghost sm" href="#/times/${teamId}/letras/${songId}">${icon("edit")} Editar letra</a><a class="btn ghost sm" href="#/times/${teamId}/letras/biblioteca">${icon("lyrics")} Biblioteca</a></div>
     <div class="pp"><div class="ppsl-col"><div id="sl"></div></div>
       <div class="ppmid"><div id="cv"></div>
         <div class="row gap mt wrap"><button class="btn primary grow" id="psave">${icon("check")} Salvar</button><button class="btn ghost grow" id="ppptx">${icon("download")} PowerPoint</button></div>
@@ -333,7 +347,9 @@ async function simulator(teamId, songId, el, alive) {
     else if (t.dataset.p && t.tagName === "SELECT") { set(t.dataset.p, t.value); repaint(); }
   });
   el.addEventListener("input", (e) => {
-    const t = e.target, path = t.dataset?.p; if (!path || t.type === "checkbox" || t.tagName === "SELECT") return;
+    const t = e.target;
+    if (t.dataset?.st) { const v = t.type === "number" ? Number(t.value) / Number(t.dataset.scale || 1) : t.value; if (t.type === "number" && (t.value === "" || Number.isNaN(v))) return; st[t.dataset.st] = Math.min(1, Math.max(0, v)) === v || t.type !== "number" ? v : Math.min(1, Math.max(0, v)); dirty = true; repaint(); return; }
+    const path = t.dataset?.p; if (!path || t.type === "checkbox" || t.tagName === "SELECT") return;
     let v = t.type === "number" || t.type === "range" ? Number(t.value) : t.value;
     if (t.type !== "color" && (t.value === "" || Number.isNaN(v))) return;
     if (t.dataset.ax) v = v / (t.dataset.ax === "W" ? resW : resH);
@@ -373,6 +389,39 @@ async function simulator(teamId, songId, el, alive) {
       repaint(); paintInsp();
     };
     ta.addEventListener("blur", done); ta.addEventListener("keydown", (k) => { if (k.key === "Escape") { ta.value = sl.text; ta.blur(); } });
+  });
+  // ---- presets: edições já definidas da igreja + os salvos pelo time
+  const PKEYS = ["font", "size", "color", "bg", "bgAlpha", "per", "caps", "showLabel"];
+  const snapshot = () => { const c = {}; for (const k of PKEYS) c[k] = st[k]; c.pp = JSON.parse(JSON.stringify({ shape: st.pp.shape, tx: st.pp.tx, trans: st.pp.trans || "none" })); return c; };
+  const applyPreset = (cfg) => { for (const k of PKEYS) if (cfg[k] !== undefined) st[k] = cfg[k]; st.pp = { shape: {}, tx: {}, over: {}, trans: "none", ...JSON.parse(JSON.stringify(cfg.pp || {})) }; st.pp.over = {}; dirty = true; repaint(); paintInsp(); };
+  const loadPresets = async () => { const r = await sb.from("lyric_presets").select("id,name,config").eq("team_id", teamId).order("sort").order("created_at"); return r.error ? null : r.data || []; };
+  const presetCard = (name, cfg, extra = "") => { const s2 = { ...st, ...cfg, pp: { shape: {}, tx: {}, over: {}, ...(cfg.pp || {}) } };
+    return `<div class="ppreset">${thumbOf(letraBoxes({ label: "", text: "Line one of text\nLine two of text", footer: "", idx: 0 }, s2), { bg: s2.bg, bgAlpha: s2.bgAlpha, color: s2.color, font: s2.font, ratio: st.ratio })}<div class="row gap-s"><span class="grow t">${esc(name)}</span>${extra}</div></div>`; };
+  on(el, "click", "#ppresets", async () => {
+    const saved2 = await loadPresets();
+    const sh = sheet(`<h3>Presets</h3><p class="small muted">Edições já definidas. Toque para aplicar à música (você ainda pode ajustar e salvar).</p>
+      <div class="sec"><h3>Da igreja</h3></div><div class="ppresets">${BUILTIN_PRESETS.map(([n, c], i) => `<button type="button" class="ppbtn" data-bp="${i}">${presetCard(n, c)}</button>`).join("")}</div>
+      <div class="sec"><h3>Salvos pelo time</h3></div><div class="ppresets" id="spl">${saved2 === null ? `<p class="tiny muted">Para salvar presets, falta rodar a atualização do banco.</p>` : saved2.length ? saved2.map((x) => `<div class="ppwrap"><button type="button" class="ppbtn" data-sp="${x.id}">${presetCard(x.name, x.config || {})}</button><button type="button" class="iconbtn ppdel" data-spd="${x.id}" aria-label="Excluir preset">${icon("trash")}</button></div>`).join("") : `<p class="tiny muted">Nenhum ainda. Ajuste a letra e salve abaixo.</p>`}</div>
+      ${saved2 === null ? "" : `<label class="field mt"><span>Salvar os ajustes atuais como preset</span><input id="spname" maxlength="60" placeholder="Ex.: Louvor domingo"></label><button class="btn primary block" id="spsave">${icon("check")} Salvar preset</button>`}`, { wide: true });
+    sh.el.addEventListener("click", async (e) => {
+      const bp = e.target.closest("[data-bp]"), sp = e.target.closest("[data-sp]"), del = e.target.closest("[data-spd]");
+      if (bp) { applyPreset(BUILTIN_PRESETS[Number(bp.dataset.bp)][1]); sh.close(); toast("Preset aplicado"); }
+      else if (sp) { applyPreset(saved2.find((x) => x.id === sp.dataset.sp).config || {}); sh.close(); toast("Preset aplicado"); }
+      else if (del) { if (!(await confirmDialog("Excluir este preset?", "Excluir", true))) return; const r = await sb.from("lyric_presets").delete().eq("id", del.dataset.spd); if (r.error) return toast(errMsg(r.error), "err"); sh.close(); toast("Preset excluído"); }
+    });
+    sh.el.querySelector("#spsave")?.addEventListener("click", async (e) => {
+      const name = sh.el.querySelector("#spname").value.trim(); if (!name) return toast("Dê um nome ao preset.", "err");
+      busy(e.currentTarget);
+      const r = await sb.from("lyric_presets").upsert({ org_id: team.org_id, team_id: teamId, name, config: snapshot(), created_by: state.user.id }, { onConflict: "team_id,name" });
+      busy(e.currentTarget, false); if (r.error) return toast(errMsg(r.error), "err");
+      sh.close(); toast("Preset salvo");
+    });
+  });
+  on(el, "click", "#psongs", () => {
+    const sh = sheet(`<h3>Escolher música</h3><label class="search srch" style="display:block">${icon("search")}<input class="input" id="psq" placeholder="Procurar música"></label><div class="list mt" id="psl" style="max-height:55vh;overflow:auto"></div><a class="btn ghost block mt" href="#/times/${teamId}/letras/biblioteca">${icon("plus")} Nova letra e ajustes da tela</a>`, { wide: true });
+    const draw = (q = "") => { sh.el.querySelector("#psl").innerHTML = lib.filter((x) => !q || norm(x.title + " " + (x.artist || "")).includes(norm(q))).map((x) => `<a class="li" href="#/times/${teamId}/letras/${x.id}/simulador"><span class="cover">${icon("lyrics")}</span><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(x.title)}</span><span class="s">${esc(x.artist || "")}</span></span>${x.id === songId ? icon("check") : ""}</a>`).join("") || `<p class="small muted" style="padding:10px">Nenhuma música encontrada.</p>`; };
+    draw(); sh.el.querySelector("#psq").oninput = (e) => draw(e.target.value);
+    sh.el.querySelector("#psl").addEventListener("click", () => setTimeout(() => sh.close(), 50));
   });
   const persist = async (b) => {
     busy(b);
@@ -443,7 +492,7 @@ async function layoutPage(teamId, el, alive) {
   const seg = (key, opts) => `<div class="segs">${opts.map(([v, t]) => `<button type="button" class="seg${L[key] === v ? " on" : ""}" data-seg="${key}:${v}">${t}</button>`).join("")}</div>`;
   const slider = (key, label, min, max, step = 1, unit = "%") => `<div class="field"><span>${label} (${unit})</span><div class="numrow"><input type="range" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}" aria-label="${label}"><input type="number" class="num" inputmode="decimal" data-k="${key}" min="${min}" max="${max}" step="${step}" value="${L[key]}" aria-label="${label} em número"></div></div>`;
   const draw = () => {
-    el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras">${icon("chevronLeft")}</a><h1>Padrão da letra</h1></div>
+    el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras/biblioteca">${icon("chevronLeft")}</a><h1>Padrão da letra</h1></div>
       <p class="muted small">Cada igreja projeta de um jeito. Ajuste aqui onde o texto fica na tela. Vale para todas as letras e para os arquivos em PowerPoint. O tamanho da letra e as cores você muda em cada música.</p>
       <div id="pv" style="position:sticky;top:var(--hdr,56px);z-index:3">${thumbOf(letraBoxes({ ...sample, footer: L.footer !== "off" ? foot : "" }, { ...st, layout: L }), { bg: st.bg, color: st.color, font: st.font, ratio: st.ratio, big: true })}</div>
       <div class="card mt">

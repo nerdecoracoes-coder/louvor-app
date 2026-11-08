@@ -28,7 +28,7 @@ export const RATIOS = { "16:9": "16:9 (Full HD, padrão)", "16:10": "16:10", "4:
 export function ratioOf(r) {
   const m = String(r || "16:9").match(/^(\d{2,5})\s*[x:×]\s*(\d{1,5})$/i) || String(r || "").match(/^(\d{1,2})\s*:\s*(\d{1,2})$/);
   const a = m ? Number(m[1]) : 16, b = m ? Number(m[2]) : 9;
-  return a > 0 && b > 0 && a / b >= 0.5 && a / b <= 6 ? [a, b] : [16, 9];
+  return a > 0 && b > 0 && a / b >= 0.5 && a / b <= 10 ? [a, b] : [16, 9];
 }
 const hFor = (r) => { const [a, b] = ratioOf(r); return Math.round((W * b) / a / 2) * 2; };
 const NS = `xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main"`;
@@ -56,7 +56,7 @@ function boxXml(b, id, H, st) {
 const TRANS = { fade: "<p:fade/>", push: '<p:push dir="u"/>', wipe: '<p:wipe dir="l"/>' };
 const transXml = (t) => (TRANS[t] ? `<p:transition spd="med">${TRANS[t]}</p:transition>` : "");
 function slideXml(s, st, H, imgRid) {
-  const bgFill = imgRid ? `<a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="${imgRid}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>` : `<a:solidFill><a:srgbClr val="${hex(s.bg || st.bg, "000000")}"/></a:solidFill>`;
+  const bgFill = imgRid ? `<a:blipFill dpi="0" rotWithShape="1"><a:blip r:embed="${imgRid}"/><a:stretch><a:fillRect/></a:stretch></a:blipFill>` : `<a:solidFill><a:srgbClr val="${hex(s.bg || st.bg, "000000")}">${alphaXml(s.bgAlpha ?? st.bgAlpha)}</a:srgbClr></a:solidFill>`;
   if (s.boxes) {
     const dim = s.dim ? `<p:sp><p:nvSpPr><p:cNvPr id="90" name="Escurecer"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="${W}" cy="${H}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:srgbClr val="000000"><a:alpha val="${Math.round(s.dim * 100000)}"/></a:srgbClr></a:solidFill><a:ln><a:noFill/></a:ln></p:spPr></p:sp>` : "";
     return `${HEAD}<p:sld ${NS}><p:cSld><p:bg><p:bgPr>${bgFill}<a:effectLst/></p:bgPr></p:bg><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>${dim}${s.boxes.map((b, i) => boxXml(b, 2 + i, H, st)).join("")}</p:spTree></p:cSld><p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${transXml(s.trans)}</p:sld>`;

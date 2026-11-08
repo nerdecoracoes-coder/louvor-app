@@ -410,7 +410,7 @@ with sync_playwright() as pw:
     expect(carla.get_by_text("Pedido pronto: Vídeo de abertura do retiro")).to_have_count(0, timeout=10000)
     ok("notificação abre o pedido e some da lista")
     # ------------------------------------------------------------------ Letras para a mídia (Multimídia vê as letras do Louvor)
-    ana.goto(f"{BASE}/#/times/{jovens_id}/letras")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras/biblioteca")
     expect(ana.locator("#ll .li", has_text="Emaús")).to_be_visible(timeout=10000)
     ana.locator("#ratio").select_option("4:3"); toast_has(ana, "Tela da projeção atualizada")
     expect(ana.locator("#ll .li", has_text="Emaús")).to_be_visible(timeout=10000)
@@ -429,11 +429,11 @@ with sync_playwright() as pw:
     with ana.expect_download() as dl2: ana.locator("[data-goto=pkg]").click()
     zn = zipfile.ZipFile(dl2.value.path()).namelist()
     assert any(n.endswith("00-ordem-do-culto.txt") for n in zn) and any(n.endswith("culto-completo.pptx") for n in zn) and any(n.endswith("-emaus.pptx") for n in zn), zn
-    ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); ana.locator("#ratio").select_option("16:9"); toast_has(ana, "Tela da projeção atualizada")
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras/biblioteca"); ana.locator("#ratio").select_option("16:9"); toast_has(ana, "Tela da projeção atualizada")
     ok("Letras para a mídia: tela da projeção (4:3 no PowerPoint), partes, estilo, PowerPoint gerado e versão salva; pacote do culto em .zip")
-    ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); ana.locator("#newl").click(); ana.fill("#nt", "Música da mídia"); ana.fill("#nl", "[Verso 1]\nLinha um\nLinha dois\n\n[Refrão]\nCoro aqui"); ana.locator("#nok").click()
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras/biblioteca"); ana.locator("#newl").click(); ana.fill("#nt", "Música da mídia"); ana.fill("#nl", "[Verso 1]\nLinha um\nLinha dois\n\n[Refrão]\nCoro aqui"); ana.locator("#nok").click()
     expect(ana.locator("#ltxt")).to_be_visible(timeout=10000); ana.locator("#save").click(); toast_has(ana, "Letra salva")
-    ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); expect(ana.locator("#ll .li", has_text="Música da mídia")).to_contain_text("Própria", timeout=10000)
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras/biblioteca"); expect(ana.locator("#ll .li", has_text="Música da mídia")).to_contain_text("Própria", timeout=10000)
     ok("Multimídia cria a própria letra e ela aparece na biblioteca")
     ana.goto(f"{BASE}/#/times/{jovens_id}/letras/modelo"); expect(ana.locator("#pv .thumb")).to_be_visible(timeout=10000)
     ana.locator("[data-seg='align:l']").click(); ana.locator("#ok").click(); toast_has(ana, "Padrão salvo")
@@ -441,14 +441,19 @@ with sync_playwright() as pw:
     ana.locator("#reset").click(); ana.locator("#ok").click(); toast_has(ana, "Padrão salvo")
     ok("Padrão da letra na tela editável (alinhamento, margens, rodapé) e salvo pelo time")
     # simulador ProPresenter: slides, caixa arrastável, abas Forma/Texto/Compilação, salvar e PowerPoint com os ajustes
-    ana.goto(f"{BASE}/#/times/{jovens_id}/letras"); ana.locator("#ll .li", has_text="Música da mídia").click()
-    expect(ana.locator("#tosim")).to_be_visible(timeout=10000); ana.locator("#tosim").click()
+    ana.goto(f"{BASE}/#/times/{jovens_id}/letras")  # Letras abre direto no simulador, na última música usada
+    expect(ana.locator("#psongs")).to_contain_text("Música da mídia", timeout=10000)
+    assert ana.locator("#tosim").count() == 0
     expect(ana.locator("#psel")).to_be_visible(timeout=10000)
     assert ana.locator(".ppsl").count() >= 2
     bx = ana.locator("#psel").bounding_box(); ana.mouse.move(bx["x"] + bx["width"] / 2, bx["y"] + bx["height"] / 2); ana.mouse.down(); ana.mouse.move(bx["x"] + bx["width"] / 2 + 8, bx["y"] + bx["height"] / 2 + 8, steps=6); ana.mouse.up()
     assert abs(ana.locator("#psel").bounding_box()["x"] - bx["x"] - 8) < 3, "caixa não moveu"
     ana.locator("[data-ptab=texto]").click(); ana.locator("[data-ptog='tx.italic']").click(); ana.locator("[data-p='tx.shadow.on']").check()
     ana.locator("[data-ptab=comp]").click(); ana.locator("[data-ptrans]").select_option("fade")
+    ana.locator("#ppresets").click(); expect(ana.locator(".ppbtn", has_text="Louvor Sem opacidade")).to_be_visible(timeout=10000)
+    ana.locator("[data-bp=\"1\"]").click(); expect(ana.locator(".ppsl .thumb").first).to_have_css("background-image", re.compile("gradient"), timeout=10000)
+    ana.locator("#ppresets").click(); ana.fill("#spname", "Meu preset"); ana.locator("#spsave").click(); toast_has(ana, "Preset salvo")
+    ana.locator("[data-ptab=texto]").click(); ana.locator("[data-ptog='tx.italic']").click(); ana.locator("[data-ptab=comp]").click(); ana.locator("[data-ptrans]").select_option("fade")
     ana.evaluate("window.scrollTo(0,0)"); assert ana.evaluate("document.documentElement.scrollWidth <= innerWidth + 1"), "simulador com rolagem horizontal"; shot(ana, "08j-simulador")
     ana.locator("#psave").click(); toast_has(ana, "Versão salva")
     with ana.expect_download() as dsim: ana.locator("#ppptx").click()
