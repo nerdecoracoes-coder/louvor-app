@@ -166,6 +166,7 @@ async function editor(teamId, songId, el, alive) {
   };
   const draw = () => {
     el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}/letras">${icon("chevronLeft")}</a><div class="grow">${song.own ? `<input class="input" id="otitle" value="${attr(song.title)}" maxlength="160" aria-label="Título" style="font-size:20px;font-weight:700"><input class="input" id="oartist" value="${attr(song.artist || "")}" maxlength="160" placeholder="Artista ou autor" aria-label="Artista" style="margin-top:6px">` : `<h1 style="font-size:22px">${esc(song.title)}</h1>`}<span class="small muted">${esc(song.artist || "")}${song.song_key ? ` · Tom ${esc(song.song_key)}` : ""}</span></div></div>
+      <button class="btn primary block" id="tosim2">${icon("layers")} Abrir no simulador ProPresenter</button>
       <div class="sec"><h2>Partes da letra</h2>${song.own ? "" : `<button class="more" id="restore">Restaurar original</button>`}</div>
       <p class="tiny muted" style="margin:0 0 8px">Separe as partes com uma linha em branco. Para nomear, escreva na primeira linha entre colchetes, como <b>[Refrão]</b>.</p>
       <label class="field"><textarea id="ltxt" style="min-height:240px;font-size:16px;line-height:1.5">${esc(text)}</textarea></label>
@@ -223,7 +224,7 @@ async function editor(teamId, songId, el, alive) {
     saved = true; toast("Versão salva"); return true;
   };
   on(el, "click", "#save", (e, b) => doSave(b));
-  on(el, "click", "#tosim", async (e, b) => { if (await doSave(b)) location.hash = `#/times/${teamId}/letras/${songId}/simulador`; });
+  on(el, "click", "#tosim, #tosim2", async (e, b) => { if (await doSave(b)) location.hash = `#/times/${teamId}/letras/${songId}/simulador`; });
   on(el, "click", "#delown", async () => {
     if (!(await confirmDialog("Excluir esta letra?", "Excluir", true))) return;
     const d = await sb.from("media_lyrics").delete().eq("id", songId); if (d.error) return toast(errMsg(d.error), "err");
