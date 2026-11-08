@@ -1,6 +1,6 @@
 // Conta, convites, primeira organização, perfil, notificações, configurações da igreja e o Google Drive do repertório.
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fRel,
-  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, TEAM_TYPES, isRepertoireStaff } from "../core.js";
+  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, TEAM_TYPES, isRepertoireStaff } from "../core.js";
 import { colorPicker, readColor, bindColor } from "./teams.js";
 
 export function register(route) {
@@ -318,11 +318,14 @@ async function orgSettings(_, el) {
   el.querySelector("#orginv").onclick = () => orgInviteSheet();
   el.querySelector("#addrole").onclick = async () => {
     const sh = sheet(`<h3>Nova função</h3><form id="rf"><label class="field"><span>Nome</span><input name="n" required maxlength="60" placeholder="Ex.: Projeção"></label>
-      <label class="field"><span>Para qual tipo de time</span><select name="t">${TEAM_TYPES.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}<option value="">Todos os tipos</option></select></label>
+      <label class="field"><span>Para qual tipo de time</span><select name="t">${TEAM_TYPES.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}<option value="">Todos os tipos</option></select></label>${roleIconPicker("")}
       <button class="btn primary block">Criar função</button></form>`);
-    const res = await new Promise((ok) => (sh.el.querySelector("#rf").onsubmit = (e) => { e.preventDefault(); ok({ n: e.target.n.value.trim(), t: e.target.t.value || null }); }));
+    bindRoleIconPicker(sh.el);
+    const res = await new Promise((ok) => (sh.el.querySelector("#rf").onsubmit = (e) => { e.preventDefault(); ok({ n: e.target.n.value.trim(), t: e.target.t.value || null, i: e.target.icon.value || null }); }));
     sh.close();
-    const r = await sb.from("music_roles").insert({ org_id: o.id, name: res.n, sort: roles.length + 1, team_type: res.t });
+    let r = await sb.from("music_roles").insert({ org_id: o.id, name: res.n, icon: res.i, sort: roles.length + 1, team_type: res.t });
+    if (r.error && /icon/i.test(r.error.message || "")) r = await sb.from("music_roles").insert({ org_id: o.id, name: res.n, sort: roles.length + 1, team_type: res.t });
+    await loadRoleIcons();
     if (r.error) return toast(errMsg(r.error), "err"); orgSettings(_, el);
   };
   on(el, "click", "[data-er]", async (e, b) => {

@@ -191,6 +191,14 @@ const P = {
   list: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
   checkbox: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/>',
   org: '<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6M9 10h.01M15 10h.01"/>', swap: '<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
+  headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/>',
+  speaker: '<rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.5"/><circle cx="12" cy="7" r=".8"/>',
+  piano: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8.5 5v10M15.5 5v10M12 15v4M8.5 19v-4M15.5 19v-4"/>',
+  drum: '<ellipse cx="12" cy="9" rx="8" ry="3"/><path d="M4 9v7c0 1.7 3.6 3 8 3s8-1.3 8-3V9"/><path d="m6 6-3-3M18 6l3-3"/>',
+  horn: '<path d="M3 10v4h3l9 5V5L6 10z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5M20.5 7a7 7 0 0 1 0 10"/>',
+  heart: '<path d="M12 20.5s-8-4.7-8-10.2A4.3 4.3 0 0 1 12 8a4.3 4.3 0 0 1 8 2.3c0 5.5-8 10.2-8 10.2z"/>',
+  star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
+  disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3a9 9 0 0 1 9 9"/>',
 };
 export const icon = (name, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ""}</svg>`;
 
@@ -331,6 +339,7 @@ export async function selectOrg(orgId, persist = true) {
     state.myTeams = (t.data || []).filter((x) => x.teams).map((x) => ({ ...x.teams, is_leader: x.is_leader })).sort((a, b) => a.name.localeCompare(b.name));
     state.leaderOf = new Set(state.myTeams.filter((x) => x.is_leader).map((x) => x.id));
     state.orgTeams = (await sb.from("teams").select("*").eq("org_id", state.org.id).order("name")).data || [];
+    await loadRoleIcons();
   }
   if (state.space) state.space = findTeam(state.space.id); // dados atualizados do time
   if (persist || !state.space) restoreSpace();
@@ -381,11 +390,33 @@ export function waLink(phone, text = "") {
   const full = d.length <= 11 ? "55" + d : d;
   return `https://wa.me/${full}${text ? "?text=" + encodeURIComponent(text) : ""}`;
 }
+// ícones que dá para escolher ao criar uma função (louvor e música primeiro)
+export const ROLE_ICONS = [["mic", "Microfone"], ["guitar", "Violão"], ["piano", "Teclas"], ["drum", "Bateria"], ["music", "Nota"], ["wave", "Onda"], ["sliders", "Mesa"], ["headphones", "Fones"],
+  ["speaker", "Caixa de som"], ["horn", "Sopro"], ["disc", "Disco"], ["lyrics", "Letra"], ["users", "Coral"], ["hand", "Mãos"], ["heart", "Coração"], ["star", "Estrela"],
+  ["crown", "Coroa"], ["sparkle", "Brilho"], ["volume", "Som"], ["bell", "Sino"], ["camera", "Câmera"], ["play", "Play"], ["layers", "Camadas"], ["megaphone", "Aviso"]];
+export const roleIcons = new Map(); // nome da função -> ícone escolhido
 export function roleIcon(name = "") {
+  const chosen = roleIcons.get(name); if (chosen && P[chosen]) return chosen;
   const n = name.toLowerCase();
   if (/guitarra|viol|baixo|ukul|cavaq/.test(n)) return "guitar";
-  if (/vocal|voz|ministro|soprano|contralto|tenor|back/.test(n)) return "mic";
+  if (/vocal|voz|ministro|soprano|contralto|tenor|back|volante|coral|coro/.test(n)) return "mic";
   if (/bateria|perc|cajon/.test(n)) return "wave";
   if (/teclado|piano|synth|keys/.test(n)) return "sliders";
   return "music";
+}
+export const roleIconPicker = (sel = "") => `<div class="field"><span>Ícone</span><input type="hidden" name="icon" value="${sel || ""}">
+  <div class="iconpick">${ROLE_ICONS.map(([k, l]) => `<button type="button" class="${k === sel ? "on" : ""}" data-ico="${k}" title="${l}" aria-label="${l}">${icon(k)}</button>`).join("")}</div></div>`;
+export function bindRoleIconPicker(root) {
+  root.querySelectorAll("[data-ico]").forEach((b) => b.addEventListener("click", () => {
+    const on = b.classList.contains("on");
+    root.querySelectorAll("[data-ico]").forEach((x) => x.classList.remove("on"));
+    if (!on) b.classList.add("on");
+    root.querySelector("input[name=icon]").value = on ? "" : b.dataset.ico;
+  }));
+}
+export async function loadRoleIcons() {
+  if (!state.org) return;
+  const r = await sb.from("music_roles").select("name,icon").eq("org_id", state.org.id); // sem a coluna (SQL pendente), segue com os ícones automáticos
+  roleIcons.clear();
+  if (!r.error) for (const x of r.data || []) if (x.icon) roleIcons.set(x.name, x.icon);
 }

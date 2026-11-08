@@ -1044,3 +1044,8 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 
 .reh-edit { background: var(--raised); border-radius: 14px; padding: 10px 10px 2px; margin-bottom: 10px; }
 .reh-edit .row { align-items: flex-end; }
+
+.iconpick { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin-top: 6px; }
+.iconpick button { aspect-ratio: 1; display: grid; place-items: center; border-radius: 12px; background: var(--raised); color: var(--muted); border: 1px solid transparent; }
+.iconpick button svg { width: 24px; height: 24px; }
+.iconpick button.on { color: var(--text); background: rgba(var(--accent-rgb), .22); border-color: rgba(var(--accent-rgb), .7); }

@@ -1,6 +1,6 @@
 // Página "Time" (dentro do time): convite, integrantes, funções, equipes, classificações, liderança, arquivos e avisos.
 import { teamHas, sb, state, must, esc, attr, icon, avatar, teamBadge, people, isAdmin, isStaff, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
-  confirmDialog, roleIcon, selectOrg, teamTypeLabel, teamHasRepertoire, applyAccent } from "../core.js";
+  confirmDialog, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, roleIcons, selectOrg, teamTypeLabel, teamHasRepertoire, applyAccent } from "../core.js";
 
 export function register(route) {
   route("/times/:id/funcoes", (p, el, a) => rolesPage(p.id, el, a));
@@ -84,14 +84,18 @@ async function rolesPage(id, el, alive) {
     el.querySelector("#new")?.addEventListener("click", () => roleSheet(null));
     on(el, "click", "[data-r]", (e, b) => roleSheet(roles.find((x) => x.id === b.dataset.r)));
     function roleSheet(r) {
-      const s = sheet(`<h3>${r ? "Editar função" : "Nova função"}</h3><form id="f"><label class="field"><span>Nome *</span><input name="name" required maxlength="60" value="${attr(r?.name || "")}" placeholder="Ex.: Violão"></label>
+      const s = sheet(`<h3>${r ? "Editar função" : "Nova função"}</h3><form id="f"><label class="field"><span>Nome *</span><input name="name" required maxlength="60" value="${attr(r?.name || "")}" placeholder="Ex.: Violão"></label>${roleIconPicker(r?.icon || roleIcons.get(r?.name || "") || "")}
         <button class="btn primary block" id="save">Salvar</button>${r && isAdmin() ? `<button type="button" class="btn danger block mt-s" id="del">${icon("trash")} Excluir função</button>` : ""}</form>`);
+      bindRoleIconPicker(s.el);
       s.el.querySelector("#f").onsubmit = async (ev) => {
         ev.preventDefault(); const btn = s.el.querySelector("#save"); busy(btn);
-        const name = ev.target.name.value.trim();
-        const q = r ? sb.from("music_roles").update({ name }).eq("id", r.id) : sb.from("music_roles").insert({ org_id: state.org.id, name, sort: roles.length + 1, team_type: team.team_type });
-        const res = await q; busy(btn, false);
+        const name = ev.target.name.value.trim(), ico = ev.target.icon.value || null;
+        const q = r ? sb.from("music_roles").update({ name, icon: ico }).eq("id", r.id) : sb.from("music_roles").insert({ org_id: state.org.id, name, icon: ico, sort: roles.length + 1, team_type: team.team_type });
+        let res = await q;
+        if (res.error && /icon/i.test(res.error.message || "")) res = await (r ? sb.from("music_roles").update({ name }).eq("id", r.id) : sb.from("music_roles").insert({ org_id: state.org.id, name, sort: roles.length + 1, team_type: team.team_type })); // SQL do ícone ainda não aplicado
+        busy(btn, false);
         if (res.error) return toast(errMsg(res.error), "err");
+        await loadRoleIcons();
         s.close(); toast("Função salva"); draw();
       };
       s.el.querySelector("#del")?.addEventListener("click", async () => {
