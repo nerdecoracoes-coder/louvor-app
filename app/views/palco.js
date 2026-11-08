@@ -1,7 +1,7 @@
 // Palco do time: o desenho padrão do app (palco em perspectiva com os instrumentos) e os presets de escala.
 // O líder monta o palco e os presets na aba "Time"; na escala, as posições viram o jeito visual de escalar.
 import { sb, state, must, esc, attr, icon, canManageTeam, sheet, toast, errMsg, busy, on, empty, spinner, confirmDialog, roleIcon } from "../core.js";
-import { instrumentArt } from "./palco-art.js";
+import { instrumentArt, artWidth } from "./palco-art.js";
 
 export function register(route) {
   route("/times/:id/palco", (p, el, a) => stagePage(p.id, el, a));
@@ -9,7 +9,7 @@ export function register(route) {
 
 const missingTable = (e) => /relation|does not exist|schema cache|42P01|PGRST205/i.test(String(e?.message || e?.code || e));
 const SETUP_MSG = `Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-07-palco-presets.sql</b> (e depois o <b>palco-giro</b>) no SQL Editor do Supabase.`;
-export const Y_MIN = 20, Y_MAX = 84, X_MIN = 7, X_MAX = 93;
+export const Y_MIN = 15, Y_MAX = 84, X_MIN = 7, X_MAX = 93;
 
 // ---------------------------------------------------------------- dados
 export async function loadStage(teamId) {
@@ -36,7 +36,7 @@ export function defaultLayout(roles) {
   for (const g of groups) for (let i = 0; i < g.length; i += 3) rows.push(g.slice(i, i + 3));
   const out = [];
   rows.forEach((list, ri) => {
-    const y = rows.length === 1 ? 50 : Math.round(26 + (ri / (rows.length - 1)) * 54);
+    const y = rows.length === 1 ? 50 : Math.round(24 + (ri / (rows.length - 1)) * 56);
     list.forEach((r, i) => out.push({ role_id: r.id, x: Math.round(((i + 1) / (list.length + 1)) * 78 + 11), y }));
   });
   return out;
@@ -47,24 +47,17 @@ export function defaultLayout(roles) {
 export function stageHTML(slots, render, { cls = "" } = {}) {
   return `<div class="stage ${cls}">
     <svg class="stage-bg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><defs>
-      <linearGradient id="stwall" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#14141a"/><stop offset="1" stop-color="#0a0a0d"/></linearGradient>
-      <radialGradient id="stspot1" cx=".3" cy="0" r=".7"><stop offset="0" stop-color="rgba(255,190,120,.30)"/><stop offset="1" stop-color="rgba(255,190,120,0)"/></radialGradient>
-      <radialGradient id="stspot2" cx=".72" cy="0" r=".7"><stop offset="0" stop-color="rgba(150,190,255,.26)"/><stop offset="1" stop-color="rgba(150,190,255,0)"/></radialGradient>
-      <linearGradient id="stfl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1c1c22"/><stop offset=".55" stop-color="#2b2b32"/><stop offset="1" stop-color="#202026"/></linearGradient>
-      <linearGradient id="stgloss" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="rgba(255,255,255,0)"/><stop offset=".5" stop-color="rgba(255,255,255,.07)"/><stop offset="1" stop-color="rgba(255,255,255,0)"/></linearGradient>
-      <linearGradient id="stwd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e28a3a"/><stop offset=".22" stop-color="#b9611f"/><stop offset="1" stop-color="#6a300d"/></linearGradient></defs>
-      <rect width="100" height="100" fill="url(#stwall)"/><rect width="100" height="100" fill="url(#stspot1)"/><rect width="100" height="100" fill="url(#stspot2)"/>
-      <polygon points="8,17 92,17 100,88 0,88" fill="url(#stfl)"/>
-      <polygon points="8,17 92,17 100,88 0,88" fill="url(#stgloss)"/>
-      <g stroke="rgba(255,255,255,.05)" stroke-width="1" vector-effect="non-scaling-stroke">
-        ${[14, 26, 38, 50, 62, 74, 86].map((xt) => `<line x1="${xt}" y1="17" x2="${(50 + (xt - 50) * 1.19).toFixed(1)}" y2="88"/>`).join("")}
-        ${[28, 42, 58, 76].map((y) => `<line x1="${8 - (y - 17) * .11}" y1="${y}" x2="${92 + (y - 17) * .11}" y2="${y}"/>`).join("")}</g>
-      <polygon points="8,17 92,17 100,88 0,88" fill="none" stroke="rgba(255,255,255,.88)" stroke-width="1.4" vector-effect="non-scaling-stroke"/>
-      <polygon points="0,88 100,88 100,96 0,96" fill="url(#stwd)"/><line x1="0" y1="88.4" x2="100" y2="88.4" stroke="rgba(255,225,170,.7)" stroke-width="1" vector-effect="non-scaling-stroke"/>
-      <rect y="96" width="100" height="4" fill="#06060a"/></svg>
+      <linearGradient id="stfl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1b1b1f"/><stop offset=".5" stop-color="#2a2a2f"/><stop offset="1" stop-color="#37373d"/></linearGradient>
+      <radialGradient id="stvig" cx=".5" cy=".55" r=".75"><stop offset=".55" stop-color="rgba(0,0,0,0)"/><stop offset="1" stop-color="rgba(0,0,0,.45)"/></radialGradient>
+      <linearGradient id="stwd" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e8883a"/><stop offset=".25" stop-color="#b8601f"/><stop offset="1" stop-color="#7a3a10"/></linearGradient></defs>
+      <rect width="100" height="100" fill="#040405"/>
+      <polygon points="5,9 95,9 99,89 1,89" fill="url(#stfl)"/><polygon points="5,9 95,9 99,89 1,89" fill="url(#stvig)"/>
+      <polygon points="5,9 95,9 99,89 1,89" fill="none" stroke="rgba(255,255,255,.92)" stroke-width="1.6" vector-effect="non-scaling-stroke"/>
+      <polygon points="1,89 99,89 100,94.5 0,94.5" fill="url(#stwd)"/><line x1="1" y1="89.4" x2="99" y2="89.4" stroke="rgba(255,226,170,.8)" stroke-width="1" vector-effect="non-scaling-stroke"/>
+      <rect y="94.5" width="100" height="5.5" fill="#030304"/></svg>
     ${slots.map((s) => {
       const r = render(s) || {}; const k = 0.72 + 0.4 * ((Number(s.y) - Y_MIN) / (Y_MAX - Y_MIN));
-      return `<div class="slot ${r.cls || ""}" data-sid="${s.id}" style="left:${Number(s.x)}%;top:${Number(s.y)}%;--k:${k.toFixed(3)};z-index:${Math.round(Number(s.y))}" ${r.attrs || ""}>
+      return `<div class="slot ${r.cls || ""}" data-sid="${s.id}" style="left:${Number(s.x)}%;top:${Number(s.y)}%;--k:${k.toFixed(3)};--aw:${artWidth(r.name)};z-index:${Math.round(Number(s.y))}" ${r.attrs || ""}>
         <span class="art" style="transform:rotate(${Number(s.rot) || 0}deg)">${instrumentArt(r.name)}</span>
         ${r.who ? `<span class="sface">${r.who.avatar}</span>` : ""}
         <span class="slabel">${r.who ? `<b class="swho">${esc(r.who.label)}</b>` : ""}<small class="sname">${esc(r.name)}</small></span>
