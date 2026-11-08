@@ -152,8 +152,8 @@ const P = {
   volume: '<path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a7.5 7.5 0 0 1 0 11"/>',
   sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
   lyrics: '<path d="M4 6h16M4 10h10M4 14h16M4 18h8"/>', tracks: '<path d="M3 6h18M3 12h18M3 18h18"/><circle cx="8" cy="6" r="1.6" fill="currentColor"/><circle cx="15" cy="12" r="1.6" fill="currentColor"/><circle cx="10" cy="18" r="1.6" fill="currentColor"/>',
-  guitar: '<path d="m20 4-6.5 6.5"/><path d="M18 2l4 4"/><path d="M11.5 9.5c-1.7-.3-3.4.3-4.3 1.6-.5.7-1.4 1-2.2 1-1.5 0-2.7 1.3-2.4 2.9.3 1.9 2.1 3.8 4 4.1 1.6.3 2.9-.9 2.9-2.4 0-.8.3-1.7 1-2.2 1.3-.9 1.9-2.6 1.6-4.3"/><circle cx="8.5" cy="15.5" r="1.2"/>',
-  mic: '<rect x="9" y="2.5" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5"/>',
+  guitar: '<path d="m15 9 6-6"/><path d="m19.5 2.5 2 2"/><path d="M12.2 11.8 15 9"/><path d="M9.3 8.3c1.6-.7 3.5-.3 4.2 1.2.5 1.2.1 2.3-.7 3.1-.9.9-1 1.6-1 2.3 0 2.4-2.2 5.3-5.6 5.3-3.3 0-5.2-1.9-5.2-4.2 0-2.1 1.5-3.3 3.5-3.3.7 0 1.3-.2 2-1 .9-1.1 1.5-2.5 2.8-3.4z"/><circle cx="8" cy="15.5" r="1.4"/>',
+  mic: '<rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0 0 13 0"/><path d="M12 18v3.5M8.5 21.5h7"/>',
   search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>', filter: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>',
   check: '<path d="m5 12.5 4.5 4.5L19 7.5"/>', x: '<path d="M6 6l12 12M18 6 6 18"/>', more: '<circle cx="5" cy="12" r="1.4" fill="currentColor"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/><circle cx="19" cy="12" r="1.4" fill="currentColor"/>',
   settings: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/>',
@@ -181,7 +181,7 @@ const P = {
   stage: '<rect x="3" y="4" width="18" height="13" rx="2.5"/><path d="M8 9.5h.01M16 9.5h.01M12 13h.01M6 21h12"/>',
   wave: '<path d="M3 12h2M7 8v8M11 5v14M15 9v6M19 7v10M21 12h0"/>', drag: '<path d="M9 6h.01M15 6h.01M9 12h.01M15 12h.01M9 18h.01M15 18h.01"/>',
   layers: '<path d="m12 3 9 5-9 5-9-5z"/><path d="m3 13 9 5 9-5"/>', lock: '<rect x="4.5" y="10.5" width="15" height="10" rx="2"/><path d="M8 10.5V7a4 4 0 0 1 8 0v3.5"/>',
-  sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M6 18l2.5-2.5M15.5 8.5 18 6"/>',
+  sparkle: '<path d="M12 3c.6 4.6 2.4 6.4 7 7-4.6.6-6.4 2.4-7 7-.6-4.6-2.4-6.4-7-7 4.6-.6 6.4-2.4 7-7z"/><path d="M19 16.5v4M17 18.5h4M5 3v3M3.5 4.5h3"/>',
   inbox: '<path d="M3 13h5l1.5 3h5L16 13h5"/><path d="M5.5 5h13L21 13v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/>',
   badge: '<rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="11" r="2.2"/><path d="M5.5 16c.6-1.8 1.9-2.6 3.5-2.6s2.9.8 3.5 2.6M15 9.5h3.5M15 13h3.5"/>',
   tag: '<path d="M3 12V4h8l9.5 9.5a1.7 1.7 0 0 1 0 2.4l-5.1 5.1a1.7 1.7 0 0 1-2.4 0z"/><circle cx="7.5" cy="8.5" r="1.2" fill="currentColor"/>',
@@ -191,14 +191,24 @@ const P = {
   list: '<path d="M9 6h12M9 12h12M9 18h12"/><path d="M4 6h.01M4 12h.01M4 18h.01"/>',
   checkbox: '<rect x="3.5" y="3.5" width="17" height="17" rx="4"/><path d="m8 12 3 3 5-6"/>',
   org: '<path d="M4 21V8l8-5 8 5v13"/><path d="M9 21v-6h6v6M9 10h.01M15 10h.01"/>', swap: '<path d="M7 4 3 8l4 4M3 8h14M17 20l4-4-4-4M21 16H7"/>',
-  headphones: '<path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="3" y="14" width="4" height="7" rx="1.5"/><rect x="17" y="14" width="4" height="7" rx="1.5"/>',
-  speaker: '<rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.5"/><circle cx="12" cy="7" r=".8"/>',
-  piano: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8.5 5v10M15.5 5v10M12 15v4M8.5 19v-4M15.5 19v-4"/>',
-  drum: '<ellipse cx="12" cy="9" rx="8" ry="3"/><path d="M4 9v7c0 1.7 3.6 3 8 3s8-1.3 8-3V9"/><path d="m6 6-3-3M18 6l3-3"/>',
-  horn: '<path d="M3 10v4h3l9 5V5L6 10z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5M20.5 7a7 7 0 0 1 0 10"/>',
-  heart: '<path d="M12 20.5s-8-4.7-8-10.2A4.3 4.3 0 0 1 12 8a4.3 4.3 0 0 1 8 2.3c0 5.5-8 10.2-8 10.2z"/>',
-  star: '<path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/>',
-  disc: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2.5"/><path d="M12 3a9 9 0 0 1 9 9"/>',
+  mic2: '<circle cx="9.5" cy="9" r="5"/><path d="M6.6 5.6c1.8 1.4 4.2 1.4 6 0M6 9h7M6.6 12.4c1.8-1.4 4.2-1.4 6 0"/><path d="m13 12.5 6.5 6.5a1.7 1.7 0 0 1-2.4 2.4L10.6 14.8"/>',
+  piano: '<rect x="2.5" y="5" width="19" height="14" rx="2.2"/><path d="M8.8 19v-5M15.2 19v-5M7 5v9h3.6V5M13.4 5v9H17V5"/>',
+  keys: '<rect x="2" y="7" width="20" height="11" rx="2"/><path d="M6 10.5h3M11.5 10.5h1M15 10.5h3"/><path d="M8 18v-3.5M12 18v-3.5M16 18v-3.5"/>',
+  drum: '<ellipse cx="12" cy="10" rx="8" ry="3"/><path d="M4 10v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6"/><path d="m8 12.5 1.5 5.5M16 12.5 14.5 18M12 13v6"/><path d="m5 3.5 5 4.2M19 3.5l-5 4.2"/>',
+  note: '<path d="M10 17.5V4l8 2.5V10l-8-2.5"/><circle cx="7" cy="17.5" r="3.2"/>',
+  mixer: '<rect x="3" y="3" width="18" height="18" rx="3"/><path d="M8 7v10M12 7v10M16 7v10"/><path d="M6.5 10h3M10.5 14h3M14.5 9h3"/>',
+  headphones: '<path d="M4 15.5V12a8 8 0 0 1 16 0v3.5"/><path d="M4 14.5h2.5a1 1 0 0 1 1 1v4a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2zM20 14.5h-2.5a1 1 0 0 0-1 1v4a1 1 0 0 0 1 1h.5a2 2 0 0 0 2-2z"/>',
+  speaker: '<rect x="5" y="2.5" width="14" height="19" rx="2.5"/><circle cx="12" cy="14.5" r="3.8"/><circle cx="12" cy="14.5" r="1"/><circle cx="12" cy="7" r="1.2"/>',
+  vinyl: '<circle cx="12" cy="12" r="9.5"/><circle cx="12" cy="12" r="3"/><path d="M12 12v0"/><path d="M5.5 8.5A8 8 0 0 1 9 5M18.5 15.5A8 8 0 0 1 15 19"/>',
+  sheet: '<path d="M6 2.5h9l4 4v15H6z"/><path d="M15 2.5v4h4"/><path d="M9 11h7M9 14h7M9 17h4"/>',
+  choir: '<circle cx="12" cy="7.5" r="3"/><circle cx="5" cy="9.5" r="2.3"/><circle cx="19" cy="9.5" r="2.3"/><path d="M6.5 20v-2.5A5.5 5.5 0 0 1 12 12a5.5 5.5 0 0 1 5.5 5.5V20z"/><path d="M1.5 17.5v-1a3.5 3.5 0 0 1 4-3M22.5 17.5v-1a3.5 3.5 0 0 0-4-3"/>',
+  heart: '<path d="M12 20.5s-8.5-5-8.5-11A4.7 4.7 0 0 1 12 7.2 4.7 4.7 0 0 1 20.5 9.5c0 6-8.5 11-8.5 11z"/>',
+  cross: '<path d="M10 2.5h4v6h6v4h-6v9h-4v-9H4v-4h6z"/>',
+  flame: '<path d="M12 21.5c-3.9 0-6.5-2.6-6.5-6.2 0-2.7 1.6-4.5 3-6 1-1.1 1.7-2.3 1.7-4.3 3.2 1.5 5.3 3.8 5.8 6.5.6-.4 1.1-1.1 1.3-2 1.2 1.4 1.7 3.1 1.7 4.6 0 3.6-3.1 7.4-7 7.4z"/><path d="M12 21.5c-1.7 0-2.8-1.2-2.8-2.8 0-1.3.9-2.1 1.6-3 .4-.5.7-1 .8-1.7 1.9 1.1 3.2 2.6 3.2 4.7 0 1.6-1.1 2.8-2.8 2.8z"/>',
+  star: '<path d="m12 2.8 2.8 5.8 6.4.9-4.6 4.5 1.1 6.4L12 17.4 6.3 20.4l1.1-6.4L2.8 9.5l6.4-.9z"/>',
+  video: '<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5z"/>',
+  church: '<path d="M12 2v4M10 4h4"/><path d="m12 6-5 4v11h10V10z"/><path d="M10 21v-5a2 2 0 0 1 4 0v5"/><path d="M7 12.5H2.5V21H7M17 12.5h4.5V21H17"/>',
+  book: '<path d="M12 6.500C10 5 7.500 4.500 4 4.500v14c3.500 0 6 .5 8 2 2-1.500 4.500-2 8-2v-14c-3.500 0-6 .5-8 2z"/><path d="M12 6.500v14"/>',
 };
 export const icon = (name, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ""}</svg>`;
 
@@ -391,17 +401,16 @@ export function waLink(phone, text = "") {
   return `https://wa.me/${full}${text ? "?text=" + encodeURIComponent(text) : ""}`;
 }
 // ícones que dá para escolher ao criar uma função (louvor e música primeiro)
-export const ROLE_ICONS = [["mic", "Microfone"], ["guitar", "Violão"], ["piano", "Teclas"], ["drum", "Bateria"], ["music", "Nota"], ["wave", "Onda"], ["sliders", "Mesa"], ["headphones", "Fones"],
-  ["speaker", "Caixa de som"], ["disc", "Disco"], ["lyrics", "Letra"], ["users", "Coral"], ["hand", "Mãos"], ["heart", "Coração"], ["star", "Estrela"],
-  ["crown", "Coroa"], ["sparkle", "Brilho"], ["bell", "Sino"], ["camera", "Câmera"], ["play", "Play"], ["layers", "Camadas"], ["moon", "Noite"], ["cloud", "Nuvem"]];
+export const ROLE_ICONS = [["mic", "Microfone"], ["mic2", "Microfone de mão"], ["guitar", "Violão"], ["piano", "Piano"], ["keys", "Teclado"], ["drum", "Bateria"], ["music", "Música"], ["note", "Nota"], ["wave", "Ondas"], ["mixer", "Mesa de som"], ["headphones", "Fones"], ["speaker", "Caixa de som"], ["vinyl", "Disco"], ["sheet", "Partitura"], ["choir", "Coral"], ["heart", "Coração"], ["cross", "Cruz"], ["flame", "Chama"], ["star", "Estrela"], ["crown", "Coroa"], ["sparkle", "Brilho"], ["bell", "Sino"], ["church", "Igreja"], ["book", "Bíblia"], ["camera", "Câmera"], ["video", "Vídeo"]];
 export const roleIcons = new Map(); // nome da função -> ícone escolhido
 export function roleIcon(name = "") {
   const chosen = roleIcons.get(name); if (chosen && P[chosen]) return chosen;
   const n = name.toLowerCase();
   if (/guitarra|viol|baixo|ukul|cavaq/.test(n)) return "guitar";
   if (/vocal|voz|ministro|soprano|contralto|tenor|back|volante|coral|coro/.test(n)) return "mic";
-  if (/bateria|perc|cajon/.test(n)) return "wave";
-  if (/teclado|piano|synth|keys/.test(n)) return "sliders";
+  if (/bateria|perc|cajon/.test(n)) return "drum";
+  if (/teclado|synth|keys|órgão|orgao/.test(n)) return "keys";
+  if (/piano/.test(n)) return "piano";
   return "music";
 }
 export const roleIconPicker = (sel = "") => `<div class="field"><span>Ícone</span><input type="hidden" name="icon" value="${sel || ""}">
