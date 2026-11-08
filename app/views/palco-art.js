@@ -9,7 +9,7 @@ export function instrumentKind(name = "") {
   if (/baixo/.test(n)) return "bass";
   if (/guitarra/.test(n)) return "eguitar";
   if (/viol|cavaq|ukul|banjo/.test(n)) return "acoustic";
-  if (/vocal|voz|ministro|soprano|contralto|tenor|back|cantor|louvor/.test(n)) return "mic";
+  if (/vocal|voz|ministro|soprano|contralto|tenor|baritono|barítono|back|cantor|volante|coral|coro|louvor/.test(n)) return "mic";
   return "other";
 }
 

@@ -25,7 +25,7 @@ export async function loadStage(teamId) {
 const rowOf = (name = "") => {
   const n = name.toLowerCase();
   if (/bateria|perc|cajon/.test(n)) return 0;
-  if (/vocal|voz|ministro|soprano|contralto|tenor|back|cantor/.test(n)) return 2;
+  if (/vocal|voz|ministro|soprano|contralto|tenor|baritono|barítono|back|cantor|volante|coral|coro/.test(n)) return 2;
   return 1;
 };
 export function defaultLayout(roles) {
