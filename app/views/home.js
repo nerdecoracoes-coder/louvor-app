@@ -5,10 +5,12 @@ import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDat
 import { openRequestsCard } from "./multimidia.js";
 import { churchHome, pendingScalesCard } from "./igreja.js";
 import { teamExtras } from "./eventos.js";
+import { maybeService } from "./servico.js";
 
 export function register(route) {
-  route("/", (p, el, a) => (state.space ? teamHome(state.space, el, a) : churchHome(el, a)));
-  route("/inicio", (p, el, a) => (state.space ? teamHome(state.space, el, a) : churchHome(el, a)));
+  const start = async (p, el, a) => { if (await maybeService()) return; return state.space ? teamHome(state.space, el, a) : churchHome(el, a); };
+  route("/", start);
+  route("/inicio", start);
   route("/avisos", noticesView);
   route("/avisos/novo", (p, el) => noticeForm(el, null));
   route("/bloqueios", blocksView);
@@ -218,6 +220,7 @@ async function teamHome(team, el, alive) {
   <div id="pend"></div>
   <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/times/${team.id}/escalas">Ver todas ${icon("chevronRight")}</a></div>
   <div id="ups">${myUps.length ? `<div class="scards">${myUps.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
+  ${manage ? `<div class="chips" style="flex-wrap:wrap;margin-top:10px"><a class="chip" href="#/times/${team.id}/servico">${icon("heart")} Hora de servir</a></div>` : ""}
   ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div><div class="scards">${others.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : ""}
 
   <div id="extras"></div>

@@ -812,6 +812,25 @@ with sync_playwright() as pw:
     bruno.goto(f"{BASE}/#/times/{louvor_id}/lideranca"); expect(bruno.locator(".pagehead h1")).to_have_text("Liderança", timeout=10000)
     ok("página Time: funções, equipes, classificações e liderança")
 
+    # ambiente de serviço: no dia da escala, perto do horário, o início vira "Hora de servir"
+    env0 = dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres")
+    subprocess.run(["psql", "-q", "-c", f"""
+      with s as (insert into schedules (org_id, team_id, title, starts_at, status, created_by)
+        select t.org_id, t.id, 'Culto de Serviço', now() + interval '20 minutes', 'published', (select id from profiles where full_name = 'Bruno Costa') from teams t where t.id = '{louvor_id}' returning id, org_id, team_id),
+      a as (insert into schedule_assignments (schedule_id, org_id, team_id, user_id, role_name) select id, org_id, team_id, (select id from profiles where full_name = 'Bruno Costa'), 'Bateria' from s)
+      insert into role_checklist_items (org_id, team_id, label, offset_min, position) select org_id, team_id, 'Chegar ao local', -30, 1 from s"""], env=env0, check=True)
+    bruno.goto(BASE + "/#/inicio")
+    bruno.wait_for_url(re.compile(r"/servico/[0-9a-f-]{36}$"), timeout=15000)
+    expect(bruno.locator(".svc-kicker")).to_have_text("Hora de servir", timeout=10000)
+    bruno.locator("[data-it]").first.click()
+    expect(bruno.locator(".li.check.on")).to_contain_text("Marcado às", timeout=10000)
+    expect(bruno.locator(".svc-late")).to_have_count(1)  # marcou depois do horário-alvo (30 min antes)
+    shot(bruno, "28-hora-de-servir")
+    assert bruno.evaluate("document.documentElement.scrollWidth <= window.innerWidth")
+    bruno.locator("#skip").click(); bruno.wait_for_url(re.compile(r"/inicio$"), timeout=10000)
+    expect(bruno.locator(".hero")).to_be_visible(timeout=10000)
+    ok("ambiente de serviço: abre no dia da escala, checklist registra o horário real e atraso")
+
     # parabéns do dia: quem faz aniversário hoje aparece em uma janela na primeira abertura do dia
     today = time.strftime("%Y-%m-%d")
     env = dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres")
