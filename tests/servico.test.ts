@@ -51,3 +51,29 @@ describe("serviço", () => {
     expect((await lider.api.get(`/service_checks?schedule_id=eq.${sch}`)).data).toHaveLength(0);
   });
 });
+
+describe("modelos por função", () => {
+  let org2 = "", team2 = "", bat = "", voc = "", other = "";
+  test("o modelo é criado uma vez, com itens gerais e da função pelo nome", async () => {
+    org2 = (await admin.api.rpc("create_organization", { p_name: "Igreja Modelo" })).data;
+    team2 = (await admin.api.post("teams", { org_id: org2, name: "Louvor M", team_type: "louvor" })).data[0].id;
+    const rs = (await admin.api.get(`/music_roles?org_id=eq.${org2}&team_type=eq.louvor`)).data;
+    const id = (n: string) => rs.find((r: any) => r.name === n).id;
+    bat = id("Bateria"); voc = id("Vocal feminino"); other = id("Volante");
+    expect((await admin.api.rpc("ensure_service_checklist", { p_team: team2 })).data).toBe(4);
+    const items = (await admin.api.get(`/role_checklist_items?team_id=eq.${team2}&select=role_id,label`)).data;
+    expect(items.filter((i: any) => i.role_id === null)).toHaveLength(4);
+    expect(items.filter((i: any) => i.role_id === bat).some((i: any) => /bateria/i.test(i.label))).toBe(true);
+    expect(items.filter((i: any) => i.role_id === voc).some((i: any) => /voz/i.test(i.label))).toBe(true);
+    expect(items.filter((i: any) => i.role_id === other)).toHaveLength(0);
+    expect((await admin.api.rpc("ensure_service_checklist", { p_team: team2 })).data).toBe(0);
+  });
+  test("restaurar devolve só o que falta e só o líder pode", async () => {
+    const one = (await admin.api.get(`/role_checklist_items?team_id=eq.${team2}&role_id=eq.${bat}&select=id`)).data[0].id;
+    await admin.api.del(`role_checklist_items?id=eq.${one}`);
+    expect((await admin.api.rpc("restore_service_template", { p_team: team2, p_role: bat })).data).toBe(1);
+    expect((await admin.api.rpc("restore_service_template", { p_team: team2, p_role: bat })).data).toBe(0);
+    expect((await fora.api.rpc("restore_service_template", { p_team: team2, p_role: bat })).ok).toBe(false);
+    expect((await fora.api.rpc("ensure_service_checklist", { p_team: team2 })).ok).toBe(false);
+  });
+});

@@ -837,9 +837,12 @@ with sync_playwright() as pw:
     # o líder monta o checklist da função (a rota não pode cair na lista de escalas)
     bruno.goto(f"{BASE}/#/times/{louvor_id}/servico")
     expect(bruno.locator(".pagehead h1")).to_have_text("Hora de servir", timeout=10000)
+    expect(bruno.locator("[data-g=''] .svc-cfg").first).to_be_visible(timeout=10000)
+    n0 = bruno.locator("[data-g=''] .svc-cfg").count()
+    assert n0 >= 4, "modelo de partida não foi criado"
     bruno.locator("[data-g=''] [data-new]").fill("Conferir o equipamento")
     bruno.locator("[data-g=''] [data-add]").click()
-    expect(bruno.locator("[data-g=''] .svc-cfg")).to_have_count(2, timeout=10000)
+    expect(bruno.locator("[data-g=''] .svc-cfg")).to_have_count(n0 + 1, timeout=10000)
     # teste/pré-visualização para o líder: escolhe função e horário, nada é salvo
     bruno.goto(BASE + "/#/servico/teste")
     expect(bruno.locator("#pr")).to_be_visible(timeout=10000)

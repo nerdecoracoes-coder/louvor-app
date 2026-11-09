@@ -68,6 +68,9 @@ const tipsFor = (names) => {
   return [...new Set(out)];
 };
 const PREPARE = ["Respire fundo e entregue este momento a Deus", "Ore pelas pessoas que vão chegar e pela equipe com quem você serve", "Lembre-se: o serviço é para Deus, antes de ser para qualquer pessoa", "Chegue com o coração leve. Se algo estiver pesando, converse com o líder"];
+// Cria o modelo de partida do time na primeira vez (silencioso se o SQL ainda não existe).
+async function ensureTemplate(teamId) { try { await sb.rpc("ensure_service_checklist", { p_team: teamId }); } catch { /* ok */ } }
+
 const mins = (ms) => Math.round(ms / 60000);
 const until = (iso) => {
   const d = mins(new Date(iso).getTime() - Date.now());
@@ -85,6 +88,7 @@ async function serviceView(id, el, alive) {
   const s = (await must(sb.from("schedules").select("*").eq("id", id).limit(1)))[0];
   if (!s) { el.innerHTML = empty("calendar", "Escala não encontrada"); return; }
   safeSet(seenKey(s.id), "1");
+  await ensureTemplate(s.team_id);
   const [mine, items, checks, rehs, leaders] = await Promise.all([
     must(sb.from("schedule_assignments").select("role_id,role_name").eq("schedule_id", id).eq("user_id", state.user.id)),
     sb.from("role_checklist_items").select("*").eq("team_id", s.team_id).order("position").then((r) => r.data || []),
@@ -224,6 +228,7 @@ async function previewView(el, alive) {
   <div id="svcbox"></div>`;
   const run = async () => {
     const now = Date.now(), team = list.find((t) => t.id === q.team), role = rolesOf(q.team).find((r) => r.id === q.role);
+    await ensureTemplate(q.team);
     const r = await sb.from("role_checklist_items").select("*").eq("team_id", q.team).order("position");
     const items = r.data || [], missing = !!r.error;
     const s = { id: "preview", org_id: state.org.id, team_id: q.team, title: "Culto de teste", starts_at: new Date(now + q.min * 60e3).toISOString(), ends_at: new Date(now + (q.min + 120) * 60e3).toISOString() };
@@ -261,11 +266,11 @@ export async function updateBanner(path) {
 }
 
 // ---------------------------------------------------------------- configuração dos líderes
-export const SUGGESTIONS = [["Chegar ao local", 30], ["Conferir o seu equipamento", 20], ["Participar da oração da equipe", 10], ["Tudo pronto para começar", 5]];
 
 async function configView(teamId, el, alive) {
   if (!canManageTeam(teamId)) { el.innerHTML = empty("lock", "Somente líderes configuram o serviço."); return; }
   el.innerHTML = spinner();
+  await ensureTemplate(teamId);
   const team = state.orgTeams?.find((t) => t.id === teamId) || state.myTeams.find((t) => t.id === teamId);
   let items;
   const [roles, items0, trow] = await Promise.all([
@@ -279,14 +284,14 @@ async function configView(teamId, el, alive) {
   const groups = [{ id: null, name: "Todos os escalados" }, ...roles];
   const offTxt = (o) => (o == null ? "" : String(-o));
   const paint = () => { el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}">${icon("chevronLeft")}</a><h1>Hora de servir</h1></div>
-  <p class="muted small" style="margin:0 0 12px">No dia da escala, quem está escalado abre o app direto na página de serviço, com o checklist da sua função.</p>
+  <p class="muted small" style="margin:0 0 12px">No dia da escala, quem está escalado abre o app direto na página de serviço, com o checklist da sua função. Já deixamos um modelo pronto para cada função: edite o texto, mude o horário, remova ou acrescente os seus próprios itens.</p>
   ${previewOn() ? `<a class="btn primary" href="#/servico/teste" style="margin-bottom:12px">${icon("eye")} Testar como uma função (até ${fDate(PREVIEW_UNTIL - 3600e3)})</a>` : ""}
   <label class="field"><span>Abrir a página de serviço</span><select id="lead">${LEAD_OPTIONS.map(([v, l]) => `<option value="${v}" ${v === lead ? "selected" : ""}>${v ? `${l} antes do início` : l}</option>`).join("")}</select></label>
   ${groups.map((g) => { const list = items.filter((i) => (i.role_id || null) === g.id); return `<div class="sec"><h2>${esc(g.name)}</h2><span class="cnt2">${list.length}</span></div>
     <div class="card" data-g="${g.id || ""}">
       ${list.map((i) => `<div class="row gap svc-cfg" data-id="${i.id}"><input class="input grow" data-lbl maxlength="140" value="${attr(i.label)}"><input class="input" data-off type="number" min="-720" max="720" placeholder="min antes" value="${offTxt(i.offset_min)}" title="Minutos antes do início (vazio = sem horário)"><button class="iconbtn" data-del aria-label="Remover">${icon("trash")}</button></div>`).join("") || `<p class="tiny muted" style="margin:0 0 8px">Nenhum item.</p>`}
       <div class="row gap"><input class="input grow" data-new maxlength="140" placeholder="Novo item (ex.: Chegar ao local)"><input class="input" data-newoff type="number" min="-720" max="720" placeholder="min antes"><button class="btn" data-add>${icon("plus")}</button></div>
-      ${!g.id && !list.length ? `<button class="chip" data-sug style="margin-top:10px">Usar sugestões</button>` : ""}
+      <button class="chip" data-restore style="margin-top:10px">Restaurar modelo sugerido</button>
     </div>`; }).join("")}`; };
   paint();
   const num = (v) => { const n = v === "" || v == null ? null : -Number(v); return Number.isFinite(n) ? n : null; };
@@ -302,10 +307,14 @@ async function configView(teamId, el, alive) {
     try { await must(sb.from("role_checklist_items").insert({ ...base(box.dataset.g), label: lbl, offset_min: num(box.querySelector("[data-newoff]").value), position: n + 1 })); reload(); }
     catch (err) { toast(errMsg(err), "err"); }
   });
-  on(el, "click", "[data-sug]", async (e, b) => {
+  on(el, "click", "[data-restore]", async (e, b) => {
     const g = b.closest("[data-g]").dataset.g;
-    try { await must(sb.from("role_checklist_items").insert(SUGGESTIONS.map(([label, m], i) => ({ ...base(g), label, offset_min: -m, position: i + 1 })))); reload(); }
-    catch (err) { toast(errMsg(err), "err"); }
+    try {
+      const r = await sb.rpc("restore_service_template", { p_team: teamId, p_role: g || null });
+      if (r.error) throw r.error;
+      toast(r.data ? `${r.data} item(ns) do modelo adicionados` : "O modelo já está completo nesta função");
+      reload();
+    } catch (err) { toast(errMsg(err), "err"); }
   });
   on(el, "click", "[data-del]", async (e, b) => {
     try { await must(sb.from("role_checklist_items").delete().eq("id", b.closest("[data-id]").dataset.id)); reload(); }
