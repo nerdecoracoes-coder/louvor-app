@@ -83,18 +83,6 @@ language sql immutable as $$
   ('ber(ç|c)(á|a)rio', 'Receber as famílias com atenção', -10, 21),
 
   ('introdu', 'Rever os pontos da introdução', -30, 20),
-  ('ilumina', 'Ligar a iluminação e testar as cenas', -45, 20),
-  ('ilumina', 'Conferir os focos no palco e no púlpito', -30, 21),
-  ('ilumina', 'Alinhar as cenas com a ordem do culto', -15, 22),
-
-  ('santa ceia', 'Preparar os elementos e os utensílios', -40, 20),
-  ('santa ceia', 'Combinar o momento com quem conduz', -20, 21),
-
-  ('altar', 'Conferir o altar e o púlpito (água, Bíblia, microfone)', -30, 20),
-  ('altar', 'Ficar atento a quem precisa de apoio', -10, 21),
-
-  ('ber(ç|c)(á|a)rio', 'Preparar o ambiente e conferir os itens de cuidado', -40, 20),
-  ('ber(ç|c)(á|a)rio', 'Receber as famílias com atenção', -10, 21),
 
   ('introdu', 'Alinhar com a banda a entrada', -20, 21),
 

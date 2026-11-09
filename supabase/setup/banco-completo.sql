@@ -3430,9 +3430,9 @@ language sql immutable as $$
   ('teclado|piano|keys|sintetizador', 'Conferir cabos, pedal de sustain e fonte', -30, 21),
   ('teclado|piano|keys|sintetizador', 'Passagem de som', -25, 22),
 
-  ('vocal|voz|cantor|backing', 'Aquecer a voz e beber água', -30, 20),
-  ('vocal|voz|cantor|backing', 'Rever letras e tons das músicas', -30, 21),
-  ('vocal|voz|cantor|backing', 'Testar microfone e retorno', -25, 22),
+  ('vocal|voz|cantor|backing|soprano|contralto|tenor', 'Aquecer a voz e beber água', -30, 20),
+  ('vocal|voz|cantor|backing|soprano|contralto|tenor', 'Rever letras e tons das músicas', -30, 21),
+  ('vocal|voz|cantor|backing|soprano|contralto|tenor', 'Testar microfone e retorno', -25, 22),
 
   ('dire(ç|c)(ã|a)o|coordena|ministro|dirigente|l(í|i)der', 'Confirmar o repertório e a ordem com a equipe', -45, 20),
   ('dire(ç|c)(ã|a)o|coordena|ministro|dirigente|l(í|i)der', 'Alinhar transições e avisos com quem conduz o culto', -25, 21),
@@ -3453,10 +3453,10 @@ language sql immutable as $$
   ('transmiss|corte|c(â|a)mera|v(í|i)deo|live|stream|foto', 'Testar o áudio e a internet', -40, 22),
   ('transmiss|corte|c(â|a)mera|v(í|i)deo|live|stream|foto', 'Iniciar a transmissão/gravação', -5, 23),
 
-  ('portaria|recep|acolh|diac', 'Abrir as portas e conferir o ambiente', -40, 20),
-  ('portaria|recep|acolh|diac', 'Conferir materiais e informativos', -30, 21),
-  ('portaria|recep|acolh|diac', 'Posicionar-se nos pontos combinados', -20, 22),
-  ('portaria|recep|acolh|diac', 'Receber quem chega com um sorriso', -10, 23),
+  ('portaria|recep|acolh|diac|visitante|estacion|seguran', 'Abrir as portas e conferir o ambiente', -40, 20),
+  ('portaria|recep|acolh|diac|visitante|estacion|seguran', 'Conferir materiais e informativos', -30, 21),
+  ('portaria|recep|acolh|diac|visitante|estacion|seguran', 'Posicionar-se nos pontos combinados', -20, 22),
+  ('portaria|recep|acolh|diac|visitante|estacion|seguran', 'Receber quem chega com um sorriso', -10, 23),
 
   ('ofert', 'Conferir cestas, envelopes e maquininha', -30, 20),
   ('ofert', 'Combinar o momento do ofertório com a equipe', -15, 21),
@@ -3464,7 +3464,21 @@ language sql immutable as $$
   ('auxiliar', 'Perguntar ao líder onde ajudar', -35, 20),
   ('auxiliar', 'Ajudar na montagem e na organização', -30, 21),
 
+  ('ilumina', 'Ligar a iluminação e testar as cenas', -45, 20),
+  ('ilumina', 'Conferir os focos no palco e no púlpito', -30, 21),
+  ('ilumina', 'Alinhar as cenas com a ordem do culto', -15, 22),
+
+  ('santa ceia', 'Preparar os elementos e os utensílios', -40, 20),
+  ('santa ceia', 'Combinar o momento com quem conduz', -20, 21),
+
+  ('altar', 'Conferir o altar e o púlpito (água, Bíblia, microfone)', -30, 20),
+  ('altar', 'Ficar atento a quem precisa de apoio', -10, 21),
+
+  ('ber(ç|c)(á|a)rio', 'Preparar o ambiente e conferir os itens de cuidado', -40, 20),
+  ('ber(ç|c)(á|a)rio', 'Receber as famílias com atenção', -10, 21),
+
   ('introdu', 'Rever os pontos da introdução', -30, 20),
+
   ('introdu', 'Alinhar com a banda a entrada', -20, 21),
 
   ('professor|(á|a)rea kids|kids|crian', 'Rever a lição e o material', -45, 20),
