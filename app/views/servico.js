@@ -155,7 +155,7 @@ function paintService(el, c) {
     }[tab];
     el.querySelector("#pane").innerHTML = pane;
     el.querySelectorAll("[data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === tab));
-    const pb = el.querySelector("#pbadge"); if (pb) pb.textContent = myItems.length ? `${n}/${myItems.length}` : "";
+    const pb = el.querySelector("#pbadge"); if (pb) { pb.textContent = `${n}/${myItems.length}`; pb.hidden = !myItems.length; }
   };
   const host = el.querySelector("#svcbox") || el;
   host.innerHTML = `
@@ -166,15 +166,15 @@ function paintService(el, c) {
     <div class="svc-ev"><b>${esc(s.title)}</b><span>${fTime(s.starts_at)} · ${until(s.starts_at)}</span></div>
     <div class="svc-roles">${roleNames.map((r) => `<span class="pill">${icon(roleIcon(r) || "star")} ${esc(r)}</span>`).join("")}</div>
   </section>
-  <div class="etabs" role="tablist">
-    <button data-tab="check" class="on"><span class="tl">${icon("check")}<em id="pbadge"></em></span><span class="tn">Checklist</span></button>
+  <div class="tabsbar etabs" role="tablist">
+    <button data-tab="check" class="on"><span class="tl">${icon("check")}<i class="cnt" id="pbadge"></i></span><span class="tn">Checklist</span></button>
     <button data-tab="agora"><span class="tl">${icon("clock")}</span><span class="tn">Agora</span></button>
     <button data-tab="preparar"><span class="tl">${icon("heart")}</span><span class="tn">Preparar</span></button>
     <button data-tab="ajuda"><span class="tl">${icon("phone")}</span><span class="tn">Ajuda</span></button>
   </div>
   <div id="pane"></div>
-  <p class="tiny muted" style="margin:18px 2px 6px;text-align:center">Pode explorar o app à vontade: um aviso “Hora de servir” fica no alto para você voltar aqui.</p>
-  <div class="row gap" style="margin:6px 0;justify-content:space-between"><a class="link" href="#/inicio">Explorar o app</a>${manage && !preview ? `<a class="link" href="#/times/${s.team_id}/servico">Configurar o serviço</a>` : ""}</div>`;
+  <p class="tiny muted" style="margin:18px 2px 6px;text-align:center">Pode explorar o app à vontade: um aviso “Hora de servir” fica na tela para você voltar aqui.</p>
+  <div class="row gap" style="margin:6px 0;padding-bottom:110px;justify-content:space-between"><a class="link" href="#/inicio">Explorar o app</a>${manage && !preview ? `<a class="link" href="#/times/${s.team_id}/servico">Configurar o serviço</a>` : ""}</div>`;
   draw();
   if (host.__svc) host.removeEventListener("click", host.__svc);
   host.__svc = async (e) => {
@@ -206,7 +206,7 @@ async function previewView(el, alive) {
     <label class="field"><span>Time</span><select id="pt">${list.map((t) => `<option value="${t.id}" ${t.id === q.team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
     <label class="field"><span>Função</span><select id="pr">${roles.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}<option value="">Sem função</option></select></label>
     <label class="field"><span>Horário</span><select id="pm">${MINS.map(([v, l]) => `<option value="${v}" ${v === q.min ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-    <div class="row gap"><button class="btn" id="preset">Marcar tudo de novo</button></div></div>
+    <div class="row gap"><button class="btn ghost" id="preset">Marcar tudo de novo</button></div></div>
   <div id="svcbox"></div>`;
   const run = async () => {
     const now = Date.now(), team = list.find((t) => t.id === q.team), role = roles.find((r) => r.id === q.role);
