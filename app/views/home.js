@@ -5,7 +5,7 @@ import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDat
 import { openRequestsCard } from "./multimidia.js";
 import { churchHome, pendingScalesCard } from "./igreja.js";
 import { teamExtras } from "./eventos.js";
-import { maybeService } from "./servico.js";
+import { maybeService, previewOn } from "./servico.js";
 
 export function register(route) {
   const start = async (p, el, a) => { if (await maybeService()) return; return state.space ? teamHome(state.space, el, a) : churchHome(el, a); };
@@ -161,6 +161,7 @@ async function homeView(_, el, alive) {
 
   ${birthdaySection([...ppl.values()])}
   ${canPostNotice() ? `<div class="sec"><h2>Ações da igreja</h2></div><div class="chips" style="flex-wrap:wrap">
+    ${previewOn() && (isAdmin() || state.myTeams.some((x) => canManageTeam(x.id))) ? `<a class="chip" href="#/servico/teste">${icon("eye")} Testar Hora de servir</a>` : ""}
     ${isStaff() ? `<a class="chip" href="#/escala/nova">${icon("calendar")} Nova escala</a>` : ""}<a class="chip" href="#/avisos/novo">${icon("megaphone")} Novo aviso</a>
     ${state.myTeams.some((x) => canManageTeam(x.id)) || isAdmin() ? `<a class="chip" href="#/convidar">${icon("link")} Convidar para um time</a>` : ""}
     ${isAdmin() ? `<a class="chip" href="#/times/novo">${icon("users")} Novo time</a><a class="chip" href="#/convidar-membro">${icon("org")} Convidar membro da igreja</a>` : ""}</div>` : ""}`;
@@ -220,7 +221,7 @@ async function teamHome(team, el, alive) {
   <div id="pend"></div>
   <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/times/${team.id}/escalas">Ver todas ${icon("chevronRight")}</a></div>
   <div id="ups">${myUps.length ? `<div class="scards">${myUps.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
-  ${manage ? `<div class="chips" style="flex-wrap:wrap;margin-top:10px"><a class="chip" href="#/times/${team.id}/servico">${icon("heart")} Hora de servir</a></div>` : ""}
+  ${manage ? `<div class="chips" style="flex-wrap:wrap;margin-top:10px"><a class="chip" href="#/times/${team.id}/servico">${icon("heart")} Hora de servir</a>${previewOn() ? `<a class="chip" href="#/servico/teste">${icon("eye")} Testar Hora de servir</a>` : ""}</div>` : ""}
   ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div><div class="scards">${others.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : ""}
 
   <div id="extras"></div>
