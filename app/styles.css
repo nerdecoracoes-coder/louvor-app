@@ -1153,3 +1153,4 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .svc-list .li.check .cb { width: 30px; height: 30px; border-radius: 50%; }
 .svc-list .li.check .t { font-size: 16px; font-weight: 600; }
 .etabs .cnt[hidden] { display: none; }
+.svc-prev { margin-bottom: 14px; } .svc-prev summary { cursor: pointer; list-style: none; } .svc-prev summary::-webkit-details-marker { display: none; }

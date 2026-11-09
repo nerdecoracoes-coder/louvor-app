@@ -208,20 +208,22 @@ async function previewView(el, alive) {
   el.innerHTML = spinner();
   const teams = isAdmin() ? state.orgTeams : state.myTeams.filter((t) => canManageTeam(t.id));
   const list = teams?.length ? teams : state.myTeams;
-  const roles = await must(sb.from("music_roles").select("id,name,sort").eq("org_id", state.org.id).order("sort"));
+  const allRoles = await must(sb.from("music_roles").select("id,name,sort,team_type").eq("org_id", state.org.id).order("sort"));
+  const rolesOf = (tid) => { const t = list.find((x) => x.id === tid); return allRoles.filter((r) => !r.team_type || r.team_type === t?.team_type); };
   if (!alive()) return;
   if (!list.length) { el.innerHTML = empty("lock", "Somente líderes e administradores testam a Hora de servir."); return; }
-  let q = { team: state.space?.id && list.some((t) => t.id === state.space.id) ? state.space.id : list[0].id, role: roles[0]?.id || "", min: 30 };
+  let q = { team: state.space?.id && list.some((t) => t.id === state.space.id) ? state.space.id : list[0].id, role: "", min: 30 };
+  q.role = rolesOf(q.team)[0]?.id || "";
   const MINS = [[120, "Começa em 2 horas"], [45, "Começa em 45 min"], [30, "Começa em 30 min"], [10, "Começa em 10 min"], [0, "Começa agora"], [-30, "Já começou (30 min atrás)"]];
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/inicio">${icon("chevronLeft")}</a><h1>Testar Hora de servir</h1></div>
-  <div class="card svc-prev"><p class="muted small" style="margin:0 0 8px">Veja a página como a pessoa escalada veria. Nada é salvo e ninguém é avisado.</p>
+  <details class="card svc-prev" open><summary><b>Opções do teste</b> <span class="muted small">(só aqui; na escala real a página abre direto)</span></summary><p class="muted small" style="margin:8px 0">Veja a página como a pessoa escalada veria. Nada é salvo e ninguém é avisado.</p>
     <label class="field"><span>Time</span><select id="pt">${list.map((t) => `<option value="${t.id}" ${t.id === q.team ? "selected" : ""}>${esc(t.name)}</option>`).join("")}</select></label>
-    <label class="field"><span>Função</span><select id="pr">${roles.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join("")}<option value="">Sem função</option></select></label>
+    <label class="field"><span>Função</span><select id="pr"></select></label>
     <label class="field"><span>Horário</span><select id="pm">${MINS.map(([v, l]) => `<option value="${v}" ${v === q.min ? "selected" : ""}>${l}</option>`).join("")}</select></label>
-    <div class="row gap"><button class="btn ghost" id="preset">Marcar tudo de novo</button></div></div>
+    <div class="row gap"><button class="btn ghost" id="preset">Marcar tudo de novo</button></div></details>
   <div id="svcbox"></div>`;
   const run = async () => {
-    const now = Date.now(), team = list.find((t) => t.id === q.team), role = roles.find((r) => r.id === q.role);
+    const now = Date.now(), team = list.find((t) => t.id === q.team), role = rolesOf(q.team).find((r) => r.id === q.role);
     const r = await sb.from("role_checklist_items").select("*").eq("team_id", q.team).order("position");
     const items = r.data || [], missing = !!r.error;
     const s = { id: "preview", org_id: state.org.id, team_id: q.team, title: "Culto de teste", starts_at: new Date(now + q.min * 60e3).toISOString(), ends_at: new Date(now + (q.min + 120) * 60e3).toISOString() };
@@ -234,7 +236,9 @@ async function previewView(el, alive) {
     if (missing) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<div class="card small" style="margin-bottom:10px">Falta rodar o SQL da Hora de servir no Supabase. Enquanto isso, a página aparece sem itens no checklist.</div>`);
     else if (!items.length) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<p class="tiny muted">${esc(team?.name || "")} ainda não tem itens. Monte em <a class="link" href="#/times/${q.team}/servico">Hora de servir</a>.</p>`);
   };
-  on(el, "change", "#pt", (e, b) => { q.team = b.value; run(); });
+  const fillRoles = () => { const rs = rolesOf(q.team); q.role = rs[0]?.id || ""; el.querySelector("#pr").innerHTML = rs.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join("") + `<option value="">Sem função</option>`; };
+  fillRoles();
+  on(el, "change", "#pt", (e, b) => { q.team = b.value; fillRoles(); run(); });
   on(el, "change", "#pr", (e, b) => { q.role = b.value; run(); });
   on(el, "change", "#pm", (e, b) => { q.min = Number(b.value); run(); });
   on(el, "click", "#preset", () => run());
@@ -265,7 +269,7 @@ async function configView(teamId, el, alive) {
   const team = state.orgTeams?.find((t) => t.id === teamId) || state.myTeams.find((t) => t.id === teamId);
   let items;
   const [roles, items0, trow] = await Promise.all([
-    must(sb.from("music_roles").select("id,name,sort").eq("org_id", state.org.id).order("sort")),
+    must(sb.from("music_roles").select("id,name,sort,team_type").eq("org_id", state.org.id).order("sort")).then((rs) => rs.filter((r) => !r.team_type || r.team_type === team?.team_type)),
     must(sb.from("role_checklist_items").select("*").eq("team_id", teamId).order("position")),
     sb.from("teams").select("service_lead_min").eq("id", teamId).limit(1).then((r) => r.data?.[0]),
   ]);
