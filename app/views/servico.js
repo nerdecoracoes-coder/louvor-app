@@ -138,9 +138,16 @@ function paintService(el, c) {
   };
   const draw = () => {
     const n = myItems.filter((i) => done.has(i.id)).length, pct = myItems.length ? Math.round(n / myItems.length * 100) : 0;
+    const nextIt = myItems.find((i) => !done.has(i.id)), tot = myItems.length;
+    const ring = el.querySelector("#ring");
+    if (ring) ring.innerHTML = `<svg viewBox="0 0 100 100"><circle class="bg" cx="50" cy="50" r="42"/><circle class="fg" cx="50" cy="50" r="42" stroke-dasharray="${(264 * pct / 100).toFixed(1)} 264"/></svg>
+      <div class="rc">${tot ? (n === tot ? icon("check") : `<b>${n}<small>/${tot}</small></b>`) : icon(roleIcon(roleNames[0] || "") || "heart")}</div>`;
+    const nextCard = !tot ? "" : nextIt
+      ? `<div class="svc-next"><span>${n ? "Próximo passo" : "Primeiro passo"}</span><b>${esc(nextIt.label)}</b>${targetOf(nextIt, s.starts_at) ? `<small>até ${fTime(targetOf(nextIt, s.starts_at))}</small>` : ""}<button class="btn primary" data-it="${nextIt.id}">${icon("check")} Feito</button></div>`
+      : `<div class="svc-next done"><span>${icon("heart")} Tudo pronto!</span><b>Agora é servir com alegria. Que Deus abençoe o seu serviço.</b></div>`;
     const pane = {
       check: myItems.length
-        ? `<div class="svc-prog"><div><i style="width:${pct}%"></i></div><span>${n} de ${myItems.length}</span></div><div class="list">${myItems.map(checkRow).join("")}</div>
+        ? `${nextCard}<div class="list svc-list">${myItems.map(checkRow).join("")}</div>
            <p class="tiny muted" style="margin:10px 2px 0">O horário registrado é o do relógio no momento em que você marca.</p>`
         : empty("check", "Nenhum item para a sua função", manage ? `<a class="link" href="#/times/${s.team_id}/servico">Montar o checklist</a>` : "Quando o líder montar o checklist da sua função, ele aparece aqui."),
       agora: `<div class="card svc-count"><span>${esc(until(s.starts_at))}</span><b>${fTime(s.starts_at)}</b></div>${timeline()}
@@ -158,13 +165,18 @@ function paintService(el, c) {
     const pb = el.querySelector("#pbadge"); if (pb) { pb.textContent = `${n}/${myItems.length}`; pb.hidden = !myItems.length; }
   };
   const host = el.querySelector("#svcbox") || el;
+  const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date()));
+  const hello = hour < 12 ? "Bom dia" : hour < 18 ? "Boa tarde" : "Boa noite";
   host.innerHTML = `
   <section class="svc-hero">
-    <p class="svc-kicker">Hora de servir</p>
-    <h1>${esc(first)}, que bom ter você aqui!</h1>
-    <p class="svc-verse">${esc(GREETING)}</p>
-    <div class="svc-ev"><b>${esc(s.title)}</b><span>${fTime(s.starts_at)} · ${until(s.starts_at)}</span></div>
-    <div class="svc-roles">${roleNames.map((r) => `<span class="pill">${icon(roleIcon(r) || "star")} ${esc(r)}</span>`).join("")}</div>
+    <span class="svc-kicker">${icon("heart")} Hora de servir</span>
+    <h1>${hello}, ${esc(first)}!</h1>
+    <p class="svc-lead">Que bom ter você aqui. ${esc(GREETING)}</p>
+    <div class="svc-main">
+      <div class="svc-ring" id="ring"></div>
+      <div class="svc-ev"><b>${esc(s.title)}</b><span>${fTime(s.starts_at)} · ${until(s.starts_at)}</span>
+        <div class="svc-roles">${roleNames.map((r) => `<span class="pill">${icon(roleIcon(r) || "star")} ${esc(r)}</span>`).join("")}</div></div>
+    </div>
   </section>
   <div class="tabsbar etabs" role="tablist">
     <button data-tab="check" class="on"><span class="tl">${icon("check")}<i class="cnt" id="pbadge"></i></span><span class="tn">Checklist</span></button>
