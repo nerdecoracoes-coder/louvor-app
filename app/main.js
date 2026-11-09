@@ -25,7 +25,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route); servico.register(route);
+home.register(route); servico.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
 

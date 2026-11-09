@@ -834,6 +834,12 @@ with sync_playwright() as pw:
     expect(bruno.locator(".hero")).to_be_visible(timeout=10000)
     expect(bruno.locator("#svcbar")).to_be_visible(timeout=10000)  # aviso para voltar à Hora de servir
     bruno.locator("#svcbar").click(); bruno.wait_for_url(re.compile(r"/servico/[0-9a-f-]{36}$"), timeout=10000)
+    # o líder monta o checklist da função (a rota não pode cair na lista de escalas)
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/servico")
+    expect(bruno.locator(".pagehead h1")).to_have_text("Hora de servir", timeout=10000)
+    bruno.locator("[data-g=''] [data-new]").fill("Conferir o equipamento")
+    bruno.locator("[data-g=''] [data-add]").click()
+    expect(bruno.locator("[data-g=''] .svc-cfg")).to_have_count(2, timeout=10000)
     # teste/pré-visualização para o líder: escolhe função e horário, nada é salvo
     bruno.goto(BASE + "/#/servico/teste")
     expect(bruno.locator("#pr")).to_be_visible(timeout=10000)
