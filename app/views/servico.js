@@ -210,7 +210,8 @@ async function previewView(el, alive) {
   <div id="svcbox"></div>`;
   const run = async () => {
     const now = Date.now(), team = list.find((t) => t.id === q.team), role = roles.find((r) => r.id === q.role);
-    const items = await must(sb.from("role_checklist_items").select("*").eq("team_id", q.team).order("position"));
+    const r = await sb.from("role_checklist_items").select("*").eq("team_id", q.team).order("position");
+    const items = r.data || [], missing = !!r.error;
     const s = { id: "preview", org_id: state.org.id, team_id: q.team, title: "Culto de teste", starts_at: new Date(now + q.min * 60e3).toISOString(), ends_at: new Date(now + (q.min + 120) * 60e3).toISOString() };
     paintService(el, {
       s, items, preview: true, manage: false, done: new Map(), mine: [{ role_id: role?.id || null, role_name: role?.name || null }],
@@ -218,7 +219,8 @@ async function previewView(el, alive) {
       leaders: [{ id: "x", display_name: "Líder de exemplo", phone: "" }],
       save: async (it, on_) => (on_ ? { item_id: it.id, checked_at: new Date().toISOString(), target_at: targetOf(it, s.starts_at) } : null),
     });
-    if (!items.length) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<p class="tiny muted">${esc(team?.name || "")} ainda não tem itens. Monte em <a class="link" href="#/times/${q.team}/servico">Hora de servir</a>.</p>`);
+    if (missing) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<div class="card small" style="margin-bottom:10px">Falta rodar o SQL da Hora de servir no Supabase. Enquanto isso, a página aparece sem itens no checklist.</div>`);
+    else if (!items.length) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<p class="tiny muted">${esc(team?.name || "")} ainda não tem itens. Monte em <a class="link" href="#/times/${q.team}/servico">Hora de servir</a>.</p>`);
   };
   on(el, "change", "#pt", (e, b) => { q.team = b.value; run(); });
   on(el, "change", "#pr", (e, b) => { q.role = b.value; run(); });
