@@ -11,6 +11,9 @@ const seenKey = (id) => `svc_seen_${id}`;
 const safeGet = (k) => { try { return sessionStorage.getItem(k); } catch { return null; } };
 const safeSet = (k, v) => { try { sessionStorage.setItem(k, v); } catch { /* ok */ } };
 
+// O ambiente de teste vale por 3 dias (até 11/11/2026, 23:59 de Brasília) e some sozinho depois.
+export const PREVIEW_UNTIL = new Date("2026-11-12T02:59:59Z").getTime();
+export const previewOn = () => Date.now() < PREVIEW_UNTIL;
 export const DEFAULT_LEAD = 60;
 export const LEAD_OPTIONS = [[0, "Desligado"], [15, "15 minutos"], [30, "30 minutos"], [45, "45 minutos"], [60, "1 hora"], [90, "1 h 30"], [120, "2 horas"], [180, "3 horas"]];
 
@@ -45,7 +48,7 @@ export async function maybeService() {
   return false;
 }
 
-const GREETING = "Você está pronto para servir a Deus com o melhor que tem. Siga os passos abaixo, e que o seu serviço seja com excelência, para a glória de Deus.";
+const GREETING = "Você está pronto para servir a Deus com o melhor que tem? Então siga os passos abaixo, e que o seu serviço seja com excelência, para a glória de Deus.";
 
 // Dicas por tipo de função (o que ajuda a servir com excelência)
 const TIPS = [
@@ -189,6 +192,7 @@ function paintService(el, c) {
 
 // ---------------------------------------------------------------- pré-visualização para líderes e administradores
 async function previewView(el, alive) {
+  if (!previewOn()) { el.innerHTML = empty("clock", "O ambiente de teste da Hora de servir terminou."); return; }
   el.innerHTML = spinner();
   const teams = isAdmin() ? state.orgTeams : state.myTeams.filter((t) => canManageTeam(t.id));
   const list = teams?.length ? teams : state.myTeams;
@@ -258,7 +262,7 @@ async function configView(teamId, el, alive) {
   const offTxt = (o) => (o == null ? "" : String(-o));
   const paint = () => { el.innerHTML = `<div class="pagehead"><a class="back" href="#/times/${teamId}">${icon("chevronLeft")}</a><h1>Hora de servir</h1></div>
   <p class="muted small" style="margin:0 0 12px">No dia da escala, quem está escalado abre o app direto na página de serviço, com o checklist da sua função.</p>
-  <a class="btn primary" href="#/servico/teste" style="margin-bottom:12px">${icon("eye")} Testar como uma função</a>
+  ${previewOn() ? `<a class="btn primary" href="#/servico/teste" style="margin-bottom:12px">${icon("eye")} Testar como uma função (até ${fDate(PREVIEW_UNTIL - 3600e3)})</a>` : ""}
   <label class="field"><span>Abrir a página de serviço</span><select id="lead">${LEAD_OPTIONS.map(([v, l]) => `<option value="${v}" ${v === lead ? "selected" : ""}>${v ? `${l} antes do início` : l}</option>`).join("")}</select></label>
   ${groups.map((g) => { const list = items.filter((i) => (i.role_id || null) === g.id); return `<div class="sec"><h2>${esc(g.name)}</h2><span class="cnt2">${list.length}</span></div>
     <div class="card" data-g="${g.id || ""}">
