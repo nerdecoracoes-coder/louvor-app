@@ -69,7 +69,13 @@ const tipsFor = (names) => {
 };
 const PREPARE = ["Respire fundo e entregue este momento a Deus", "Ore pelas pessoas que vão chegar e pela equipe com quem você serve", "Lembre-se: o serviço é para Deus, antes de ser para qualquer pessoa", "Chegue com o coração leve. Se algo estiver pesando, converse com o líder"];
 // Cria o modelo de partida do time na primeira vez (silencioso se o SQL ainda não existe).
-async function ensureTemplate(teamId) { try { await sb.rpc("ensure_service_checklist", { p_team: teamId }); } catch { /* ok */ } }
+async function ensureTemplate(teamId) {
+  try {
+    const r = await sb.rpc("ensure_service_checklist", { p_team: teamId });
+    if (r.error) { console.warn("modelo do serviço:", r.error.message); return r.error.message; }
+  } catch (e) { return String(e?.message || e); }
+  return null;
+}
 
 const mins = (ms) => Math.round(ms / 60000);
 const until = (iso) => {
@@ -228,7 +234,7 @@ async function previewView(el, alive) {
   <div id="svcbox"></div>`;
   const run = async () => {
     const now = Date.now(), team = list.find((t) => t.id === q.team), role = rolesOf(q.team).find((r) => r.id === q.role);
-    await ensureTemplate(q.team);
+    const seedErr = await ensureTemplate(q.team);
     const r = await sb.from("role_checklist_items").select("*").eq("team_id", q.team).order("position");
     const items = r.data || [], missing = !!r.error;
     const s = { id: "preview", org_id: state.org.id, team_id: q.team, title: "Culto de teste", starts_at: new Date(now + q.min * 60e3).toISOString(), ends_at: new Date(now + (q.min + 120) * 60e3).toISOString() };
@@ -238,7 +244,8 @@ async function previewView(el, alive) {
       leaders: [{ id: "x", display_name: "Líder de exemplo", phone: "" }],
       save: async (it, on_) => (on_ ? { item_id: it.id, checked_at: new Date().toISOString(), target_at: targetOf(it, s.starts_at) } : null),
     });
-    if (missing) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<div class="card small" style="margin-bottom:10px">Falta rodar o SQL da Hora de servir no Supabase. Enquanto isso, a página aparece sem itens no checklist.</div>`);
+    if (seedErr && !items.length) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<div class="card small" style="margin-bottom:10px">Não consegui criar o modelo do checklist: ${esc(seedErr)}</div>`);
+    else if (missing) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<div class="card small" style="margin-bottom:10px">Falta rodar o SQL da Hora de servir no Supabase. Enquanto isso, a página aparece sem itens no checklist.</div>`);
     else if (!items.length) el.querySelector("#pane").insertAdjacentHTML("afterbegin", `<p class="tiny muted">${esc(team?.name || "")} ainda não tem itens. Monte em <a class="link" href="#/times/${q.team}/servico">Hora de servir</a>.</p>`);
   };
   const fillRoles = () => { const rs = rolesOf(q.team); q.role = rs[0]?.id || ""; el.querySelector("#pr").innerHTML = rs.map((r) => `<option value="${r.id}">${esc(r.name)}</option>`).join("") + `<option value="">Sem função</option>`; };
@@ -270,7 +277,8 @@ export async function updateBanner(path) {
 async function configView(teamId, el, alive) {
   if (!canManageTeam(teamId)) { el.innerHTML = empty("lock", "Somente líderes configuram o serviço."); return; }
   el.innerHTML = spinner();
-  await ensureTemplate(teamId);
+  const seedErr = await ensureTemplate(teamId);
+  if (seedErr) toast(`Não consegui criar o modelo: ${seedErr}`, "err");
   const team = state.orgTeams?.find((t) => t.id === teamId) || state.myTeams.find((t) => t.id === teamId);
   let items;
   const [roles, items0, trow] = await Promise.all([
