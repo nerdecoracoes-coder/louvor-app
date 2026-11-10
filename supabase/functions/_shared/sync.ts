@@ -155,6 +155,11 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
 
     const songs: any[] = await db.select("songs", `org_id=eq.${orgId}&source=eq.drive&select=*`);
     const byFolder = new Map(songs.map((s) => [s.drive_folder_id, s]));
+    // Troca de pasta: se a pasta antiga sumiu e aparece uma nova com o mesmo nome, a música (e as escalas) continuam as mesmas.
+    const fold = (x: unknown) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const aliveIds = new Set<string>([...folders.map((f) => f.id), ...unmarkedIds, ...groupIds]);
+    const orphans = songs.filter((x) => !aliveIds.has(x.drive_folder_id));
+    const sameSong = (a: { title: string; artist: string | null }, b: { title: string; artist: string | null }) => fold(a.title) === fold(b.title) && fold(a.artist) === fold(b.artist);
     const listings = await pool(folders, deps.concurrency ?? 6, async (f) => {
       try { return { folder: f, files: (await walk(drive, f.id)).filter((x) => !IGNORE.test(x.name)), error: null as string | null }; }
       catch (e) { return { folder: f, files: [] as FolderFile[], error: String((e as Error).message ?? e) }; }
@@ -180,6 +185,21 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
       const needs = !song || song.drive_signature !== signature || song.status === "removed"
         || (["error", "waiting_files", "processing"].includes(song.status) && retryDue);
       if (!needs) { stats.unchanged++; continue; }
+      if (!song) {
+        const n = bestName(null, folder.name);
+        const nm = { title: n.title || folder.name, artist: n.artist ?? folder.group ?? null };
+        const cands = orphans.filter((x) => !x.__adopted && (fold(x.drive_folder_name) === fold(folder.name) || sameSong(x, nm)));
+        const exact = cands.filter((x) => fold(x.drive_folder_name) === fold(folder.name));
+        const old = cands.length === 1 ? cands[0] : exact.length === 1 ? exact[0] : null;
+        if (cands.length > 1 && !old) await event("warn", `"${folder.name}": há mais de uma música antiga com este nome; foi criada como nova. Confira o repertório.`, { folder_id: folder.id });
+        if (old) {
+          const [row] = await db.update("songs", `id=eq.${old.id}`, { drive_folder_id: folder.id, drive_folder_name: folder.name, status: "processing",
+            status_message: "Na fila para processamento", drive_signature: null, retry_count: 0, next_retry_at: null });
+          Object.assign(old, row ?? { drive_folder_id: folder.id, drive_folder_name: folder.name }); old.__adopted = true;
+          song = old; byFolder.set(folder.id, song);
+          await event("info", `"${old.title}": a pasta nova com o mesmo nome assumiu a música. As escalas continuam apontando para ela.`, { song_id: old.id, folder_id: folder.id });
+        }
+      }
       if (!song) {
         const n = bestName(null, folder.name);
         try {
@@ -231,6 +251,15 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
         if (!used.length) { await db.delete("songs", `id=eq.${s.id}`); await event("info", `"${s.drive_folder_name ?? s.title}" é uma pasta de cantor/grupo; as músicas dela foram lidas das subpastas.`, { folder_id: s.drive_folder_id }); continue; }
       }
       if (s.status === "removed") continue;
+      // a pasta nova já estava no Drive antes de a antiga sair: as escalas e versões passam para a música nova
+      const heirs = songs.filter((x) => x.id !== s.id && x.status !== "removed" && present.has(x.drive_folder_id) && sameSong(x, s));
+      if (heirs.length === 1) {
+        const h = heirs[0];
+        await db.update("schedule_songs", `song_id=eq.${s.id}`, { song_id: h.id });
+        await db.update("song_versions", `song_id=eq.${s.id}`, { song_id: h.id }).catch(() => {});
+        await db.update("songs", `duplicate_of=eq.${s.id}`, { duplicate_of: null }).catch(() => {});
+        await event("info", `"${s.title}": as escalas foram passadas para a pasta nova com o mesmo nome.`, { song_id: h.id, folder_id: h.drive_folder_id });
+      }
       await db.update("songs", `id=eq.${s.id}`, { status: "removed", status_message: "A pasta foi removida do Google Drive. O histórico das escalas foi preservado.", drive_signature: null });
       await event("info", `"${s.title}" saiu do repertório (pasta removida do Drive).`, { song_id: s.id, folder_id: s.drive_folder_id });
       stats.removed++;

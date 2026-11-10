@@ -289,4 +289,40 @@ describe("importação do Drive", () => {
     expect((await db.select("songs", `id=eq.${um.id}`))[0].status).toBe("ready");
     expect(await db.select("songs", `org_id=eq.${org}&drive_folder_name=eq.${encodeURIComponent("Pronta Um - Banda")}`)).toHaveLength(1);
   });
+  test("pasta apagada e refeita com o mesmo nome: a música e as escalas continuam as mesmas", async () => {
+    await makeProject({ root: ROOT, folder: "Tua Graça - Banda A - 70 BPM (G)", rppName: "Tua Graça - Banda A - 70 BPM (G).rpp" });
+    await ageAll(ROOT); await syncOrg(deps(), org, "cron");
+    const a = await song("Tua Graça - Banda A - 70 BPM (G)"); expect(a.status).toBe("ready");
+    const sch = (await admin.api.post("schedules", { org_id: org, team_id: team, title: "Culto troca", starts_at: new Date(Date.now() + 864e5).toISOString(), status: "published" })).data[0];
+    await admin.api.post("schedule_songs", { schedule_id: sch.id, org_id: org, team_id: team, song_id: a.id, title_snapshot: "Tua Graça", song_key: "A" });
+    // apaga a pasta e envia outra, com o mesmo nome, em outro lugar do Drive (outro ID)
+    renameSync(join(ROOT, "Tua Graça - Banda A - 70 BPM (G)"), `${SIM}/lixeira-tua`);
+    await syncOrg(deps(), org, "cron");
+    expect((await db.select("songs", `id=eq.${a.id}`))[0].status).toBe("removed");
+    mkdirSync(join(ROOT, "Novos"), { recursive: true });
+    await makeProject({ root: join(ROOT, "Novos"), folder: "Tua Graça - Banda A - 70 BPM (G)", rppName: "Tua Graça - Banda A - 70 BPM (G).rpp", variant: "v2" });
+    await ageAll(ROOT); await syncOrg(deps(), org, "cron");
+    const rows = await db.select("songs", `org_id=eq.${org}&title=eq.${encodeURIComponent("Tua Graça")}`);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ id: a.id, status: "ready", drive_folder_id: drive.idOf(join(ROOT, "Novos", "Tua Graça - Banda A - 70 BPM (G)")) });
+    expect(rows[0].current_project_id).not.toBe(a.current_project_id);
+    expect((await member.api.get(`/schedule_songs?schedule_id=eq.${sch.id}`)).data[0]).toMatchObject({ song_id: a.id, song_key: "A" });
+  });
+
+  test("pasta nova enviada antes de a antiga sair: as escalas passam para a música nova", async () => {
+    await makeProject({ root: ROOT, folder: "Santo - Banda B - 80 BPM (D)", rppName: "Santo - Banda B - 80 BPM (D).rpp" });
+    await ageAll(ROOT); await syncOrg(deps(), org, "cron");
+    const a = await song("Santo - Banda B - 80 BPM (D)");
+    const sch = (await admin.api.post("schedules", { org_id: org, team_id: team, title: "Culto troca 2", starts_at: new Date(Date.now() + 864e5).toISOString(), status: "published" })).data[0];
+    await admin.api.post("schedule_songs", { schedule_id: sch.id, org_id: org, team_id: team, song_id: a.id, title_snapshot: "Santo" });
+    mkdirSync(join(ROOT, "Novos"), { recursive: true });
+    await makeProject({ root: join(ROOT, "Novos"), folder: "Santo - Banda B - 80 BPM (D)", rppName: "Santo - Banda B - 80 BPM (D).rpp", variant: "v2" });
+    await ageAll(ROOT); await syncOrg(deps(), org, "cron");          // as duas pastas existem
+    renameSync(join(ROOT, "Santo - Banda B - 80 BPM (D)"), `${SIM}/lixeira-santo`);
+    await syncOrg(deps(), org, "cron");                                // a antiga saiu
+    const novo = (await db.select("songs", `org_id=eq.${org}&drive_folder_id=eq.${drive.idOf(join(ROOT, "Novos", "Santo - Banda B - 80 BPM (D)"))}`))[0];
+    expect(novo.id).not.toBe(a.id);
+    expect((await member.api.get(`/schedule_songs?schedule_id=eq.${sch.id}`)).data[0].song_id).toBe(novo.id);
+    expect((await db.select("songs", `id=eq.${a.id}`))[0].status).toBe("removed");
+  });
 });
