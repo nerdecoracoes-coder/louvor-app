@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, isEditPath, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, isEditPath, canGoBack, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as servico from "./views/servico.js";
 import * as multimidia from "./views/multimidia.js";
@@ -261,6 +261,9 @@ window.addEventListener("hashchange", render);
 // links dentro de uma tela de edição que levam para fora dela não empilham a edição no histórico
 document.addEventListener("click", (e) => {
   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  // regra do app inteiro: o botão voltar leva à tela exatamente anterior (menos edições já fechadas); sem anterior, usa o destino padrão do botão
+  const back = e.target.closest?.("a.back");
+  if (back && !isEditPath(location.hash.replace(/^#/, "").split("?")[0]) && canGoBack()) { e.preventDefault(); history.back(); return; }
   const a = e.target.closest?.('a[href^="#/"]'); if (!a || a.target) return;
   const to = a.getAttribute("href").slice(1), cur = location.hash.replace(/^#/, "") || "/";
   if (isEditPath(cur) && !isEditPath(to) && cur.split("?")[0] !== to.split("?")[0]) { e.preventDefault(); leaveEdit(to); }

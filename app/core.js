@@ -398,6 +398,8 @@ export function leaveEdit(path) {
 }
 // Link do botão voltar de uma página que pode ser aberta de vários lugares (ex.: a música, vinda da escala ou do repertório):
 // volta para a tela de onde a pessoa veio; se não houver (abriu direto), vai para a tela padrão.
+// há uma tela anterior (do app) para onde o voltar pode ir? Telas de edição já fechadas não contam.
+export const canGoBack = () => trail.idx > 0 && !!trail.list[trail.idx - 1] && !isEditPath(trail.list[trail.idx - 1]);
 export const backHref = (fallback, avoid) => (trail.idx > 0 && trail.list[trail.idx - 1] && !isEditPath(trail.list[trail.idx - 1]) && !(avoid && avoid.test(trail.list[trail.idx - 1])) ? "javascript:history.back()" : "#" + fallback);
 export const go = (path) => {
   const cur = location.hash.replace(/^#/, "") || "/";
