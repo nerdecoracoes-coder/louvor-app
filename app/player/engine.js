@@ -79,6 +79,27 @@ export class Engine extends EventTarget {
     this.bytesLoaded = 0;
   }
 
+  // ------------------------------------------------------------- tom (muda o tom das faixas sem mudar o andamento)
+  // Deslocamento de tom na mixagem final. Com 0 semitons o filtro fica desligado (sem atraso nem perda).
+  async setSemitones(n) {
+    n = Math.max(-12, Math.min(12, Math.round(n) || 0));
+    this.semitones = n;
+    if (!this.ctx || !this.masterGain) return false;
+    try {
+      if (n !== 0 && !this.pitchNode) {
+        if (!this.ctx.audioWorklet) return false;
+        await this.ctx.audioWorklet.addModule(new URL("./pitch-worklet.js", import.meta.url).href);
+        if (this.destroyed) return false;
+        this.pitchNode = new AudioWorkletNode(this.ctx, "pitch-shift", { outputChannelCount: [2], processorOptions: { semitones: n } });
+      }
+      this.pitchNode?.port.postMessage({ semitones: n });
+      try { this.masterGain.disconnect(); } catch {}
+      if (n === 0 || !this.pitchNode) this.masterGain.connect(this.masterAn);
+      else { this.masterGain.connect(this.pitchNode); try { this.pitchNode.disconnect(); } catch {} this.pitchNode.connect(this.masterAn); }
+      return true;
+    } catch (e) { console.warn("tom:", e); try { this.masterGain.connect(this.masterAn); } catch {} return false; }
+  }
+
   // ------------------------------------------------------------- grafo de áudio
   async init() {
     const srs = [...this.media.values()].map((m) => m.format?.sampleRate).filter(Boolean);

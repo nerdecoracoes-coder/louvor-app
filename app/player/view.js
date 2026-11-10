@@ -2,6 +2,7 @@
 import { sb, state, must, esc, attr, icon, toast, errMsg, isRepertoireStaff as isStaff, fDur } from "../core.js";
 import { Engine, gainToDb, warmOpus } from "./engine.js";
 import { manifest, isCached } from "./warm.js";
+import { parseKey, semitonesBetween, transposeKey } from "../lib/keys.js";
 
 // Cores salvas no REAPER (PEAKCOL das faixas e cor de marcadores/regiões): só valem com o bit 0x1000000 ligado;
 // o valor vem no formato do Windows (0x00BBGGRR).
@@ -20,8 +21,9 @@ const loaderHtml = (text, pct = 0) => `<div class="loadov" id="loadov" role="sta
 const fmt = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r.toFixed(1).padStart(4, "0")}`; };
 const dbLabel = (g) => { const d = gainToDb(g); return d === -Infinity ? "-∞" : (d > 0 ? "+" : "") + d.toFixed(1); };
 
-export async function openPlayer(songId) {
+export async function openPlayer(songId, tomParam = null) {
   closePlayer();
+  let st = 0;   // semitons aplicados às faixas (tom pedido pela escala ou ajustado no player)
   const root = document.createElement("div");
   root.className = "player";
   root.innerHTML = `<div class="backdrop"></div><div class="ph"><button class="back" data-x aria-label="Fechar">${icon("chevronDown")}</button><div class="grow"></div></div>${loaderHtml("Abrindo a música…")}`;
@@ -70,6 +72,9 @@ export async function openPlayer(songId) {
       mediaUrl: (id) => `${mediaBase}?file=${encodeURIComponent(id)}`, token: () => sb.auth.token(), anonKey: sb.anonKey,
     });
     await engine.init();
+    // tom pedido pela escala (ex.: #/player/ID?tom=D): as faixas já abrem no tom certo
+    st = song.song_key && tomParam ? semitonesBetween(song.song_key, tomParam) : 0;
+    if (st) await engine.setSemitones(st);
     engine.timings = marks; engine.t0open = T0;
     window.__player = engine;
     engine.peaksP = engine.loadPeaks();
@@ -118,13 +123,29 @@ export async function openPlayer(songId) {
         <button data-t="next" aria-label="Próximo marcador">${icon("next")}</button>
         <button data-t="rep" aria-label="Repetir">${icon("repeat")}</button>
       </div>
-      <div class="pinfo">${song.song_key ? `<span class="tile"><b>${esc(song.song_key)}</b><small>tom</small></span>` : ""}${song.bpm ? `<span class="tile"><b>${Number(song.bpm)}</b><small>bpm</small></span>` : ""}
+      <div class="pinfo"><span class="tile keytile"><button type="button" data-ks="-1" aria-label="Descer um semitom">−</button><span class="kb"><b id="kname">${esc(song.song_key ? transposeKey(song.song_key, st) : (st ? (st > 0 ? "+" : "") + st : "—"))}</b><small id="ksub">tom</small></span><button type="button" data-ks="1" aria-label="Subir um semitom">+</button></span>${song.bpm ? `<span class="tile"><b>${Number(song.bpm)}</b><small>bpm</small></span>` : ""}
         ${project.time_sig_num ? `<span class="tile"><b>${project.time_sig_num}/${project.time_sig_den}</b><small>compasso</small></span>` : ""}
         <span class="tile mixt"><b id="mixtag">Mix do projeto</b><small id="buf" class="hidden">Carregando…</small></span></div>
       <div class="tiny muted" id="diag"></div>${loaderHtml("Carregando faixas…")}`;
     root.querySelector("[data-x]").onclick = close;
     root.querySelector(".ph h2").onclick = () => root.classList.toggle("diag");   // toque no título: mostra os tempos de carregamento
     const body = root.querySelector("#pbody");
+    // ---------- tom: − / + em semitons (o andamento não muda)
+    const kname = root.querySelector("#kname"), ksub = root.querySelector("#ksub");
+    const paintKey = () => {
+      kname.textContent = song.song_key && parseKey(song.song_key) ? transposeKey(song.song_key, st) : (st ? (st > 0 ? "+" : "") + st : "—");
+      ksub.textContent = st === 0 ? (song.song_key ? "tom original" : "tom") : `${st > 0 ? "+" : ""}${st} · original ${song.song_key || "—"}`;
+      root.querySelector(".keytile").classList.toggle("shifted", st !== 0);
+    };
+    paintKey();
+    root.querySelectorAll("[data-ks]").forEach((b) => b.onclick = async () => {
+      const n = Math.max(-12, Math.min(12, st + Number(b.dataset.ks)));
+      if (n === st) return;
+      st = n; paintKey();
+      const okp = await engine.setSemitones(st);
+      if (okp === false && st !== 0) { toast("Este aparelho não consegue mudar o tom.", "err"); st = 0; paintKey(); await engine.setSemitones(0); }
+    });
+    root.querySelector(".keytile .kb").onclick = async () => { if (st === 0) return; st = 0; paintKey(); await engine.setSemitones(0); };
 
     // ---------- abas
     const drawTab = () => {

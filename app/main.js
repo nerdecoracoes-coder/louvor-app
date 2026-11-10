@@ -27,7 +27,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
 // ---------------------------------------------------------------- rotas
 home.register(route); servico.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
-route("/player/:id", async ({ id }) => { await openPlayer(id); }, { overlay: true });
+route("/player/:id", async ({ id }) => { await openPlayer(id, new URLSearchParams(location.hash.split("?")[1] || "").get("tom")); }, { overlay: true });
 
 // Dois lugares: o TIME (onde a pessoa passa a maior parte do tempo) e a IGREJA (avisos gerais, calendário, membros, times).
 // O app abre no último time usado; o seletor no topo troca de time ou leva para a igreja.

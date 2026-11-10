@@ -317,6 +317,23 @@ with sync_playwright() as pw:
     loop = carla.evaluate("window.__player.loop")
     assert loop and abs(loop[0] - 3.428571) < 0.01, loop
     ok("pause, próximo marcador e repetição de região")
+    # tom no player: − / + muda o tom sem mexer no andamento; tocar no tom volta ao original
+    carla.locator('[data-ks="1"]').click(); carla.locator('[data-ks="1"]').click()
+    carla.wait_for_function("window.__player.semitones === 2 && !!window.__player.pitchNode", timeout=15000)
+    expect(carla.locator(".keytile.shifted")).to_be_visible()
+    carla.locator(".keytile .kb").click()
+    carla.wait_for_function("window.__player.semitones === 0", timeout=15000)
+    # abrir já no tom da escala: #/player/ID?tom=…
+    sid_song = re.search(r"/player/([0-9a-f-]{36})", carla.url).group(1)
+    orig_key = carla.locator("#kname").inner_text()
+    if parse_ok := (orig_key not in ("—", "")):
+        tgt = carla.evaluate("async (k) => (await import('/app/lib/keys.js')).transposeKey(k, 3)", orig_key)
+        pg2 = carla.context.new_page(); pg2.goto(BASE); pg2.wait_for_timeout(4000)   # espera o app abrir (pode redirecionar para um convite guardado)
+        pg2.evaluate("h => { location.hash = h; }", f"#/player/{sid_song}?tom=" + __import__("urllib.parse").parse.quote(tgt, safe=""))
+        pg2.wait_for_function("window.__player && window.__player.semitones === 3", timeout=30000)
+        assert pg2.locator("#kname").inner_text() == tgt
+        pg2.close()
+    ok("player: tom pelos botões, volta ao original e abre no tom da escala")
     carla.evaluate("window.__player.setLoop(null); window.__player.pause()")
     carla.wait_for_timeout(1500)
     shot(carla, "13-player-faixas")
@@ -755,6 +772,10 @@ with sync_playwright() as pw:
     bruno.wait_for_timeout(400); bruno.mouse.up(); bruno.wait_for_timeout(500)
     assert bruno.locator("#songs .sli").nth(1).locator(".t").inner_text() == first, "a música não trocou de lugar"
     shot(bruno, "08f-musicas-arrastar")
+    # tom da música nesta escala: toque no botão do tom abre o seletor; escolher D grava
+    bruno.locator(".keybtn").first.click(); bruno.locator(".keygrid [data-k=D]").click()
+    expect(bruno.locator(".keybtn").first).to_have_text("D", timeout=10000)
+    ok("escala: tom da música escolhido pelo seletor")
     bruno.locator("#savebtn").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=15000)
     bruno.locator("[data-dtab=par]").click(); bruno.locator("[data-pv=palco]").click()
     expect(bruno.locator(".stage.readonly .slot")).to_have_count(1, timeout=10000)

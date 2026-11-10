@@ -1,4 +1,5 @@
 // Escalas: criação/edição com sugestão automática, detalhe e calendários (geral, do time e pessoal).
+import { parseKey, SHARP_NAMES } from "../lib/keys.js";
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, isAdmin, canManageTeam, isStaff, sheet, toast, errMsg, busy, on, go,
   empty, spinner, fDate, fDateLong, fTime, fDow, fDay, fMon, ymd, fromLocal, confirmDialog, roleIcon, linkify, fDur, fMonthYear, cap, teamHasRepertoire, teamHas } from "../core.js";
 import { schedRow } from "./home.js";
@@ -279,8 +280,24 @@ async function editor(el, scheduleId, teamId) {
     <div class="list" id="songs">${f.songs.length ? f.songs.map((s, i) => `<div class="li sli" data-i="${i}"><span class="dim small" style="width:18px">${i + 1}</span>
       <span class="grow" style="min-width:0"><span class="t ellipsis" style="display:block">${esc(s.title)}${s.removed ? ` <span class="tag gray">fora do repertório</span>` : ""}</span><span class="s">${esc(s.artist || "")}</span>
         ${hasVer && !s.removed ? `<button type="button" class="vchip ${s.version_name ? "" : "none"}" data-ver="${i}" aria-label="Trocar a versão">${icon("layers")} ${s.version_name ? esc(s.version_name) : "Versão original"}${bpmOf(s) ? ` · ${bpmOf(s)} BPM` : ""}</button>` : ""}</span>
-      <input class="input" style="width:66px;height:38px;padding:0 8px;text-align:center" data-key="${i}" value="${attr(s.song_key || "")}" placeholder="Tom" aria-label="Tom">
+      <button type="button" class="keybtn${s.song_key ? "" : " none"}" data-keybtn="${i}" aria-label="Trocar o tom">${s.song_key ? esc(s.song_key) : "Tom"}</button>
       <button class="iconbtn" data-rm="${i}" aria-label="Remover">${icon("x")}</button></div>`).join("") : `<div class="li muted small">Nenhuma música selecionada.</div>`}</div>`;
+  }
+
+  // escolher o tom desta música NESTA escala (a versão já traz o dela; aqui dá para mudar à mão)
+  function keySheet(i) {
+    const s = f.songs[i]; if (!s) return;
+    const cur = parseKey(s.song_key);
+    let minor = !!cur?.minor;
+    const draw2 = () => `<h3>${esc(s.title)}</h3><p class="small muted" style="margin-top:-6px">Tom em que será tocada neste dia. O player abre as faixas já nesse tom.</p>
+      <div class="keygrid">${SHARP_NAMES.map((k, n) => `<button type="button" data-k="${k}" class="${cur && cur.root === n ? "on" : ""}">${k}${minor ? "m" : ""}</button>`).join("")}</div>
+      <label class="row gap-s mt small"><input type="checkbox" id="kminor" ${minor ? "checked" : ""}> Tom menor</label>
+      <div class="row gap mt wrap">${s.ver_key && s.ver_key !== s.song_key ? `<button type="button" class="btn ghost grow" data-kver>${icon("layers")} Tom da versão (${esc(s.ver_key)})</button>` : ""}${s.song_key ? `<button type="button" class="btn ghost grow" data-kclear>Sem tom definido</button>` : ""}</div>`;
+    const sh = sheet(draw2(), { wide: true });
+    on(sh.el, "click", "[data-k]", (e, b) => { s.song_key = b.dataset.k.replace(/m$/, "") + (sh.el.querySelector("#kminor").checked ? "m" : ""); sh.close(); draw(); });
+    on(sh.el, "change", "#kminor", (e, b) => { minor = b.checked; sh.el.querySelectorAll("[data-k]").forEach((x) => { x.dataset.k = x.dataset.k.replace(/m$/, "") + (minor ? "m" : ""); x.textContent = x.dataset.k; }); });
+    on(sh.el, "click", "[data-kver]", () => { s.song_key = s.ver_key; sh.close(); draw(); });
+    on(sh.el, "click", "[data-kclear]", () => { s.song_key = null; sh.close(); draw(); });
   }
 
   // escolher a versão da música nesta escala: tom e BPM acompanham a versão
@@ -296,8 +313,8 @@ async function editor(el, scheduleId, teamId) {
       </div>${vs.length ? "" : `<p class="small muted mt">Esta música ainda não tem versões. Cadastre na página da música quem canta em qual tom.</p>`}`, { wide: true });
     on(sh.el, "click", "[data-v]", (e, b) => {
       const v = vs.find((x) => x.id === b.dataset.v);
-      if (v) Object.assign(s, { version_id: v.id, version_name: v.name, song_key: v.song_key || base.song_key || null, bpm: v.bpm ?? base.bpm ?? null });
-      else Object.assign(s, { version_id: null, version_name: null, song_key: base.song_key || null, bpm: base.bpm ?? null });
+      if (v) Object.assign(s, { version_id: v.id, version_name: v.name, song_key: v.song_key || base.song_key || null, ver_key: v.song_key || base.song_key || null, bpm: v.bpm ?? base.bpm ?? null });
+      else Object.assign(s, { version_id: null, version_name: null, song_key: base.song_key || null, ver_key: base.song_key || null, bpm: base.bpm ?? null });
       sh.close(); draw();
     });
   }
@@ -393,6 +410,7 @@ async function editor(el, scheduleId, teamId) {
   el.addEventListener("click", async (e) => {
     const t = e.target.closest("button, .pcard.pslot, .slot[data-sid]"); if (!t) return;
     if (t.dataset.etab) { readForm(); if (cueMount) { cueList = cueMount.read(); cueMount = null; } f.tab = t.dataset.etab; return draw(); }
+    if (t.dataset.keybtn !== undefined) return keySheet(Number(t.dataset.keybtn));
     if (t.id === "rehadd") { readForm(); const last = f.rehs[f.rehs.length - 1]; f.rehs.push({ date: last?.date || f.date, time: last?.time || "18:00", notes: "" }); return draw(); }
     if (t.dataset.rhdel !== undefined) { f.rehs.splice(Number(t.dataset.rhdel), 1); return draw(); }
     if (t.id === "openpal") { readForm(); f.view = "palette"; draw(); return window.scrollTo(0, 0); }
@@ -695,7 +713,7 @@ async function detail(el, id, tab = "det") {
       return `<div class="song"><span class="cover">${x.songs?.cover_url ? `<img src="${attr(x.songs.cover_url)}" alt="">` : `<b style="font-size:18px">${i + 1}</b>`}</span>
         <a class="grow" style="color:inherit;min-width:0" ${live ? `href="#/musica/${x.song_id}"` : ""}><div class="t ellipsis">${esc(x.title_snapshot)}</div>
           <div class="s">${esc(x.artist_snapshot || "")}${x.version_name ? `<span>${esc(x.version_name)}</span>` : ""}${x.song_key ? `<span>Tom ${esc(x.song_key)}</span>` : ""}${(x.bpm ?? x.songs?.bpm) ? `<span>${Number(x.bpm ?? x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
-        ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
+        ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}${x.song_key ? `?tom=${encodeURIComponent(x.song_key)}` : ""}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
     }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>`,
     par: () => parBar() + (pv === "palco" && stage.slots.length ? stagePane() : parList()),
     rot: () => `<div id="extras"></div>`,
