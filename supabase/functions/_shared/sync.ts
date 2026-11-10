@@ -31,6 +31,8 @@ export interface SyncDeps {
   timeBudgetMs?: number;        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
   projectConcurrency?: number;  // projetos processados ao mesmo tempo
 }
+// muda quando a leitura dos nomes ganha uma regra nova: todas as músicas são relidas uma vez
+const NAMING_V = "naming2\n";
 export interface SyncStats { busy?: boolean; processed?: number; editing?: number; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
 const IGNORE = /(\.rpp-bak|\.reapeaks|\.rpp-undo|\.reapindex|\.ds_store|desktop\.ini|thumbs\.db)$/i;
@@ -179,7 +181,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
       if (error) { stats.errors++; await event("error", `Não foi possível ler a pasta "${folder.name}": ${error}`, { folder_id: folder.id, song_id: song?.id }); continue; }
       if (song) await syncCover(deps, orgId, song, files).catch((e) => event("warn", `"${folder.name}": não foi possível copiar a capa (${(e as Error).message}).`, { folder_id: folder.id, song_id: song.id }));
       const sigSrc = files.map((x) => `${x.relPath}|${x.md5 ?? ""}|${x.size ?? ""}|${x.modifiedTime ?? ""}`).sort().join("\n");
-      const signature = await sha256(folder.name + "\n" + sigSrc);
+      const signature = await sha256(NAMING_V + folder.name + "\n" + sigSrc);
       const latest = files.reduce((m, x) => (x.modifiedTime && x.modifiedTime > m ? x.modifiedTime : m), folder.modifiedTime ?? "");
       const retryDue = !song?.next_retry_at || new Date(song.next_retry_at) <= now();
       const needs = !song || song.drive_signature !== signature || song.status === "removed"

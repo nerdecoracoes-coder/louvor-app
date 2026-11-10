@@ -16,6 +16,10 @@ describe("convenção de nomes", () => {
     expect(parseProjectName("Emaús - Morada - 140 BPM (B).rpp")).toMatchObject({ title: "Emaús", artist: "Morada", bpm: 140, key: "B", matched: true });
   });
   test("título com hífen e com ' - '", () => {
+    expect(parseProjectName("Gratidão-Get Worship-78 BPM (D).rpp")).toMatchObject({ title: "Gratidão", artist: "Get Worship", bpm: 78, key: "D", matched: true });
+    expect(parseProjectName("Gratidão-GetWorship-78BPM(D)")).toMatchObject({ title: "Gratidão", artist: "GetWorship", bpm: 78, key: "D" });
+    expect(parseProjectName("Gratidão - Get Worship-78 BPM (Bb)")).toMatchObject({ title: "Gratidão", artist: "Get Worship", bpm: 78, key: "Bb" });
+    expect(parseProjectName("Pós-Tudo-Gabriela Rocha-72 BPM (G)")).toMatchObject({ title: "Pós-Tudo", artist: "Gabriela Rocha", bpm: 72, key: "G" });
     expect(parseProjectName("Pós-Tudo - Gabriela Rocha - 72 BPM (G)")).toMatchObject({ title: "Pós-Tudo", artist: "Gabriela Rocha", bpm: 72, key: "G" });
     expect(parseProjectName("Te Louvarei - Ao Vivo - Morada - 140 BPM (B)")).toMatchObject({ title: "Te Louvarei - Ao Vivo", artist: "Morada" });
   });

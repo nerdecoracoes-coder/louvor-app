@@ -40,9 +40,15 @@ export function parseProjectName(input: string): ParsedName {
   const name = clean(stripProjectExt(input));
   const warnings: string[] = [];
   // aceita " - ", " – " e " — " como separadores (com espaços dos dois lados)
-  const parts = name.split(/\s+[-–—]\s+/).map(clean).filter(Boolean);
+  const BPM_TAIL = /^(\d{2,3}(?:[.,]\d{1,2})?)\s*bpm\s*(?:\(\s*([^)]+?)\s*\)|\[\s*([^\]]+?)\s*\])?$/i;
+  let parts = name.split(/\s+[-–—]\s+/).map(clean).filter(Boolean);
+  // tolera hífens sem espaço ("Música-Artista-78BPM(D)") quando o nome termina em BPM: o padrão com espaços tem prioridade
+  if (!BPM_TAIL.test(parts[parts.length - 1] ?? "")) {
+    const loose = name.split(/\s*[-–—]\s*/).map(clean).filter(Boolean);
+    if (loose.length >= 3 && BPM_TAIL.test(loose[loose.length - 1])) parts = [loose.slice(0, -2).join("-"), loose[loose.length - 2], loose[loose.length - 1]];
+  }
   const tail = parts[parts.length - 1] ?? "";
-  const bpmKey = tail.match(/^(\d{2,3}(?:[.,]\d{1,2})?)\s*bpm\s*(?:\(\s*([^)]+?)\s*\)|\[\s*([^\]]+?)\s*\])?$/i);
+  const bpmKey = tail.match(BPM_TAIL);
 
   if (parts.length >= 3 && bpmKey) {
     const bpm = Number(bpmKey[1].replace(",", "."));
