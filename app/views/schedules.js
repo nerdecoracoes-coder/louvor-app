@@ -642,8 +642,9 @@ async function detail(el, id, tab = "det") {
   const byRole = new Map();
   for (const a of assigns) { const k = a.role_name || "Sem função"; if (!byRole.has(k)) byRole.set(k, []); byRole.get(k).push(a); }
   const showSongs = teamHasRepertoire(s.teams) || songs.length;
-  const tabs = [["det", "Detalhes", null], ...(showSongs ? [["mus", "Músicas", songs.length]] : []),
-    ["par", "Participantes", askConf && s.status === "published" ? `${seenN}/${uniq.length}` : uniq.length], ...(showCues ? [["rot", "Roteiro", cues.length]] : [])];
+  const tabs = [["det", "Detalhes", null],
+    ["par", "Participantes", askConf && s.status === "published" ? `${seenN}/${uniq.length}` : uniq.length],
+    ...(showSongs ? [["mus", "Músicas", songs.length]] : []), ...(showCues ? [["rot", "Roteiro", cues.length]] : [])];
   if (!tabs.some((t) => t[0] === tab)) tab = "det";
   const today = ymd(s.starts_at) === ymd(new Date());
   const pending = askConf && s.status === "published" && uniq.length > 0 && seenN < uniq.length;
