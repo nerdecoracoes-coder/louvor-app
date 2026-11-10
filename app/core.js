@@ -396,6 +396,9 @@ export function leaveEdit(path) {
   if (trail.idx > 0 && trail.list[trail.idx - 1] === path.split("?")[0]) { history.back(); return; }
   location.replace("#" + path);
 }
+// Link do botão voltar de uma página que pode ser aberta de vários lugares (ex.: a música, vinda da escala ou do repertório):
+// volta para a tela de onde a pessoa veio; se não houver (abriu direto), vai para a tela padrão.
+export const backHref = (fallback, avoid) => (trail.idx > 0 && trail.list[trail.idx - 1] && !isEditPath(trail.list[trail.idx - 1]) && !(avoid && avoid.test(trail.list[trail.idx - 1])) ? "javascript:history.back()" : "#" + fallback);
 export const go = (path) => {
   const cur = location.hash.replace(/^#/, "") || "/";
   if (isEditPath(cur) && !isEditPath(path) && cur.split("?")[0] !== path.split("?")[0]) return leaveEdit(path);

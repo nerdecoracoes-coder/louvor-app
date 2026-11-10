@@ -1,5 +1,5 @@
 // Biblioteca geral (uma por organização): lista, filtros, cadastro manual, detalhe, anexos e letra.
-import { sb, state, must, esc, attr, icon, headerActions, isRepertoireStaff as isStaff, hasRepertoire, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fDur, safeUrl, confirmDialog, uploadPublic, pickFile, people } from "../core.js";
+import { sb, state, must, esc, attr, icon, headerActions, isRepertoireStaff as isStaff, hasRepertoire, isAdmin, sheet, toast, errMsg, busy, on, go, backHref, empty, spinner, fDate, fDur, safeUrl, confirmDialog, uploadPublic, pickFile, people } from "../core.js";
 
 const onlyRep = (fn) => (p, el, a) => hasRepertoire() ? fn(p, el, a)
   : (el.innerHTML = empty("music", "Repertório disponível para times de Louvor", "Você não participa de nenhum time que usa o repertório."));
@@ -272,7 +272,7 @@ async function songDetail(el, id) {
   const refSlots = [...REF_TYPES.map((t) => vrefs.find((r) => r.label.toLowerCase() === t[1].toLowerCase()) || (staff ? { label: t[1], mark: slotMark[t[0]] } : null)).filter(Boolean),
     ...vrefs.filter((r) => !typeOf(r.label))];
   const warnings = project ? [...(project.warnings || []), ...tracks.flatMap((t) => (t.warnings || []).map((w) => `${t.name}: ${w}`))] : [];
-  el.innerHTML = `<div class="pagehead"><a class="back" href="#/musicas">${icon("chevronLeft")}</a><h1 class="grow ellipsis" style="font-size:22px">Música</h1>
+  el.innerHTML = `<div class="pagehead"><a class="back" href="${backHref("/musicas", /^\/musica\//)}">${icon("chevronLeft")}</a><h1 class="grow ellipsis" style="font-size:22px">Música</h1>
       ${staff ? `<a class="iconbtn" href="#/musica/${id}/editar" aria-label="Editar">${icon("edit")}</a>` : ""}</div>
     <div class="sd-head">
       <span class="cover sd-cover">${s.cover_url ? `<img src="${attr(s.cover_url)}" alt="">` : icon("music")}</span>

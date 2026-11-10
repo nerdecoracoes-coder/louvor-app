@@ -870,6 +870,13 @@ with sync_playwright() as pw:
     bruno.go_back()
     assert not bruno.url.endswith("/editar"), "o voltar reabriu a edição"
     # Editar abre na mesma aba em que estava (Músicas -> edição em Músicas)
+    # música aberta de dentro da escala: o voltar retorna à escala, não ao repertório
+    subprocess.run(["psql", "-q", "-c", f"""insert into schedule_songs (schedule_id, org_id, team_id, song_id, position, title_snapshot, artist_snapshot)
+      select '{sid}', sc.org_id, sc.team_id, (select id from songs where status = 'ready' limit 1), 99, 'Teste voltar', 'X' from schedules sc where sc.id = '{sid}'"""], env=env0, check=True)
+    bruno.goto(f"{BASE}/#/escala/{sid}"); bruno.reload(); bruno.locator("[data-dtab=mus]").click()
+    bruno.locator(".song a.grow[href^='#/musica/']").first.click(); bruno.wait_for_url(re.compile(r"/musica/"), timeout=10000)
+    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
+    ok("voltar de uma música aberta dentro da escala retorna à escala")
     bruno.goto(f"{BASE}/#/escala/{sid}")
     bruno.locator("[data-dtab=mus]").click(); bruno.get_by_text("Editar", exact=True).first.click()
     bruno.wait_for_url(re.compile(r"/editar\?aba=musicas$"), timeout=10000)
