@@ -10,7 +10,7 @@ import { loadStage, stageHTML } from "./palco.js";
 export function register(route) {
   route("/escala/nova", (p, el) => editor(el, null, null));
   route("/escala/nova/:team", (p, el) => editor(el, null, p.team));
-  route("/escala/:id", (p, el) => detail(el, p.id));
+  route("/escala/:id", (p, el) => detail(el, p.id, ["par", "mus", "rot"].includes(/[?&]aba=(\w+)/.exec(location.hash)?.[1]) ? /[?&]aba=(\w+)/.exec(location.hash)[1] : "det"));
   route("/escala/:id/editar", (p, el) => editor(el, p.id, null));
   route("/times/:id/escalas", (p, el) => calendar(el, "time:" + p.id));
   route("/panorama", (p, el, a) => panorama(p, el, a));
@@ -736,6 +736,8 @@ async function detail(el, id, tab = "det") {
     <div class="tabsbar etabs" role="tablist">${tabs.map(([k, l, n]) => `<button type="button" role="tab" data-dtab="${k}" class="${tab === k ? "on" : ""}"><span class="tl">${icon(TABICO[k])}${n != null ? `<i class="cnt">${n}</i>` : ""}</span><span class="tn">${l}</span></button>`).join("")}</div>
     <div id="pane">${panes[tab]()}</div>
     ${manageBar()}`;
+  // a aba aberta fica no endereço: ao voltar de uma música (ou de qualquer tela) a escala reabre na mesma aba
+  try { if (location.hash.split("?")[0] === `#/escala/${id}`) history.replaceState(history.state, "", `#/escala/${id}${tab !== "det" ? "?aba=" + tab : ""}`); } catch { /* ok */ }
   if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
   el.querySelectorAll("[data-pv]").forEach((b) => b.addEventListener("click", () => { try { localStorage.setItem(PVIEW_KEY, b.dataset.pv); } catch { /* ok */ } detail(el, id, tab); }));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));

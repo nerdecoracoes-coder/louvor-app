@@ -212,7 +212,7 @@ with sync_playwright() as pw:
     bruno.locator("#savebtn").click()
     expect(bruno.locator(".pagehead h1", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
     bruno.locator("[data-dtab=mus]").click(); expect(bruno.get_by_text("Emaús")).to_be_visible()
-    sched_url = bruno.url
+    sched_url = bruno.url.split("?")[0]
     ok("escala criada com sugestão, música do repertório e publicada")
 
     # ------------------------------------------------------------------ Carla vê, confirma; calendário
@@ -778,7 +778,7 @@ with sync_playwright() as pw:
     bruno.locator(".keybtn").first.click(); bruno.locator(".keygrid [data-k=D]").click()
     expect(bruno.locator(".keybtn").first).to_have_text("D", timeout=10000)
     ok("escala: tom da música escolhido pelo seletor")
-    bruno.locator("#savebtn").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=15000)
+    bruno.locator("#savebtn").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=15000)
     bruno.locator("[data-dtab=par]").click(); bruno.locator("[data-pv=palco]").click()
     expect(bruno.locator(".stage.readonly .slot")).to_have_count(1, timeout=10000)
     assert bruno.locator(".stage.readonly .stools, .stage.readonly .handles").count() == 0
@@ -794,7 +794,7 @@ with sync_playwright() as pw:
     bruno.locator("[data-etab=roteiro]").click(); bruno.locator("[data-ctpl]").click()
     expect(bruno.locator(".cue-edit")).to_have_count(6, timeout=10000)
     bruno.locator("#savebtn").click(); bruno.wait_for_timeout(1500); shot(bruno, "08h-salvar-roteiro")
-    bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=15000)
+    bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=15000)
     expect(bruno.locator(".reh-card", has_text="Passar o repertório novo")).to_be_visible(timeout=10000)
     shot(bruno, "08g-ensaio-destaque")
     expect(bruno.locator("[data-dtab=rot] .cnt")).to_have_text("6")
@@ -862,11 +862,11 @@ with sync_playwright() as pw:
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")
     expect(bruno.locator("a[href^='#/escala/']:not([href*='/nova'])").first).to_be_visible(timeout=10000)
     first_sched = bruno.locator("a[href^='#/escala/']:not([href*='/nova'])").first
-    first_sched.click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
+    first_sched.click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=10000)
     sid = re.search(r"/escala/([0-9a-f-]{36})", bruno.url).group(1)
     bruno.get_by_text("Editar", exact=True).first.click()
     bruno.wait_for_url(re.compile(r"/editar$"), timeout=10000)
-    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
+    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=10000)
     bruno.go_back()
     assert not bruno.url.endswith("/editar"), "o voltar reabriu a edição"
     # Editar abre na mesma aba em que estava (Músicas -> edição em Músicas)
@@ -875,13 +875,14 @@ with sync_playwright() as pw:
       select '{sid}', sc.org_id, sc.team_id, (select id from songs where status = 'ready' limit 1), 99, 'Teste voltar', 'X' from schedules sc where sc.id = '{sid}'"""], env=env0, check=True)
     bruno.goto(f"{BASE}/#/escala/{sid}"); bruno.reload(); bruno.locator("[data-dtab=mus]").click()
     bruno.locator(".song a.grow[href^='#/musica/']").first.click(); bruno.wait_for_url(re.compile(r"/musica/"), timeout=10000)
-    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
-    ok("voltar de uma música aberta dentro da escala retorna à escala")
+    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}\?aba=mus$"), timeout=10000)
+    expect(bruno.locator("[data-dtab=mus]")).to_have_class(re.compile("on"), timeout=10000)
+    ok("voltar de uma música aberta dentro da escala retorna à escala, na mesma aba")
     bruno.goto(f"{BASE}/#/escala/{sid}")
     bruno.locator("[data-dtab=mus]").click(); bruno.get_by_text("Editar", exact=True).first.click()
     bruno.wait_for_url(re.compile(r"/editar\?aba=musicas$"), timeout=10000)
     expect(bruno.locator("[data-etab=musicas]")).to_have_class(re.compile("on"), timeout=10000)
-    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
+    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=10000)
     # o líder monta o checklist da função (a rota não pode cair na lista de escalas)
     bruno.goto(f"{BASE}/#/times/{louvor_id}/servico")
     expect(bruno.locator(".pagehead h1")).to_have_text("Hora de servir", timeout=10000)
