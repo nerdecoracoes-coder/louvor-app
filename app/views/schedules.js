@@ -657,7 +657,7 @@ async function detail(el, id, tab = "det") {
   const stage = await loadStage(s.team_id);
   const [assigns, songs, ppl, cues, rehs] = await Promise.all([
     must(sb.from("schedule_assignments").select("*").eq("schedule_id", id)),
-    must(sb.from("schedule_songs").select("*,songs(id,status,current_project_id,cover_url,youtube_url,chords_url,bpm,duration_sec)").eq("schedule_id", id).order("position")),
+    must(sb.from("schedule_songs").select("*,songs(id,status,current_project_id,cover_url,youtube_url,chords_url,bpm,duration_sec,song_key)").eq("schedule_id", id).order("position")),
     people(),
     showCues ? sb.from("schedule_cues").select("id").eq("schedule_id", id).then((r) => r.data || []) : Promise.resolve([]),
     sb.from("schedule_rehearsals").select("id,starts_at,notes").eq("schedule_id", id).order("starts_at").then((r) => r.data || []),
@@ -723,8 +723,8 @@ async function detail(el, id, tab = "det") {
       const live = x.songs && x.songs.status !== "removed";
       return `<div class="song"><span class="cover">${x.songs?.cover_url ? `<img src="${attr(x.songs.cover_url)}" alt="">` : `<b style="font-size:18px">${i + 1}</b>`}</span>
         <a class="grow" style="color:inherit;min-width:0" ${live ? `href="#/musica/${x.song_id}"` : ""}><div class="t ellipsis">${esc(x.title_snapshot)}</div>
-          <div class="s">${esc(x.artist_snapshot || "")}${x.version_name ? `<span>${esc(x.version_name)}</span>` : ""}${x.song_key ? `<span>Tom ${esc(x.song_key)}</span>` : ""}${(x.bpm ?? x.songs?.bpm) ? `<span>${Number(x.bpm ?? x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
-        ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}${x.song_key ? `?tom=${encodeURIComponent(x.song_key)}` : ""}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
+          <div class="s">${esc(x.artist_snapshot || "")}<span>${x.version_name ? esc(x.version_name) : "Versão original"}</span>${(x.song_key || x.songs?.song_key) ? `<span>Tom ${esc(x.song_key || x.songs.song_key)}</span>` : `<span class="muted">Sem tom</span>`}${(x.bpm ?? x.songs?.bpm) ? `<span>${Number(x.bpm ?? x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
+        ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}${(x.song_key || x.songs?.song_key) ? `?tom=${encodeURIComponent(x.song_key || x.songs.song_key)}` : ""}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
     }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>`,
     par: () => parBar() + (pv === "palco" && stage.slots.length ? stagePane() : parList()),
     rot: () => `<div id="extras"></div>`,
