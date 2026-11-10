@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, isEditPath, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as servico from "./views/servico.js";
 import * as multimidia from "./views/multimidia.js";
@@ -211,6 +211,7 @@ let current = null;
 async function render() {
   const raw = location.hash.replace(/^#/, "") || "/";
   const [path] = raw.split("?");
+  trackNav(path);
   const m = matchRoute(path);
 
   // rotas públicas
@@ -257,6 +258,13 @@ async function render() {
   if (token === current) swap(); else { obs.disconnect(); clearTimeout(timer); }
 }
 window.addEventListener("hashchange", render);
+// links dentro de uma tela de edição que levam para fora dela não empilham a edição no histórico
+document.addEventListener("click", (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const a = e.target.closest?.('a[href^="#/"]'); if (!a || a.target) return;
+  const to = a.getAttribute("href").slice(1), cur = location.hash.replace(/^#/, "") || "/";
+  if (isEditPath(cur) && !isEditPath(to) && cur.split("?")[0] !== to.split("?")[0]) { e.preventDefault(); leaveEdit(to); }
+});
 document.addEventListener("org-changed", () => {
   if (!document.getElementById("view")) return;
   // time ou recursos mudaram: refaz o topo e o menu

@@ -834,6 +834,17 @@ with sync_playwright() as pw:
     expect(bruno.locator(".hero")).to_be_visible(timeout=10000)
     expect(bruno.locator("#svcbar")).to_be_visible(timeout=10000)  # aviso para voltar à Hora de servir
     bruno.locator("#svcbar").click(); bruno.wait_for_url(re.compile(r"/servico/[0-9a-f-]{36}$"), timeout=10000)
+    # o voltar nunca reabre uma edição: lista -> escala -> editar -> escala -> voltar = lista
+    bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas")
+    expect(bruno.locator("a[href^='#/escala/']:not([href*='/nova'])").first).to_be_visible(timeout=10000)
+    first_sched = bruno.locator("a[href^='#/escala/']:not([href*='/nova'])").first
+    first_sched.click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
+    sid = re.search(r"/escala/([0-9a-f-]{36})", bruno.url).group(1)
+    bruno.get_by_text("Editar", exact=True).first.click()
+    bruno.wait_for_url(re.compile(r"/editar$"), timeout=10000)
+    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
+    bruno.go_back()
+    assert not bruno.url.endswith("/editar"), "o voltar reabriu a edição"
     # o líder monta o checklist da função (a rota não pode cair na lista de escalas)
     bruno.goto(f"{BASE}/#/times/{louvor_id}/servico")
     expect(bruno.locator(".pagehead h1")).to_have_text("Hora de servir", timeout=10000)

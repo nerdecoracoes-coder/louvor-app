@@ -366,7 +366,26 @@ export function route(pattern, handler, opts = {}) {
   const re = new RegExp("^" + pattern.replace(/:(\w+)/g, (_, k) => { keys.push(k); return "([^/]+)"; }) + "/?$");
   routes.push({ re, keys, handler, opts });
 }
-export const go = (path) => { if (location.hash !== "#" + path) location.hash = path; else window.dispatchEvent(new HashChangeEvent("hashchange")); };
+// Telas de edição (formulários) não entram no fluxo do "voltar": sair delas volta ao ponto de onde se entrou
+// (ou troca a entrada do histórico), então o voltar nunca reabre uma edição.
+const EDIT_RE = /\/editar$|\/nova(\/|$)|\/novo(\/|$)|^\/times\/[^/]+\/(aviso|servico)$|^\/times\/[^/]+\/letras\/(?!biblioteca$)(?![^/]+\/simulador$)[^/]+$/;
+export const isEditPath = (p) => EDIT_RE.test(String(p || "").split("?")[0]);
+const trail = { list: [], idx: -1 };
+// chamado a cada navegação: mantém um espelho da pilha do histórico (índice guardado em history.state)
+export function trackNav(path) {
+  const st = history.state;
+  if (st && typeof st.i === "number") { trail.idx = st.i; trail.list[st.i] = path; }
+  else { trail.idx += 1; trail.list.length = trail.idx; trail.list[trail.idx] = path; try { history.replaceState({ ...(history.state || {}), i: trail.idx }, ""); } catch { /* ok */ } }
+}
+export function leaveEdit(path) {
+  if (trail.idx > 0 && trail.list[trail.idx - 1] === path.split("?")[0]) { history.back(); return; }
+  location.replace("#" + path);
+}
+export const go = (path) => {
+  const cur = location.hash.replace(/^#/, "") || "/";
+  if (isEditPath(cur) && !isEditPath(path) && cur.split("?")[0] !== path.split("?")[0]) return leaveEdit(path);
+  if (location.hash !== "#" + path) location.hash = path; else window.dispatchEvent(new HashChangeEvent("hashchange"));
+};
 export function matchRoute(path) {
   for (const r of routes) {
     const m = r.re.exec(path);

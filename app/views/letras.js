@@ -1,6 +1,6 @@
 // Letras para a mídia: as letras do repertório divididas em partes (Verso 1, Refrão...), com estilo
 // próprio do time e exportação para PowerPoint e texto. Serve ao Louvor e à Multimídia.
-import { sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, empty, spinner, teamHas, canManageTeam, confirmDialog } from "../core.js";
+import { go, sb, state, must, esc, attr, icon, sheet, toast, errMsg, busy, on, empty, spinner, teamHas, canManageTeam, confirmDialog } from "../core.js";
 import { parseLyricsText, lyricsToText } from "./songs.js";
 import { buildPptx, zipStore, RATIOS, ratioOf } from "../lib/pptx.js";
 import { fDate, fTime } from "../core.js";
@@ -227,7 +227,7 @@ async function editor(teamId, songId, el, alive) {
   on(el, "click", "#delown", async () => {
     if (!(await confirmDialog("Excluir esta letra?", "Excluir", true))) return;
     const d = await sb.from("media_lyrics").delete().eq("id", songId); if (d.error) return toast(errMsg(d.error), "err");
-    toast("Letra excluída"); location.hash = `#/times/${teamId}/letras/biblioteca`;
+    toast("Letra excluída"); go(`/times/${teamId}/letras/biblioteca`);
   });
   void canManageTeam;
 }
