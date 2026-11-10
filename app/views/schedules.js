@@ -1,5 +1,6 @@
 // Escalas: criação/edição com sugestão automática, detalhe e calendários (geral, do time e pessoal).
 import { parseKey, SHARP_NAMES } from "../lib/keys.js";
+import { MAX_REPEAT, addDays, repeatDates, repeatUntilDefault, repeatLabel } from "../lib/repeat.js";
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, isAdmin, canManageTeam, isStaff, sheet, toast, errMsg, busy, on, go,
   empty, spinner, fDate, fDateLong, fTime, fDow, fDay, fMon, ymd, fromLocal, confirmDialog, roleIcon, linkify, fDur, fMonthYear, cap, teamHasRepertoire, teamHas } from "../core.js";
 import { schedRow } from "./home.js";
@@ -137,7 +138,7 @@ async function editor(el, scheduleId, teamId) {
     return w;
   };
 
-  const REPEATS = [["none", "Não se repete"], ["weekly", "Toda semana"], ["biweekly", "A cada 2 semanas"], ["monthly", "Todo mês"]];
+  const repeats = () => [["none", "Não se repete"], ["weekly", repeatLabel("weekly", f.date)], ["biweekly", repeatLabel("biweekly", f.date)], ["monthly", repeatLabel("monthly", f.date)]];
     const switchRow = (name, on_, title, sub, ic) => `<label class="switchrow">${icon(ic)}<span class="grow"><b>${title}</b><small>${sub}</small></span><span class="switch"><input type="checkbox" name="${name}" ${on_ ? "checked" : ""}><i></i></span></label>`;
 
   const sw = (c) => `<span class="pcol" style="background:${attr(c)}" title="${attr(c)}"></span>`;
@@ -178,9 +179,10 @@ async function editor(el, scheduleId, teamId) {
       <div class="dt3"><fieldset class="of"><legend>Data *</legend><input type="date" name="date" required value="${f.date}"></fieldset>
         <fieldset class="of"><legend>Início *</legend><input type="time" name="time" required value="${f.time}"></fieldset>
         <fieldset class="of"><legend>Término</legend><input type="time" name="end" value="${f.end}"></fieldset></div>
-      ${scheduleId ? "" : `<div class="two"><fieldset class="of"><legend>Repetir</legend><select name="repeat">${REPEATS.map(([k, l]) => `<option value="${k}" ${f.repeat === k ? "selected" : ""}>${l}</option>`).join("")}</select></fieldset>
+      ${scheduleId ? "" : `<div class="two"><fieldset class="of"><legend>Repetir</legend><select name="repeat">${repeats().map(([k, l]) => `<option value="${k}" ${f.repeat === k ? "selected" : ""}>${l}</option>`).join("")}</select></fieldset>
         ${f.repeat !== "none" ? `<fieldset class="of"><legend>Até</legend><input type="date" name="until" value="${f.until}" min="${f.date}"></fieldset>` : ""}</div>
-        ${f.repeat !== "none" ? `<p class="tiny muted" style="margin:-4px 0 12px">${icon("calendar")} Cria uma escala para cada data, com os mesmos participantes e músicas (no máximo ${MAX_REPEAT}).</p>` : ""}`}
+        ${f.repeat !== "none" ? (() => { const ds = repeatDates(f.date, f.repeat, f.until && f.until >= f.date ? f.until : f.date); const sh = (d) => fDate(d + "T12:00:00").slice(0, 5);
+          return `<p class="tiny muted" style="margin:-4px 0 12px">${icon("calendar")} ${ds.length > 1 ? `Cria ${ds.length} escalas: ${ds.slice(0, 6).map(sh).join(", ")}${ds.length > 6 ? ` … ${sh(ds[ds.length - 1])}` : ""}.` : "Escolha uma data em “Até” depois da primeira."} Cada uma com os mesmos participantes e músicas (no máximo ${MAX_REPEAT}).</p>`; })() : ""}`}
       ${hasReh ? `<div class="sec"><h3>Ensaios</h3></div>
         ${f.rehs.length ? f.rehs.map((r, i) => `<div class="reh-edit" data-reh="${i}"><div class="dt2"><fieldset class="of"><legend>Data</legend><input type="date" data-rf="date" value="${r.date}"></fieldset>
           <fieldset class="of"><legend>Hora</legend><input type="time" data-rf="time" value="${r.time}"></fieldset></div>
@@ -400,9 +402,10 @@ async function editor(el, scheduleId, teamId) {
   const readForm = () => { const form = el.querySelector("#f"); if (!form) return; const d = Object.fromEntries(new FormData(form)); Object.assign(f, { title: d.title ?? f.title, date: d.date ?? f.date, time: d.time ?? f.time, end: d.end ?? f.end, location: d.location ?? f.location, notes: d.notes ?? f.notes, publish: d.publish === "on", repeat: d.repeat ?? f.repeat, until: d.until ?? f.until }); if (hasExt) f.ask = d.ask === "on"; if (d.team) f.team = d.team; };
   el.addEventListener("change", async (e) => {
     if (e.target.name === "team") { readForm(); f.picks.clear(); f.slots.clear(); f.preset = null; if (!teamHasRepertoire(teams.find((t) => t.id === e.target.value))) f.songs = []; await loadTeam(); await loadCandidates(); await loadStageData(); draw(); return; }
-    if (["date", "time", "end"].includes(e.target.name)) { readForm(); await loadCandidates(); draw(); }
-    if (e.target.name === "repeat") { readForm(); if (f.repeat !== "none" && !f.until) f.until = addDays(f.date, f.repeat === "monthly" ? 90 : 28); draw(); }
-    if (["publish", "ask", "until"].includes(e.target.name)) readForm();
+    if (["date", "time", "end"].includes(e.target.name)) { readForm(); if (e.target.name === "date" && f.repeat !== "none" && !f.untilSet) f.until = repeatUntilDefault(f.date, f.repeat); await loadCandidates(); draw(); }
+    if (e.target.name === "repeat") { readForm(); f.untilSet = false; if (f.repeat !== "none") f.until = repeatUntilDefault(f.date, f.repeat); draw(); }
+    if (e.target.name === "until") { readForm(); f.untilSet = true; draw(); }
+    if (["publish", "ask"].includes(e.target.name)) readForm();
     if (e.target.dataset.rf) { const r = f.rehs[Number(e.target.closest("[data-reh]").dataset.reh)]; if (r) r[e.target.dataset.rf] = e.target.value; }
     if (e.target.dataset.key !== undefined) f.songs[Number(e.target.dataset.key)].song_key = e.target.value.trim() || null;
   });
@@ -558,9 +561,7 @@ async function editor(el, scheduleId, teamId) {
     }
     let dates = [f.date];
     if (!scheduleId && f.repeat !== "none") {
-      const step = f.repeat === "weekly" ? 7 : f.repeat === "biweekly" ? 14 : 0;
-      const until = f.until && f.until >= f.date ? f.until : addDays(f.date, step ? 28 : 90);
-      for (let i = 1; dates.length < MAX_REPEAT; i++) { const d = step ? addDays(f.date, step * i) : addMonths(f.date, i); if (d > until) break; dates.push(d); }
+      dates = repeatDates(f.date, f.repeat, f.until && f.until >= f.date ? f.until : repeatUntilDefault(f.date, f.repeat));
       if (dates.length > 1 && !(await confirmDialog(`Criar ${dates.length} escalas, de ${fDate(dates[0] + "T12:00:00")} a ${fDate(dates[dates.length - 1] + "T12:00:00")}?`, "Criar"))) return;
     }
     if (cueMount) { cueList = cueMount.read(); cueMount = null; }
@@ -623,7 +624,6 @@ async function editor(el, scheduleId, teamId) {
   }
 }
 
-const MAX_REPEAT = 26;
 const rehWhen = (r) => `${cap(fDow(r.starts_at)).replace(/\.$/, "")}, ${fDate(r.starts_at)} às ${fTime(r.starts_at)}`;
 const TABICO = {detalhes:"info",det:"info",participantes:"users",par:"users",musicas:"music",mus:"music",roteiro:"list",rot:"list"};
 const autosize = (t) => { if (!t) return; t.style.height = "auto"; t.style.height = `${t.scrollHeight}px`; };
@@ -634,8 +634,6 @@ const CATALOG = [["Branco", "#ffffff"], ["Off-white", "#f5efe6"], ["Bege", "#d9c
 const SUGGESTED = [["Branco e azul", ["#ffffff", "#9cc9f2", "#1b2a5c"]], ["Tons terrosos", ["#6b4226", "#b7773e", "#d9c3a0", "#6b7a3a"]], ["Preto e branco", ["#111111", "#ffffff", "#8b9099"]],
   ["Vinho e rosé", ["#7a1f35", "#e8b4b8", "#f5efe6"]], ["Verde e creme", ["#1f4d3a", "#a8cf6a", "#f5efe6"]], ["Pastel", ["#e8b4b8", "#9cc9f2", "#a8cf6a", "#f2d03b"]],
   ["Azul e dourado", ["#1b2a5c", "#2f6fd6", "#d9a521"]], ["Neutros", ["#f5efe6", "#d9c3a0", "#8b9099", "#3c4048"]]];
-const addDays = (d, n) => { const x = new Date(d + "T12:00:00"); x.setDate(x.getDate() + n); return ymd(x); };
-const addMonths = (d, n) => { const x = new Date(d + "T12:00:00"); const day = x.getDate(); x.setDate(1); x.setMonth(x.getMonth() + n); x.setDate(Math.min(day, new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate())); return ymd(x); };
 
 export function songPicker(selected, done, { title = "Adicionar músicas", multi = true } = {}) {
   const s = sheet(`<h3>${title}</h3><label class="search mb" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Buscar no repertório" enterkeyhint="search" autocomplete="off"></label>

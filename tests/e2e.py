@@ -709,6 +709,8 @@ with sync_playwright() as pw:
     bruno.locator("input[name=ask]").evaluate("e => e.click()")
     assert bruno.locator("select[name=team], input[name=location]").count() == 0   # sem escolher time nem local: a escala é do time atual
     assert bruno.locator("textarea[name=notes]").get_attribute("maxlength") == "500"
+    expect(bruno.locator("select[name=repeat] option[value=weekly]")).to_contain_text("Toda "); expect(bruno.locator("select[name=repeat] option[value=weekly]")).to_contain_text("-feira")
+    expect(bruno.locator("#f")).to_contain_text("Cria 3 escalas")   # d0, d0+7, d0+14 (até d1 = d0+14)
     shot(bruno, "08b-escala-repetir")
     # a mesma pessoa em duas funções pede confirmação de quem escala
     bruno.locator("[data-etab=participantes]").click()
