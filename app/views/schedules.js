@@ -57,7 +57,7 @@ async function editor(el, scheduleId, teamId) {
     location: sched?.location || churchEv?.location || "", notes: sched?.notes || "",
     // por função: [{user_id}]
     picks: new Map(), slots: new Map(), songs: songsSel,
-    tab: "detalhes", publish: sched ? sched.status === "published" : true,
+    tab: ["detalhes", "participantes", "musicas", "roteiro"].includes(/[?&]aba=(\w+)/.exec(location.hash)?.[1]) ? /[?&]aba=(\w+)/.exec(location.hash)[1] : "detalhes", publish: sched ? sched.status === "published" : true,
     rehs: [],
     ask: sched?.ask_confirmation !== false, palettes: (sched?.palettes || []).map((x) => ({ desc: x.desc || "", colors: [...(x.colors || [])] })), view: "main", repeat: "none", until: "",
   };
@@ -663,7 +663,8 @@ async function detail(el, id, tab = "det") {
     return (cells.length ? stageHTML(cells.map((c) => c.sl), (sl) => { const c = cells.find((x) => x.sl.id === sl.id); return { name: c.a.role_name || "Função", who: { avatar: avatar(ppl.get(c.a.user_id), 54, false), label: personName(ppl, c.a.user_id).split(" ")[0] } }; }, { cls: "readonly" }) : `<div class="li muted small">Ninguém escalado nas posições do palco.</div>`)
       + (extra.length ? `<div class="sec"><h3>Fora do palco</h3></div><div class="list">${extra.map((a) => `<div class="li">${avatar(ppl.get(a.user_id), 40, false)}<span class="grow"><span class="t">${esc(personName(ppl, a.user_id))}</span><span class="s">${esc(a.role_name || "Sem função")}</span></span></div>`).join("")}</div>` : "");
   };
-  const manageBar = () => manage ? `<div class="row gap mt wrap"><a class="btn ghost grow" href="#/escala/${id}/editar">${icon("edit")} Editar</a>
+  const editHref = () => `#/escala/${id}/editar${{ par: "?aba=participantes", mus: "?aba=musicas", rot: "?aba=roteiro" }[tab] || ""}`;
+  const manageBar = () => manage ? `<div class="row gap mt wrap"><a class="btn ghost grow" href="${editHref()}">${icon("edit")} Editar</a>
         ${s.status === "draft" ? `<button class="btn primary grow" id="pub">${icon("check")} Publicar</button>` : ""}<button class="btn danger" id="del">${icon("trash")}</button></div>` : "";
   // Ensaios em destaque (times de louvor sempre mostram; os demais só quando há ensaio marcado)
   const dayWord = (iso) => {
@@ -710,7 +711,7 @@ async function detail(el, id, tab = "det") {
   el.querySelectorAll("[data-pv]").forEach((b) => b.addEventListener("click", () => { try { localStorage.setItem(PVIEW_KEY, b.dataset.pv); } catch { /* ok */ } detail(el, id, tab); }));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
   el.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", async () => {
-    if (b.dataset.goto === "edit") return go(`/escala/${id}/editar`);
+    if (b.dataset.goto === "edit") return go(editHref().slice(1));
     if (b.dataset.goto !== "pkg") return detail(el, id, b.dataset.goto);
     busy(b);
     try { const n = await downloadPackage(s); toast(`Pacote gerado com ${n} ${n === 1 ? "música" : "músicas"}`); } catch (e) { toast(errMsg(e), "err"); }

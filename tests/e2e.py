@@ -846,6 +846,12 @@ with sync_playwright() as pw:
     bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
     bruno.go_back()
     assert not bruno.url.endswith("/editar"), "o voltar reabriu a edição"
+    # Editar abre na mesma aba em que estava (Músicas -> edição em Músicas)
+    bruno.goto(f"{BASE}/#/escala/{sid}")
+    bruno.locator("[data-dtab=mus]").click(); bruno.get_by_text("Editar", exact=True).first.click()
+    bruno.wait_for_url(re.compile(r"/editar\?aba=musicas$"), timeout=10000)
+    expect(bruno.locator("[data-etab=musicas]")).to_have_class(re.compile("on"), timeout=10000)
+    bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}$"), timeout=10000)
     # o líder monta o checklist da função (a rota não pode cair na lista de escalas)
     bruno.goto(f"{BASE}/#/times/{louvor_id}/servico")
     expect(bruno.locator(".pagehead h1")).to_have_text("Hora de servir", timeout=10000)
