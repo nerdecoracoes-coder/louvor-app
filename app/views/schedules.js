@@ -665,15 +665,26 @@ async function detail(el, id, tab = "det") {
   };
   const manageBar = () => manage ? `<div class="row gap mt wrap"><a class="btn ghost grow" href="#/escala/${id}/editar">${icon("edit")} Editar</a>
         ${s.status === "draft" ? `<button class="btn primary grow" id="pub">${icon("check")} Publicar</button>` : ""}<button class="btn danger" id="del">${icon("trash")}</button></div>` : "";
+  // Ensaios em destaque (times de louvor sempre mostram; os demais só quando há ensaio marcado)
+  const dayWord = (iso) => {
+    const d = Math.round((new Date(ymd(iso) + "T12:00:00Z") - new Date(ymd(new Date()) + "T12:00:00Z")) / 864e5);
+    return d === 0 ? "Hoje" : d === 1 ? "Amanhã" : d === -1 ? "Ontem" : d > 1 ? `Em ${d} dias` : `Há ${-d} dias`;
+  };
+  const rehCard = () => {
+    if (!rehs.length && s.teams?.team_type !== "louvor") return "";
+    if (!rehs.length) return `<div class="reh-card empty"><div class="reh-h">${icon("music")}<b>Ensaio</b></div><p>Ainda não há ensaio marcado para esta escala.</p>${manage ? `<a class="btn primary sm" href="#/escala/${id}/editar">${icon("plus")} Marcar ensaio</a>` : ""}</div>`;
+    const now = Date.now(), next = rehs.find((r) => new Date(r.starts_at).getTime() >= now - 3600e3);
+    return `<div class="reh-card${next && dayWord(next.starts_at) === "Hoje" ? " today" : ""}"><div class="reh-h">${icon("music")}<b>${rehs.length === 1 ? "Ensaio" : "Ensaios"}</b>${next ? `<span class="reh-when">${dayWord(next.starts_at)}</span>` : ""}</div>
+      ${rehs.map((r) => { const past = new Date(r.starts_at).getTime() < now - 3600e3; return `<div class="reh-i${past ? " past" : ""}${r === next ? " next" : ""}"><span class="reh-time">${fTime(r.starts_at)}</span><span class="grow"><b>${esc(cap(fDow(r.starts_at)).replace(/\.$/, ""))}, ${fDate(r.starts_at)}</b>${r.notes ? `<small>${esc(r.notes)}</small>` : ""}</span>${past ? `<span class="chip">Já passou</span>` : r === next ? "" : `<span class="reh-rel">${dayWord(r.starts_at)}</span>`}</div>`; }).join("")}
+    </div>`;
+  };
   const panes = {
-    det: () => `<div class="list">
+    det: () => `${rehCard()}<div class="list">
         ${row("clock", "Horário", `${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""}`)}
         ${s.location ? row("pin", "Local", esc(s.location)) : ""}
-        ${rehs.length ? row("music", rehs.length === 1 ? "Ensaio" : "Ensaios", rehs.length === 1 ? rehWhen(rehs[0]) : `${rehs.length} marcados`) : row("music", "Ensaio", manage ? "Marcar ensaio" : "Não marcado", manage ? "edit" : null)}
         ${askConf && s.status === "published" ? row("check", "Confirmados", `${seenN} de ${uniq.length}`, "par") : ""}
         ${showSongs ? row("music", "Músicas", `${songs.length} ${songs.length === 1 ? "música" : "músicas"}`, "mus") : ""}
         ${showCues ? row("list", "Roteiro", `${cues.length} ${cues.length === 1 ? "item" : "itens"}`, "rot") : ""}${row("users", "Participantes", String(uniq.length), "par")}</div>
-      ${rehs.length ? `<div class="sec">${icon("music")}<h2>${rehs.length === 1 ? "Ensaio" : "Ensaios"}</h2></div><div class="list">${rehs.map((r) => `<div class="li"><span class="grow"><span class="t">${esc(rehWhen(r))}</span>${r.notes ? `<span class="s">${esc(r.notes)}</span>` : ""}</span>${new Date(r.starts_at) < new Date() ? `<span class="chip">Já passou</span>` : ""}</div>`).join("")}</div>` : ""}
       ${letrasTeamOf() ? row("download", "Pacote do culto", "Letras e slides", "pkg") : ""}
       ${unseen ? `<button class="btn primary block mt" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length && askConf ? `<p class="small ok row gap-s mt">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
       ${s.notes ? `<div class="sec">${icon("edit")}<h2>Observações</h2></div><div class="card"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}

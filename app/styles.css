@@ -1154,3 +1154,15 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .svc-list .li.check .t { font-size: 16px; font-weight: 600; }
 .etabs .cnt[hidden] { display: none; }
 .svc-prev { margin-bottom: 14px; } .svc-prev summary { cursor: pointer; list-style: none; } .svc-prev summary::-webkit-details-marker { display: none; }
+
+/* Ensaios em destaque na escala */
+.reh-card { margin: 0 0 14px; padding: 16px; border-radius: 22px; background: linear-gradient(150deg, rgba(255,176,64,.26), rgba(255,176,64,.07)); box-shadow: inset 0 0 0 1px rgba(255,176,64,.5); }
+.reh-card.today { box-shadow: inset 0 0 0 2px #ffb040, 0 6px 24px rgba(255,176,64,.22); }
+.reh-card.empty { background: rgba(255,255,255,.04); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); } .reh-card.empty p { margin: 6px 0 10px; color: var(--muted); }
+.reh-h { display: flex; align-items: center; gap: 8px; font-size: 17px; } .reh-h .ic { width: 22px; height: 22px; color: #ffb040; }
+.reh-when { margin-left: auto; padding: 4px 12px; border-radius: 99px; background: #ffb040; color: #1a1205; font-weight: 700; font-size: 13px; }
+.reh-i { display: flex; align-items: center; gap: 14px; padding: 12px 0 2px; }
+.reh-i + .reh-i { border-top: 1px solid rgba(255,255,255,.1); margin-top: 10px; }
+.reh-time { font: 700 32px/1 var(--serif); letter-spacing: -.02em; min-width: 92px; }
+.reh-i b { display: block; font-size: 16px; } .reh-i small { display: block; color: var(--muted); margin-top: 2px; font-size: 14px; }
+.reh-rel { color: #ffb040; font-weight: 600; font-size: 13px; white-space: nowrap; } .reh-i.past { opacity: .55; }
