@@ -53,6 +53,11 @@ export async function lightFetch(L, start, end) {
 }
 export { byteRange };
 
+// Faixas que NÃO são transpostas: bateria, percussão, loops, click e guia (só harmonia e melodia mudam de tom).
+const NOPITCH = /^(bateria|bat|drum|drums|drumkit|perc|percussao|percussion|loop|loops|click|metronomo|metronome|clap|palma|palmas|kick|bumbo|snare|caixa|hihat|hat|hats|chimbal|prato|cymbal|cymbals|overhead|overheads|tom-tom|tamborim|cajon|pandeiro|shaker|timbal|timbales|conga|congas|bongo|bongos|surdo|zabumba|triangulo|guia|guide|cue|cues)$/;
+export const isUnpitchedName = (name) => String(name || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().split(/[^a-z]+/).filter(Boolean).some((w) => NOPITCH.test(w));
+const PITCH_LATENCY = 1536;   // atraso do filtro de tom (amostras), igual ao LAT do pitch-worklet.js
+
 export class Engine extends EventTarget {
   constructor({ project, tracks, markers, media, mediaUrl, token, anonKey, mix }) {
     super();
@@ -84,7 +89,7 @@ export class Engine extends EventTarget {
   async setSemitones(n) {
     n = Math.max(-12, Math.min(12, Math.round(n) || 0));
     this.semitones = n;
-    if (!this.ctx || !this.masterGain) return false;
+    if (!this.ctx || !this.busH) return false;
     try {
       if (n !== 0 && !this.pitchNode) {
         if (!this.ctx.audioWorklet) return false;
@@ -93,11 +98,14 @@ export class Engine extends EventTarget {
         this.pitchNode = new AudioWorkletNode(this.ctx, "pitch-shift", { outputChannelCount: [2], processorOptions: { semitones: n } });
       }
       this.pitchNode?.port.postMessage({ semitones: n });
-      try { this.masterGain.disconnect(); } catch {}
-      if (n === 0 || !this.pitchNode) this.masterGain.connect(this.masterAn);
-      else { this.masterGain.connect(this.pitchNode); try { this.pitchNode.disconnect(); } catch {} this.pitchNode.connect(this.masterAn); }
+      try { this.busH.disconnect(); } catch {}
+      if (n === 0 || !this.pitchNode) { this.busH.connect(this.masterGain); this.delayP.delayTime.value = 0; }
+      else {
+        this.busH.connect(this.pitchNode); try { this.pitchNode.disconnect(); } catch {} this.pitchNode.connect(this.masterGain);
+        this.delayP.delayTime.value = PITCH_LATENCY / this.ctx.sampleRate;   // as faixas sem tom esperam o filtro para continuar em sincronia
+      }
       return true;
-    } catch (e) { console.warn("tom:", e); try { this.masterGain.connect(this.masterAn); } catch {} return false; }
+    } catch (e) { console.warn("tom:", e); try { this.busH.disconnect(); this.busH.connect(this.masterGain); this.delayP.delayTime.value = 0; } catch {} return false; }
   }
 
   // ------------------------------------------------------------- grafo de áudio
@@ -110,6 +118,12 @@ export class Engine extends EventTarget {
     this.masterGain = this.ctx.createGain();
     this.masterAn = this.ctx.createAnalyser(); this.masterAn.fftSize = 512;
     this.masterGain.connect(this.masterAn); this.masterAn.connect(this.ctx.destination);
+    // dois barramentos: harmonia/melodia (passa pelo filtro de tom) e percussão/loops (segue direto, só com o atraso igualado)
+    this.busH = this.ctx.createGain(); this.busP = this.ctx.createGain(); this.delayP = this.ctx.createDelay(0.5);
+    this.busH.connect(this.masterGain); this.busP.connect(this.delayP); this.delayP.connect(this.masterGain);
+    const kids = (t) => this.tracks.filter((x) => x.parent_idx === t.idx);
+    const unpitched = (t) => isUnpitchedName(t.name) || (t.kind === "folder" && kids(t).length > 0 && kids(t).every(unpitched));
+    for (const t of this.tracks) t.unpitched = unpitched(t);
     for (const t of this.tracks) {
       t.input = this.ctx.createGain();       // soma dos itens (e das faixas filhas, se for pasta)
       t.gain = this.ctx.createGain();
@@ -121,7 +135,7 @@ export class Engine extends EventTarget {
     for (const t of this.tracks) {
       if (!t.sends_to_parent) continue;      // como no REAPER: envio para o master/pasta desligado = sem som
       const parent = t.parent_idx != null ? this.tracks.find((x) => x.idx === t.parent_idx) : null;
-      t.an.connect(parent ? parent.input : this.masterGain);
+      t.an.connect(parent ? parent.input : (t.unpitched ? this.busP : this.busH));
     }
     this.updateGains(true);
     this.dispatch("ready");

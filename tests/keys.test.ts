@@ -26,3 +26,9 @@ describe("tons", () => {
     expect(normKey("")).toBeNull();
   });
 });
+
+import { isUnpitchedName } from "../app/player/engine.js";
+test("faixas de bateria, percussão e loop não são transpostas; harmonia e melodia são", () => {
+  for (const n of ["Bateria", "DRUMS", "Drum Kit", "Percussão", "Perc 2", "Loop", "Loops 1", "Click", "Guia", "Kick In", "Hi-Hat", "Overheads", "Cajón", "Bateria (L)"]) expect(isUnpitchedName(n)).toBe(true);
+  for (const n of ["Baixo", "Violão", "Guitarra 1", "Teclado", "Pad", "Vocal Principal", "Backing", "Piano", "Cordas", "Sax"]) expect(isUnpitchedName(n)).toBe(false);
+});

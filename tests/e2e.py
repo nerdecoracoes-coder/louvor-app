@@ -321,6 +321,8 @@ with sync_playwright() as pw:
     carla.locator('[data-ks="1"]').click(); carla.locator('[data-ks="1"]').click()
     carla.wait_for_function("window.__player.semitones === 2 && !!window.__player.pitchNode", timeout=15000)
     expect(carla.locator(".keytile.shifted")).to_be_visible()
+    assert carla.evaluate("window.__player.tracks.filter((t) => t.unpitched).map((t) => t.name).sort().join()") == "Click,Drums,Guide"
+    assert carla.evaluate("window.__player.delayP.delayTime.value") > 0.02, "percussão precisa de atraso igual ao do filtro"
     carla.locator(".keytile .kb").click()
     carla.wait_for_function("window.__player.semitones === 0", timeout=15000)
     # abrir já no tom da escala: #/player/ID?tom=…

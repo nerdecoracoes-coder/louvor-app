@@ -287,15 +287,12 @@ async function editor(el, scheduleId, teamId) {
   // escolher o tom desta música NESTA escala (a versão já traz o dela; aqui dá para mudar à mão)
   function keySheet(i) {
     const s = f.songs[i]; if (!s) return;
-    const cur = parseKey(s.song_key);
-    let minor = !!cur?.minor;
+    const cur = parseKey(s.song_key);   // só tons maiores (os menores são calculados pelo tom relativo)
     const draw2 = () => `<h3>${esc(s.title)}</h3><p class="small muted" style="margin-top:-6px">Tom em que será tocada neste dia. O player abre as faixas já nesse tom.</p>
-      <div class="keygrid">${SHARP_NAMES.map((k, n) => `<button type="button" data-k="${k}" class="${cur && cur.root === n ? "on" : ""}">${k}${minor ? "m" : ""}</button>`).join("")}</div>
-      <label class="row gap-s mt small"><input type="checkbox" id="kminor" ${minor ? "checked" : ""}> Tom menor</label>
+      <div class="keygrid">${SHARP_NAMES.map((k, n) => `<button type="button" data-k="${k}" class="${cur && cur.root === n ? "on" : ""}">${k}</button>`).join("")}</div>
       <div class="row gap mt wrap">${s.ver_key && s.ver_key !== s.song_key ? `<button type="button" class="btn ghost grow" data-kver>${icon("layers")} Tom da versão (${esc(s.ver_key)})</button>` : ""}${s.song_key ? `<button type="button" class="btn ghost grow" data-kclear>Sem tom definido</button>` : ""}</div>`;
     const sh = sheet(draw2(), { wide: true });
-    on(sh.el, "click", "[data-k]", (e, b) => { s.song_key = b.dataset.k.replace(/m$/, "") + (sh.el.querySelector("#kminor").checked ? "m" : ""); sh.close(); draw(); });
-    on(sh.el, "change", "#kminor", (e, b) => { minor = b.checked; sh.el.querySelectorAll("[data-k]").forEach((x) => { x.dataset.k = x.dataset.k.replace(/m$/, "") + (minor ? "m" : ""); x.textContent = x.dataset.k; }); });
+    on(sh.el, "click", "[data-k]", (e, b) => { s.song_key = b.dataset.k; sh.close(); draw(); });
     on(sh.el, "click", "[data-kver]", () => { s.song_key = s.ver_key; sh.close(); draw(); });
     on(sh.el, "click", "[data-kclear]", () => { s.song_key = null; sh.close(); draw(); });
   }
