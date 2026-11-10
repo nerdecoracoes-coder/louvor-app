@@ -2,7 +2,7 @@
 import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDate, fDateLong, ymd, people, personName, myName, isStaff, isAdmin, canEditAgenda,
   canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire, invalidatePeople,
   teamBadge, teamHasRepertoire, teamTypeLabel, teamHas } from "../core.js";
-import { openRequestsCard } from "./multimidia.js";
+import { openRequestsCard, receivedRepertoiresCard } from "./multimidia.js";
 import { churchHome, pendingScalesCard } from "./igreja.js";
 import { teamExtras } from "./eventos.js";
 import { maybeService, previewOn } from "./servico.js";
@@ -225,6 +225,7 @@ async function teamHome(team, el, alive) {
   ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div><div class="scards">${others.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : ""}
 
   <div id="extras"></div>
+  <div id="mmrep"></div>
   <div id="reqs"></div>
   <div class="sec"><h2>Avisos do time</h2>${manage ? `<a href="#/times/${team.id}/aviso">Novo ${icon("plus")}</a>` : `<a href="#/times/${team.id}/avisos">Todos ${icon("chevronRight")}</a>`}</div>
   ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>
@@ -251,6 +252,7 @@ async function teamHome(team, el, alive) {
   on(el, "click", "[data-notice]", (e, b) => openNotice(notices.find((n) => n.id === b.dataset.notice), ppl));
   pendingScalesCard(team.id).then((h) => { const b = el.querySelector("#pend"); if (b) b.innerHTML = h; }).catch(() => {});
   teamExtras(team).then((h) => { const b = el.querySelector("#extras"); if (b) b.innerHTML = h; }).catch(() => {});
+  if (team.team_type === "multimidia") receivedRepertoiresCard().then((h) => { const b = el.querySelector("#mmrep"); if (b) b.innerHTML = h; }).catch(() => {});
   if (teamHas(team, "pedidos")) openRequestsCard(team).then((h) => { const b = el.querySelector("#reqs"); if (b) b.innerHTML = h; }).catch(() => {});
 }
 

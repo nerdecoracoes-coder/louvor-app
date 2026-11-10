@@ -9,6 +9,37 @@ export function register(route) {
   route("/pedidos/novo", (p, el) => requestForm(el, null));
   route("/pedidos/novo/:team", (p, el) => requestForm(el, p.team));
   route("/pedido/:id", (p, el, a) => requestDetail(p.id, el, a));
+  route("/repertorio-culto/:id", (p, el, a) => receivedRepertoire(p.id, el, a));
+}
+
+// ================================================================ repertórios recebidos do Louvor
+const repWhen = (r) => `${new Date(r.starts_at).toLocaleDateString("pt-BR", { weekday: "short", day: "2-digit", month: "2-digit" }).replace(".", "")} · ${fTime(r.starts_at)}`;
+const repLine = (x) => [x.version ? esc(x.version) : "Versão original", x.key ? `Tom ${esc(x.key)}` : "", x.bpm ? `${Number(x.bpm)} BPM` : ""].filter(Boolean).join(" · ");
+
+// cartão do início da Multimídia: o próximo culto em destaque e os demais abaixo
+export async function receivedRepertoiresCard() {
+  const r = await sb.rpc("media_repertoires", {});
+  const rows = r.error ? [] : r.data || [];
+  if (!rows.length) return `<div class="sec">${icon("music")}<h2>Repertórios recebidos</h2></div><div class="card small muted">Quando o Louvor enviar o repertório de um culto, ele aparece aqui.</div>`;
+  const [next, ...rest] = rows;
+  const tag = (x) => (x.mm_changed ? `<span class="tag warn">Alterado · aguarde o novo envio</span>` : "");
+  return `<div class="sec">${icon("music")}<h2>Repertórios recebidos</h2></div>
+    <a class="card reh-card" href="#/repertorio-culto/${next.id}" style="display:block;color:inherit"><div class="reh-h">${icon("music")}<b>${esc(next.title)}</b><span class="reh-when">${repWhen(next)}</span></div>
+      <p style="margin:6px 0 0">${(next.songs || []).length} ${(next.songs || []).length === 1 ? "música" : "músicas"} · ${esc(next.team_name)} ${tag(next)}</p>
+      <small class="muted">${(next.songs || []).slice(0, 3).map((x) => esc(x.title)).join(" · ")}${(next.songs || []).length > 3 ? "…" : ""}</small></a>
+    ${rest.length ? `<div class="list">${rest.map((x) => `<a class="li" href="#/repertorio-culto/${x.id}"><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(x.title)}</span><span class="s">${repWhen(x)} · ${(x.songs || []).length} músicas</span></span>${x.mm_changed ? `<span class="tag warn">Alterado</span>` : ""}${icon("chevronRight", "chev")}</a>`).join("")}</div>` : ""}`;
+}
+
+async function receivedRepertoire(id, el, alive) {
+  el.innerHTML = spinner();
+  const r = await sb.rpc("media_repertoires", { p_schedule: id });
+  const x = (r.data || [])[0];
+  el.innerHTML = `<div class="pagehead"><a class="back" href="#/inicio">${icon("chevronLeft")}</a><h1>Repertório do culto</h1></div>` + (!x
+    ? empty("music", "Repertório não encontrado", "Ele ainda não foi enviado pelo Louvor, ou você não faz parte da Multimídia.")
+    : `<div class="card"><b>${esc(x.title)}</b><p class="small muted" style="margin:4px 0 0">${repWhen(x)}${x.location ? " · " + esc(x.location) : ""}<br>Enviado pelo ${esc(x.team_name)} em ${fDate(x.mm_sent_at)} às ${fTime(x.mm_sent_at)}</p></div>
+      ${x.mm_changed ? `<div class="card mt small warn">${icon("alert")} O Louvor mudou este repertório depois do envio. Aguarde o novo envio antes de preparar os slides.</div>` : ""}
+      <div class="list mt">${(x.songs || []).map((s, i) => `<div class="song"><span class="cover"><b style="font-size:18px">${i + 1}</b></span><div class="grow" style="min-width:0"><div class="t ellipsis">${esc(s.title)}</div>
+        <div class="s">${esc(s.artist || "")}${s.artist ? " · " : ""}${repLine(s)}</div>${s.notes ? `<div class="small muted">${esc(s.notes)}</div>` : ""}</div></div>`).join("") || `<div class="card small muted">Sem músicas.</div>`}</div>`);
 }
 
 // ================================================================ pedidos de mídia

@@ -20,6 +20,9 @@ export function register(route) {
 
 const EVENT_TYPES = ["Culto de Celebração", "Culto da Família", "Culto de Domingo", "Culto de Jovens", "Ensaio", "Santa Ceia", "Evento especial", "Conferência"];
 
+// assinatura do repertório (ordem, música, versão e tom): muda quando algo que a Multimídia precisa saber muda
+const repSig = (list) => list.map((x) => [x.song_id || "", x.version_id || "", x.song_key || ""].join("|")).join(";");
+
 async function managedTeams() {
   if (isAdmin()) return must(sb.from("teams").select("*").eq("org_id", state.org.id).order("name"));
   return state.myTeams.filter((t) => canManageTeam(t.id));
@@ -525,16 +528,25 @@ async function editor(el, scheduleId, teamId) {
   async function save(status, btn) {
     if (!f.title.trim()) { f.tab = "detalhes"; draw(); return toast("Informe o nome do evento.", "err"); }
     if (!f.date || !f.time) { f.tab = "detalhes"; draw(); return toast("Informe data e horário.", "err"); }
-    // conferência das músicas: versão e tom de cada uma, para ninguém esquecer de defini-los
+    // conferência das músicas: versão e tom de cada uma, para ninguém esquecer de defini-los; e se já pode seguir para a Multimídia
+    let sendMM = false, markChanged = false;
     if (f.songs.length) {
-      const ok = await new Promise((res) => {
+      const myTeam = state.orgTeams.find((t) => t.id === f.team);
+      const canSend = status === "published" && (myTeam?.team_type === "louvor") && state.orgTeams.some((t) => t.team_type === "multimidia");
+      const sig = repSig(f.songs), wasSent = !!sched?.mm_sent_at, changed = wasSent && (sched.mm_changed || sched.mm_sig !== sig);
+      const when = wasSent ? `${fDate(sched.mm_sent_at)} às ${fTime(sched.mm_sent_at)}` : "";
+      const choice = await new Promise((res) => {
         const sh = sheet(`<h3>Confira as músicas</h3><p class="small muted" style="margin-top:-6px">Estas são as versões e os tons que serão salvos nesta escala.</p>
           <div class="list">${f.songs.map((x, i) => `<div class="li"><span class="cover" style="width:34px;height:34px"><b>${i + 1}</b></span><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(x.title)}</span>
             <span class="s">${x.version_name ? esc(x.version_name) : "Versão original"} · ${x.song_key ? `Tom ${esc(x.song_key)}` : `<b class="warn">Sem tom definido</b>`}${x.bpm != null ? ` · ${Number(x.bpm)} BPM` : ""}</span></span></div>`).join("")}</div>
-          <div class="row gap end mt"><button class="btn ghost" data-close>Revisar</button><button class="btn primary" data-songok>${icon("check")} Confirmar e salvar</button></div>`, { wide: true, onClose: () => res(false) });
-        sh.el.querySelector("[data-songok]").onclick = () => { res(true); sh.close(); };
+          ${canSend ? `<div class="card mt small ${changed ? "warn" : ""}">${changed ? `<b>O repertório já foi enviado à Multimídia (${when}) e mudou desde então.</b><br>` : wasSent ? `${icon("check")} Enviado à Multimídia em ${when}, sem mudanças.<br>` : ""}${wasSent && !changed ? "" : "O repertório está pronto e sem nada a alterar? Então ele já pode ir para o Ministério de Multimídia."}</div>` : ""}
+          <div class="row gap end mt wrap"><button class="btn ghost" data-close>Revisar</button>
+            ${canSend && (!wasSent || changed) ? `<button class="btn ghost" data-songok="save">${changed ? "Salvar sem reenviar" : "Salvar sem enviar"}</button><button class="btn primary" data-songok="send">${icon("share")} ${changed ? "Salvar e reenviar" : "Salvar e enviar à Multimídia"}</button>`
+              : `<button class="btn primary" data-songok="save">${icon("check")} Confirmar e salvar</button>`}</div>`, { wide: true, onClose: () => res(null) });
+        sh.el.querySelectorAll("[data-songok]").forEach((b) => b.onclick = () => { res(b.dataset.songok); sh.close(); });
       });
-      if (!ok) { f.tab = "musicas"; draw(); return; }
+      if (!choice) { f.tab = "musicas"; draw(); return; }
+      sendMM = choice === "send"; markChanged = choice === "save" && changed;
     }
     // datas: uma só, ou todas as repetições
     // revisão final: data/horário podem ter mudado depois de escolher as pessoas
@@ -598,6 +610,12 @@ async function editor(el, scheduleId, teamId) {
           ...(hasVer ? { version_id: s.version_id || null, version_name: s.version_name || null, bpm: s.bpm ?? null } : {}) }))));
         await must(sb.from("schedules").update({ status }).eq("id", id));
         created.push(id);
+      }
+      if (sendMM || markChanged) {
+        const sig = repSig(f.songs);
+        const rs = await Promise.all(created.map((cid) => sendMM ? sb.rpc("send_repertoire", { p_schedule: cid, p_sig: sig }) : sb.rpc("mark_repertoire_changed", { p_schedule: cid })));
+        const bad = rs.find((r) => r?.error);
+        if (bad) toast("A escala foi salva, mas o repertório não pôde ser enviado: " + errMsg(bad.error), "err"); else if (sendMM) toast("Repertório enviado à Multimídia");
       }
       toast(created.length > 1 ? `${created.length} escalas ${status === "published" ? "publicadas" : "salvas como rascunho"}` : status === "published" ? "Escala publicada" : "Rascunho salvo");
       go(created.length > 1 ? `/times/${f.team}/escalas` : `/escala/${created[0]}`);
@@ -719,6 +737,13 @@ async function detail(el, id, tab = "det") {
       ${rehs.map((r) => { const past = new Date(r.starts_at).getTime() < now - 3600e3; return `<div class="reh-i${past ? " past" : ""}${r === next ? " next" : ""}"><span class="reh-time">${fTime(r.starts_at)}</span><span class="grow"><b>${esc(cap(fDow(r.starts_at)).replace(/\.$/, ""))}, ${fDate(r.starts_at)}</b>${r.notes ? `<small>${esc(r.notes)}</small>` : ""}</span>${past ? `<span class="chip">Já passou</span>` : r === next ? "" : `<span class="reh-rel">${dayWord(r.starts_at)}</span>`}</div>`; }).join("")}
     </div>`;
   };
+  // situação do repertório na Multimídia (só para quem gerencia o time do Louvor)
+  const mmBox = () => {
+    if (!manage || s.teams?.team_type !== "louvor" || s.status !== "published" || !songs.length || !state.orgTeams.some((t) => t.team_type === "multimidia")) return "";
+    const changed = !!s.mm_sent_at && (s.mm_changed || s.mm_sig !== repSig(songs));
+    return `<div class="card small ${changed ? "warn" : ""}" style="margin-bottom:10px">${s.mm_sent_at && !changed ? `${icon("check")} Repertório enviado à Multimídia em ${fDate(s.mm_sent_at)} às ${fTime(s.mm_sent_at)}.`
+      : `${changed ? `<b>O repertório mudou depois do envio à Multimídia.</b>` : "Este repertório ainda não foi enviado à Multimídia."}<div class="mt"><button class="btn primary sm" id="mmsend">${icon("share")} ${s.mm_sent_at ? "Reenviar à Multimídia" : "Enviar à Multimídia"}</button></div>`}</div>`;
+  };
   const panes = {
     det: () => `${rehCard()}<div class="list">
         ${row("clock", "Horário", `${fTime(s.starts_at)}${s.ends_at ? "–" + fTime(s.ends_at) : ""}`)}
@@ -730,7 +755,7 @@ async function detail(el, id, tab = "det") {
       ${unseen ? `<button class="btn primary block mt" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length && askConf ? `<p class="small ok row gap-s mt">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
       ${s.notes ? `<div class="sec">${icon("edit")}<h2>Observações</h2></div><div class="card"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}
       ${(s.palettes || []).length ? `<div class="sec">${icon("shirt")}<h2>Vestimentas</h2></div><div class="card">${s.palettes.map((p) => `<div class="palview">${p.desc ? `<b class="small">${esc(p.desc)}</b>` : ""}<div class="pcolors">${(p.colors || []).map((c) => `<span class="pcol big" style="background:${attr(c)}" title="${attr(c)}"></span>`).join("")}</div></div>`).join("")}</div>` : ""}`,
-    mus: () => `<div class="list">${songs.length ? songs.map((x, i) => {
+    mus: () => `${mmBox()}<div class="list">${songs.length ? songs.map((x, i) => {
       const live = x.songs && x.songs.status !== "removed";
       return `<div class="song"><span class="cover">${x.songs?.cover_url ? `<img src="${attr(x.songs.cover_url)}" alt="">` : `<b style="font-size:18px">${i + 1}</b>`}</span>
         <a class="grow" style="color:inherit;min-width:0" ${live ? `href="#/musica/${x.song_id}"` : ""}><div class="t ellipsis">${esc(x.title_snapshot)}</div>
@@ -752,6 +777,12 @@ async function detail(el, id, tab = "det") {
   if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
   el.querySelectorAll("[data-pv]").forEach((b) => b.addEventListener("click", () => { try { localStorage.setItem(PVIEW_KEY, b.dataset.pv); } catch { /* ok */ } detail(el, id, tab); }));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
+  el.querySelector("#mmsend")?.addEventListener("click", async (e) => {
+    const b = e.currentTarget; busy(b);
+    const r = await sb.rpc("send_repertoire", { p_schedule: id, p_sig: repSig(songs) });
+    if (r.error) { busy(b, false); return toast(errMsg(r.error), "err"); }
+    toast("Repertório enviado à Multimídia"); detail(el, id, tab);
+  });
   el.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", async () => {
     if (b.dataset.goto === "edit") return go(editHref().slice(1));
     if (b.dataset.goto !== "pkg") return detail(el, id, b.dataset.goto);

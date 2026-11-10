@@ -15,7 +15,7 @@ results = []
 
 def songs_ok(pg):
     """a conferência das músicas aparece ao salvar uma escala que tem músicas"""
-    try: pg.locator("[data-songok]").click(timeout=1500)
+    try: pg.locator("[data-songok]").first.click(timeout=1500)
     except Exception: pass
 
 def ok(name):
@@ -214,7 +214,7 @@ with sync_playwright() as pw:
     toast_has(bruno, "sugest")
     expect(bruno.locator(".pcard", has_text="Carla Dias")).to_be_visible()
     shot(bruno, "08-escala-editor")
-    bruno.locator("#savebtn").click(); songs_ok(bruno)
+    bruno.locator("#savebtn").click(); bruno.wait_for_timeout(1500); songs_ok(bruno)
     expect(bruno.locator(".pagehead h1", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
     bruno.locator("[data-dtab=mus]").click(); expect(bruno.get_by_text("Emaús")).to_be_visible()
     sched_url = bruno.url.split("?")[0]
@@ -786,8 +786,15 @@ with sync_playwright() as pw:
     bruno.locator("#savebtn").click()
     expect(bruno.locator(".sheet h3", has_text="Confira as músicas")).to_be_visible(timeout=10000)
     expect(bruno.locator(".sheet")).to_contain_text("Tom D"); expect(bruno.locator(".sheet")).to_contain_text("Versão original")
-    bruno.locator("[data-songok]").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=15000)
-    ok("salvar escala: janela de conferência de versões e tons")
+    expect(bruno.locator("[data-songok=send]")).to_contain_text("enviar à Multimídia")
+    bruno.locator("[data-songok=send]").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=15000)
+    ok("salvar escala: janela de conferência de versões e tons, com envio à Multimídia")
+    rep_id = re.search(r"/escala/([0-9a-f-]{36})", bruno.url).group(1)
+    ana.goto(f"{BASE}/#/repertorio-culto/{rep_id}")
+    expect(ana.locator(".pagehead h1")).to_have_text("Repertório do culto", timeout=10000)
+    expect(ana.locator(".list .song")).to_have_count(2, timeout=10000); expect(ana.locator(".card", has_text="Culto no palco")).to_be_visible()
+    ana.goto(BASE + "/#/inicio")
+    ok("repertório enviado aparece para a Multimídia")
     bruno.locator("[data-dtab=par]").click(); bruno.locator("[data-pv=palco]").click()
     expect(bruno.locator(".stage.readonly .slot")).to_have_count(1, timeout=10000)
     assert bruno.locator(".stage.readonly .stools, .stage.readonly .handles").count() == 0
