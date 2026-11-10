@@ -609,9 +609,19 @@ const addDays = (d, n) => { const x = new Date(d + "T12:00:00"); x.setDate(x.get
 const addMonths = (d, n) => { const x = new Date(d + "T12:00:00"); const day = x.getDate(); x.setDate(1); x.setMonth(x.getMonth() + n); x.setDate(Math.min(day, new Date(x.getFullYear(), x.getMonth() + 1, 0).getDate())); return ymd(x); };
 
 export function songPicker(selected, done, { title = "Adicionar músicas", multi = true } = {}) {
-  const s = sheet(`<h3>${title}</h3><label class="search mb" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Buscar no repertório"></label>
-    <div class="list" id="res" style="max-height:58vh;overflow:auto">${spinner()}</div>${multi ? `<button class="btn primary block mt" id="ok">Concluir</button>` : ""}`, { wide: true });
+  const s = sheet(`<h3>${title}</h3><label class="search mb" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Buscar no repertório" enterkeyhint="search" autocomplete="off"></label>
+    ${multi ? `<div class="pickcount" id="cnt" aria-live="polite"></div>` : ""}
+    <div class="list" id="res">${spinner()}</div>${multi ? `<button class="btn primary block mt" id="ok">Concluir</button>` : ""}`, { wide: true });
+  s.el.classList.add("picker");
   let rows = [];
+  const picked = new Set();   // músicas marcadas nesta janela (as que já estavam na escala não contam)
+  const count = () => {
+    const c = s.el.querySelector("#cnt"), ok = s.el.querySelector("#ok"), n = picked.size;
+    if (c) c.innerHTML = n ? `Músicas selecionadas: <b>${n}</b>` : "Nenhuma música selecionada ainda";
+    if (c) c.classList.toggle("has", n > 0);
+    if (ok) ok.textContent = n ? `Concluir (${n})` : "Concluir";
+  };
+  count();
   const draw = (q = "") => {
     const ql = q.toLowerCase();
     const list = rows.filter((r) => !ql || r.title.toLowerCase().includes(ql) || (r.artist || "").toLowerCase().includes(ql));
@@ -628,9 +638,13 @@ export function songPicker(selected, done, { title = "Adicionar músicas", multi
     const r = rows.find((x) => x.id === b.dataset.s);
     if (!multi) { s.close(); return done(r); }
     const i = selected.findIndex((x) => x.song_id === r.id);
-    if (i >= 0) selected.splice(i, 1); else selected.push({ song_id: r.id, title: r.title, artist: r.artist, song_key: r.song_key, bpm: r.bpm ?? null });
+    if (i >= 0) { selected.splice(i, 1); picked.delete(r.id); } else { selected.push({ song_id: r.id, title: r.title, artist: r.artist, song_key: r.song_key, bpm: r.bpm ?? null }); picked.add(r.id); }
     b.querySelector(".selbox").classList.toggle("on", i < 0);
+    count();
+    const q = s.el.querySelector("#q"); q.focus({ preventScroll: true }); q.select();   // segue pesquisando: o que for digitado troca o texto anterior
   });
+  // tocar numa música não tira o foco da busca (o teclado fica aberto)
+  s.el.addEventListener("mousedown", (e) => { if (e.target.closest("[data-s]")) e.preventDefault(); });
   s.el.querySelector("#ok")?.addEventListener("click", () => { s.close(); done(); });
 }
 

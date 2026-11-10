@@ -267,7 +267,22 @@ export function sheet(html, { onClose, wide = false } = {}) {
   wrap.innerHTML = `<div class="sheet${wide ? " wide" : ""}" role="dialog" aria-modal="true"><div class="grab"></div>${html}</div>`;
   document.body.appendChild(wrap);
   document.body.classList.add("noscroll");
-  const close = () => { wrap.classList.add("out"); document.body.classList.remove("noscroll"); setTimeout(() => wrap.remove(), 200); onClose?.(); window.removeEventListener("hashchange", close); };
+  // teclado na tela: a folha acompanha a área realmente visível, para nada ficar escondido atrás dele
+  const vv = window.visualViewport;
+  const fit = () => {
+    if (!vv) return;
+    const kb = window.innerHeight - vv.height - vv.offsetTop > 80 || window.innerHeight - vv.height > 120;
+    if (kb) {
+      Object.assign(wrap.style, { top: vv.offsetTop + "px", left: vv.offsetLeft + "px", width: vv.width + "px", height: vv.height + "px", bottom: "auto", right: "auto" });
+      wrap.style.setProperty("--vvh", vv.height + "px");
+      wrap.classList.add("kb");
+    } else {
+      for (const k of ["top", "left", "width", "height", "bottom", "right"]) wrap.style[k] = "";
+      wrap.style.removeProperty("--vvh"); wrap.classList.remove("kb");
+    }
+  };
+  vv?.addEventListener("resize", fit); vv?.addEventListener("scroll", fit);
+  const close = () => { wrap.classList.add("out"); document.body.classList.remove("noscroll"); setTimeout(() => wrap.remove(), 200); onClose?.(); window.removeEventListener("hashchange", close); vv?.removeEventListener("resize", fit); vv?.removeEventListener("scroll", fit); };
   wrap.addEventListener("click", (e) => { if (e.target === wrap || e.target.closest("[data-close]")) close(); });
   window.addEventListener("hashchange", close);
   setTimeout(() => wrap.querySelector("input:not([type=hidden]):not([type=file]),textarea")?.focus({ preventScroll: true }), 150);
