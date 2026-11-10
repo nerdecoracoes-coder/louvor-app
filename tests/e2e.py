@@ -13,6 +13,11 @@ IGNORED = ("ERR_TUNNEL_CONNECTION_FAILED", "fonts.g", "/realtime/", "WebSocket",
 errors = []
 results = []
 
+def songs_ok(pg):
+    """a conferência das músicas aparece ao salvar uma escala que tem músicas"""
+    try: pg.locator("[data-songok]").click(timeout=1500)
+    except Exception: pass
+
 def ok(name):
     results.append(name); print("✓", name, flush=True)
 
@@ -209,7 +214,7 @@ with sync_playwright() as pw:
     toast_has(bruno, "sugest")
     expect(bruno.locator(".pcard", has_text="Carla Dias")).to_be_visible()
     shot(bruno, "08-escala-editor")
-    bruno.locator("#savebtn").click()
+    bruno.locator("#savebtn").click(); songs_ok(bruno)
     expect(bruno.locator(".pagehead h1", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
     bruno.locator("[data-dtab=mus]").click(); expect(bruno.get_by_text("Emaús")).to_be_visible()
     sched_url = bruno.url.split("?")[0]
@@ -403,7 +408,7 @@ with sync_playwright() as pw:
     ana.goto(f"{BASE}/#/escala/nova/{jovens_id}")
     ana.fill("input[name=title]", "Culto de Celebração")
     ana.fill("input[name=date]", nxt); ana.locator("input[name=date]").dispatch_event("change"); ana.fill("input[name=time]", "18:30")
-    ana.locator("#savebtn").click()
+    ana.locator("#savebtn").click(); songs_ok(ana)
     expect(ana.locator("[data-dtab=rot]")).to_be_visible(timeout=10000); ana.locator("[data-dtab=rot]").click()
     expect(ana.get_by_role("heading", name="Roteiro do culto")).to_be_visible(timeout=10000)
     ana.locator("#cedit").click(); ana.locator(".sheet #tpl").click(); ana.locator(".sheet-wrap:not(.out) #ok").click()
@@ -616,7 +621,7 @@ with sync_playwright() as pw:
     assert bruno.locator("text=Eventos da igreja com este time").count() == 0 and bruno.locator("text=Todos do mês").count() == 0
     ok("calendário do time marca o dia do evento da igreja em vermelho até criar a escala")
     bruno.locator(".pending a", has_text="Criar escala").click(); expect(bruno.locator("input[name=title]")).to_have_value("Culto de celebração", timeout=10000)
-    bruno.locator("#savebtn").click(); expect(bruno.locator(".toast").first).to_be_visible(timeout=10000)
+    bruno.locator("#savebtn").click(); songs_ok(bruno); expect(bruno.locator(".toast").first).to_be_visible(timeout=10000)
     bruno.goto(f"{BASE}/#/times/{louvor_id}/escalas"); expect(bruno.locator(".cal .d.done")).to_have_count(1, timeout=10000)
     expect(bruno.locator(".cal .d.pend")).to_have_count(0)
     ok("depois de criar a escala o dia fica azul")
@@ -730,7 +735,7 @@ with sync_playwright() as pw:
     bruno.locator("#psuggest").click(); bruno.locator(".sheet [data-sg]").first.click()
     expect(bruno.locator(".pal")).to_have_count(2); shot(bruno, "08c-paleta-cores")
     bruno.locator("[data-pback]").click(); expect(bruno.locator("#openpal")).to_contain_text("2 paletas")
-    bruno.locator("#savebtn").click(); bruno.locator(".dialog .btn.primary, .sheet .btn.primary, [data-ok]").first.click()
+    bruno.locator("#savebtn").click(); songs_ok(bruno); bruno.locator(".dialog .btn.primary, .sheet .btn.primary, [data-ok]").first.click()
     bruno.wait_for_url(re.compile(r"/escalas$"), timeout=15000)
     bruno.locator("#modebtn").click(); bruno.locator(".tlcard", has_text="Ensaio semanal").first.wait_for(timeout=10000)
     bruno.locator(".tlcard", has_text="Ensaio semanal").first.click(); expect(bruno.locator(".palview")).to_have_count(2, timeout=10000)
@@ -778,7 +783,11 @@ with sync_playwright() as pw:
     bruno.locator(".keybtn").first.click(); bruno.locator(".keygrid [data-k=D]").click()
     expect(bruno.locator(".keybtn").first).to_have_text("D", timeout=10000)
     ok("escala: tom da música escolhido pelo seletor")
-    bruno.locator("#savebtn").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=15000)
+    bruno.locator("#savebtn").click()
+    expect(bruno.locator(".sheet h3", has_text="Confira as músicas")).to_be_visible(timeout=10000)
+    expect(bruno.locator(".sheet")).to_contain_text("Tom D"); expect(bruno.locator(".sheet")).to_contain_text("Versão original")
+    bruno.locator("[data-songok]").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=15000)
+    ok("salvar escala: janela de conferência de versões e tons")
     bruno.locator("[data-dtab=par]").click(); bruno.locator("[data-pv=palco]").click()
     expect(bruno.locator(".stage.readonly .slot")).to_have_count(1, timeout=10000)
     assert bruno.locator(".stage.readonly .stools, .stage.readonly .handles").count() == 0
@@ -793,7 +802,7 @@ with sync_playwright() as pw:
     bruno.locator("#rehadd").click(); bruno.locator("[data-reh=\"0\"] [data-rf=date]").fill("2026-12-01"); bruno.locator("[data-reh=\"0\"] [data-rf=notes]").fill("Passar o repertório novo")
     bruno.locator("[data-etab=roteiro]").click(); bruno.locator("[data-ctpl]").click()
     expect(bruno.locator(".cue-edit")).to_have_count(6, timeout=10000)
-    bruno.locator("#savebtn").click(); bruno.wait_for_timeout(1500); shot(bruno, "08h-salvar-roteiro")
+    bruno.locator("#savebtn").click(); songs_ok(bruno); bruno.wait_for_timeout(1500); shot(bruno, "08h-salvar-roteiro")
     bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}(\?aba=\w+)?$"), timeout=15000)
     expect(bruno.locator(".reh-card", has_text="Passar o repertório novo")).to_be_visible(timeout=10000)
     shot(bruno, "08g-ensaio-destaque")

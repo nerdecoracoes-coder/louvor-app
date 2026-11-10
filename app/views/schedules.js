@@ -525,6 +525,17 @@ async function editor(el, scheduleId, teamId) {
   async function save(status, btn) {
     if (!f.title.trim()) { f.tab = "detalhes"; draw(); return toast("Informe o nome do evento.", "err"); }
     if (!f.date || !f.time) { f.tab = "detalhes"; draw(); return toast("Informe data e horário.", "err"); }
+    // conferência das músicas: versão e tom de cada uma, para ninguém esquecer de defini-los
+    if (f.songs.length) {
+      const ok = await new Promise((res) => {
+        const sh = sheet(`<h3>Confira as músicas</h3><p class="small muted" style="margin-top:-6px">Estas são as versões e os tons que serão salvos nesta escala.</p>
+          <div class="list">${f.songs.map((x, i) => `<div class="li"><span class="cover" style="width:34px;height:34px"><b>${i + 1}</b></span><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(x.title)}</span>
+            <span class="s">${x.version_name ? esc(x.version_name) : "Versão original"} · ${x.song_key ? `Tom ${esc(x.song_key)}` : `<b class="warn">Sem tom definido</b>`}${x.bpm != null ? ` · ${Number(x.bpm)} BPM` : ""}</span></span></div>`).join("")}</div>
+          <div class="row gap end mt"><button class="btn ghost" data-close>Revisar</button><button class="btn primary" data-songok>${icon("check")} Confirmar e salvar</button></div>`, { wide: true, onClose: () => res(false) });
+        sh.el.querySelector("[data-songok]").onclick = () => { res(true); sh.close(); };
+      });
+      if (!ok) { f.tab = "musicas"; draw(); return; }
+    }
     // datas: uma só, ou todas as repetições
     // revisão final: data/horário podem ter mudado depois de escolher as pessoas
     const risk = await elsewhere([...new Set([...f.picks.values()].flat())].filter((u) => !okElsewhere.has(u)));
