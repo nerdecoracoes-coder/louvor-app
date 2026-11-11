@@ -1,7 +1,7 @@
 // Início: perfil, atalhos, avisos, próximas escalas, aniversariantes e bloqueio de datas.
 import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDate, fDateLong, ymd, people, personName, myName, isStaff, isAdmin, canEditAgenda,
   canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire, invalidatePeople,
-  teamBadge, teamHasRepertoire, teamTypeLabel, teamHas } from "../core.js";
+  teamBadge, teamHasRepertoire, teamTypeLabel, teamHas, findTeam } from "../core.js";
 import { openRequestsCard, receivedRepertoiresCard } from "./multimidia.js";
 import { churchHome, pendingScalesCard } from "./igreja.js";
 import { teamExtras } from "./eventos.js";
@@ -42,10 +42,12 @@ export function schedRow(s, { showTeam = true, feature = false } = {}) {
   const roles = s.roles || [];
   const where = [s.location, showTeam && s.teams ? s.teams.name : null].filter(Boolean).join(" · ");
   const status = s.status === "draft" ? `<span class="tag gray">Rascunho</span>` : s.ask_confirmation === false ? "" : s.seen_at === null ? `<span class="tag soft">Nova</span>` : s.seen_at ? `<span class="seen">${icon("check")} Visto</span>` : "";
+  // quantidade de participantes e de músicas (quando a escala foi enriquecida), para não precisar abrir a escala
+  const counts = s.people ? `<span class="sc-counts" style="margin-left:auto"><span>${icon("users")}${s.people.length}</span><span>${icon("music")}${s.songCount || 0}</span></span>` : "";
   return `<a class="sched${feature ? " feature" : ""}${s.status === "draft" ? " draft" : ""}" href="#/escala/${s.id}">
     <div class="date"><span>${fDow(s.starts_at)}</span><b>${fDay(s.starts_at)}</b><span>${fMon(s.starts_at)}</span></div>
     <div class="info"><h3>${esc(s.title)}</h3><div class="meta">${fTime(s.starts_at)}${where ? ` · ${esc(where)}` : ""}</div>
-      ${roles.length || status ? `<div class="side">${roles.map((r) => `<span class="pill">${esc(r)}</span>`).join("")}${status}</div>` : ""}</div>
+      ${roles.length || status || counts ? `<div class="side">${roles.map((r) => `<span class="pill">${esc(r)}</span>`).join("")}${status}${counts}</div>` : ""}</div>
     ${icon("chevronRight", "chev")}</a>`;
 }
 
@@ -198,11 +200,31 @@ async function teamHome(team, el, alive) {
     people(),
   ]);
   if (!alive()) return;
-  const myUps = mine.filter((s) => s.team_id === team.id).slice(0, 12);
-  const mineIds = new Set(myUps.map((s) => s.id));
+  // "meus próximos compromissos": escalas (de todos os times), ensaios dessas escalas e eventos dos times da pessoa
+  const myScheds = mine.slice(0, 12);
+  const mineIds = new Set(mine.filter((s) => s.team_id === team.id).map((s) => s.id));
   const others = next.filter((s) => !mineIds.has(s.id)).slice(0, 3);
-  await enrichSchedules([...myUps, ...others]).catch((e) => console.warn(e));
+  const [rehs, evts] = await Promise.all([
+    myScheds.length ? sb.from("schedule_rehearsals").select("id,schedule_id,starts_at,notes").in("schedule_id", myScheds.map((s) => s.id)).gte("starts_at", now).order("starts_at") : { data: [] },
+    state.myTeams.length ? sb.from("team_events").select("id,team_id,title,kind,starts_at,location").in("team_id", state.myTeams.map((t) => t.id)).gte("starts_at", now).order("starts_at").limit(10) : { data: [] },
+  ]);
+  await enrichSchedules([...myScheds, ...others]).catch((e) => console.warn(e));
   if (!alive()) return;
+  const KIND = { reuniao: "Reunião", fraternizacao: "Fraternização", ensaio: "Ensaio", estudo: "Estudo", outro: "Evento" };
+  const miniCard = ({ at, ic, tag, title, sub, href, tid }) => {
+    const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date(at)));
+    const tname = tid !== team.id ? findTeam(tid)?.name || state.orgTeams.find((t) => t.id === tid)?.name || "" : "";
+    return { at, tid, html: `<a class="scard" href="${href}" data-team="${tid}">
+      <div class="sc-top"><span class="sc-when">${icon(ic || (hour >= 18 || hour < 5 ? "moon" : "sun"))} ${esc(cap(fDow(at)).replace(/\.$/, ""))}, ${fTime(at)}</span><span class="sc-date">${Number(fDay(at))} ${MONTHS[Number(ymd(at).slice(5, 7)) - 1]}</span></div>
+      <h3>${esc(title)}</h3><div class="sc-sub"><span class="tag soft">${esc(tag)}</span>${tname ? `<span class="muted small ellipsis">${esc(tname)}</span>` : ""}</div>
+      ${sub ? `<div class="muted small ellipsis">${esc(sub)}</div>` : ""}</a>` };
+  };
+  const byId = new Map(myScheds.map((s) => [s.id, s]));
+  const compromissos = [
+    ...myScheds.map((s) => ({ at: s.starts_at, tid: s.team_id, html: schedCard(s, { showTeam: s.team_id !== team.id, ppl }).replace('<a class="scard"', `<a class="scard" data-team="${s.team_id}"`) })),
+    ...(rehs.data || []).filter((r) => byId.has(r.schedule_id)).map((r) => miniCard({ at: r.starts_at, ic: "music", tag: "Ensaio", title: `Ensaio · ${byId.get(r.schedule_id).title}`, sub: r.notes, href: `#/escala/${r.schedule_id}`, tid: byId.get(r.schedule_id).team_id })),
+    ...(evts.error ? [] : evts.data || []).map((e) => miniCard({ at: e.starts_at, tag: KIND[e.kind] || "Evento", title: e.title, sub: e.location, href: `#/times/${e.team_id}/eventos/${e.id}`, tid: e.team_id })),
+  ].sort((a, b) => a.at.localeCompare(b.at)).slice(0, 12);
   const roleNames = roles.map((r) => r.music_roles).filter(Boolean).sort((a, b) => a.sort - b.sort).map((r) => r.name);
   const memberIds = new Set(members.map((m) => m.user_id));
   const name = myName().split(" ")[0] || "você";
@@ -219,8 +241,8 @@ async function teamHome(team, el, alive) {
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div id="pend"></div>
-  <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/times/${team.id}/escalas">Ver todas ${icon("chevronRight")}</a></div>
-  <div id="ups">${myUps.length ? `<div class="scards">${myUps.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : empty("calendar", "Você não está em nenhuma escala por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
+  <div class="sec"><h2>Meus próximos compromissos</h2><a href="#/calendario/meu">Agenda ${icon("chevronRight")}</a></div>
+  <div id="ups">${compromissos.length ? `<div class="scards">${compromissos.map((c) => c.html).join("")}</div>` : empty("calendar", "Você não tem compromissos por enquanto", manage ? `<a class="link" href="#/escala/nova/${team.id}">Criar uma escala</a>` : "Quando o líder publicar uma escala com você, ela aparece aqui.")}</div>
   ${manage ? `<div class="chips" style="flex-wrap:wrap;margin-top:10px"><a class="chip" href="#/times/${team.id}/servico">${icon("heart")} Hora de servir</a>${previewOn() ? `<a class="chip" href="#/servico/teste">${icon("eye")} Testar Hora de servir</a>` : ""}</div>` : ""}
   ${others.length ? `<div class="sec"><h2>Próximas do time</h2></div><div class="scards">${others.map((s) => schedCard(s, { showTeam: false, ppl })).join("")}</div>` : ""}
 
@@ -244,6 +266,14 @@ async function teamHome(team, el, alive) {
   };
   el.querySelector("#addphoto")?.addEventListener("click", pickPhoto);
   el.querySelector("#heroav").onclick = () => (noPhoto ? pickPhoto() : go("/perfil"));
+  // compromisso de outro time: pergunta antes de trocar de time e então abre o compromisso lá
+  el.querySelector("#ups")?.addEventListener("click", async (e) => {
+    const a = e.target.closest("a[data-team]"); if (!a || a.dataset.team === team.id) return;
+    e.preventDefault(); e.stopPropagation();
+    const t = findTeam(a.dataset.team) || state.orgTeams.find((x) => x.id === a.dataset.team);
+    if (await confirmDialog(`Este compromisso é do time ${t?.name || "outro time"}. Deseja trocar para esse time para visualizá-lo?`, "Trocar de time"))
+      document.dispatchEvent(new CustomEvent("somos:switch-team", { detail: { team: a.dataset.team, path: a.getAttribute("href").replace(/^#/, "") } }));
+  });
   const car = el.querySelector("#notices");
   if (car) car.addEventListener("scroll", () => {
     const i = Math.round(car.scrollLeft / car.clientWidth);

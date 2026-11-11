@@ -595,7 +595,7 @@ with sync_playwright() as pw:
     shot(carla, "16-organizacoes")
     carla.locator(".sheet [data-org]", has_text="INVT Tijuca").click()
     expect(carla.locator(".brand")).to_contain_text("INVT Tijuca", timeout=10000)
-    expect(carla.locator("#ups .scard")).to_have_count(1, timeout=10000)
+    expect(carla.locator("#ups .scard")).to_have_count(2, timeout=10000)   # a escala e o ensaio dela (compromissos)
     carla.locator("[data-act=space]").click(); carla.locator(".sheet [data-org]", has_text="Igreja do Bairro").click()
     expect(carla.locator(".brand")).to_contain_text("Igreja do Bairro", timeout=10000)
     carla.goto(BASE + "/#/musicas"); expect(carla.locator(".song")).to_have_count(0, timeout=10000)
@@ -709,7 +709,7 @@ with sync_playwright() as pw:
     bruno.locator("input[name=ask]").evaluate("e => e.click()")
     assert bruno.locator("select[name=team], input[name=location]").count() == 0   # sem escolher time nem local: a escala é do time atual
     assert bruno.locator("textarea[name=notes]").get_attribute("maxlength") == "500"
-    expect(bruno.locator("select[name=repeat] option[value=weekly]")).to_contain_text("Toda "); expect(bruno.locator("select[name=repeat] option[value=weekly]")).to_contain_text("-feira")
+    expect(bruno.locator("select[name=repeat] option[value=weekly]")).to_have_text(re.compile(r"^Toda (domingo|segunda-feira|terça-feira|quarta-feira|quinta-feira|sexta-feira|sábado)$"))
     expect(bruno.locator("#f")).to_contain_text("Cria 3 escalas")   # d0, d0+7, d0+14 (até d1 = d0+14)
     shot(bruno, "08b-escala-repetir")
     # a mesma pessoa em duas funções pede confirmação de quem escala
@@ -901,6 +901,19 @@ with sync_playwright() as pw:
     bruno.locator("a[href^='#/musica/']").first.click(); bruno.wait_for_url(re.compile(r"/musica/"), timeout=10000)
     bruno.locator(".pagehead a.back").click(); bruno.wait_for_url(re.compile(r"/musicas$"), timeout=10000)
     ok("regra geral do voltar: retorna à tela anterior")
+    # compromissos de todos os times no início; os de outro time pedem confirmação para trocar de time
+    q = lambda sql: subprocess.run(["psql", "-At", "-c", sql], env=env0, capture_output=True, text=True, check=True).stdout.strip()
+    media_id = q("select id from teams where name = 'Jovens' limit 1"); bru = q("select id from profiles where full_name like 'Bruno%' limit 1")
+    q(f"""insert into team_members (team_id, user_id, org_id) select '{media_id}', '{bru}', org_id from teams where id = '{media_id}' on conflict do nothing;
+      with s as (insert into schedules (org_id, team_id, title, starts_at, status, created_by) select org_id, '{media_id}', 'Culto da Mídia', now() + interval '3 days', 'published', '{bru}' from teams where id = '{media_id}' returning id, org_id)
+      insert into schedule_assignments (schedule_id, org_id, team_id, user_id, role_name) select id, org_id, '{media_id}', '{bru}', 'Projeção' from s""")
+    bruno.goto(f"{BASE}/#/"); bruno.reload()
+    expect(bruno.get_by_text("Meus próximos compromissos")).to_be_visible(timeout=10000)
+    bruno.locator(f"#ups a.scard[data-team='{media_id}']", has_text="Culto da Mídia").click()
+    expect(bruno.locator(".sheet, .dialog, .modal").filter(has_text="Deseja trocar para esse time")).to_be_visible(timeout=10000)
+    bruno.locator(".sheet [data-ok]").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}"), timeout=10000)
+    expect(bruno.locator(".pagehead h1", has_text="Culto da Mídia")).to_be_visible(timeout=10000)
+    ok("início: compromissos de todos os times; outro time pede confirmação e abre o compromisso lá")
     bruno.goto(f"{BASE}/#/escala/{sid}")
     bruno.locator("[data-dtab=mus]").click(); bruno.get_by_text("Editar", exact=True).first.click()
     bruno.wait_for_url(re.compile(r"/editar\?aba=musicas$"), timeout=10000)

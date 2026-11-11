@@ -259,6 +259,8 @@ async function render() {
 }
 window.addEventListener("hashchange", render);
 // links dentro de uma tela de edição que levam para fora dela não empilham a edição no histórico
+// troca de time vinda de um compromisso do início ("este compromisso é do time X, deseja trocar?")
+document.addEventListener("somos:switch-team", (e) => { setSpace(e.detail.team); renderShell(); go(e.detail.path); });
 document.addEventListener("click", (e) => {
   if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
   // regra do app inteiro: o botão voltar leva à tela exatamente anterior (menos edições já fechadas); sem anterior, usa o destino padrão do botão

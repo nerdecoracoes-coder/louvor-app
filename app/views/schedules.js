@@ -3,7 +3,7 @@ import { parseKey, SHARP_NAMES } from "../lib/keys.js";
 import { MAX_REPEAT, addDays, repeatDates, repeatUntilDefault, repeatLabel } from "../lib/repeat.js";
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, people, personName, isAdmin, canManageTeam, isStaff, sheet, toast, errMsg, busy, on, go,
   empty, spinner, fDate, fDateLong, fTime, fDow, fDay, fMon, ymd, fromLocal, confirmDialog, roleIcon, linkify, fDur, fMonthYear, cap, teamHasRepertoire, teamHas } from "../core.js";
-import { schedRow } from "./home.js";
+import { schedRow, enrichSchedules } from "./home.js";
 import { scheduleExtras, cueEditor, mountCueList, cueRows, roteiroOn } from "./multimidia.js";
 import { downloadPackage, letrasTeamOf } from "./letras.js";
 import { loadStage, stageHTML } from "./palco.js";
@@ -128,7 +128,7 @@ async function editor(el, scheduleId, teamId) {
     const c = candInfo(uid, roleId); const w = [];
     if (c && !c.available) w.push(`Indisponível${c.unavailable_note ? ": " + c.unavailable_note : ""}`);
     if (c && c.monthly_limit != null && c.month_count >= c.monthly_limit) w.push(`Limite do mês (${c.month_count}/${c.monthly_limit})`);
-    if (c && c.same_day_count > 0) w.push("Já escalado(a) neste dia");
+    if (c && c.same_day_count > 0) w.push("Já escalado(a) neste horário");
     const also = rolesOf(uid).filter((rid) => rid !== roleId).map((rid) => teamRoles.find((r) => r.id === rid)?.name).filter(Boolean);
     if (also.length) w.push(`Também escalado(a) como ${also.join(", ")}`);
     const others = [...f.picks.values()].flat().filter((x) => x !== uid);
@@ -861,6 +861,7 @@ async function calendar(el, scope) {
       cells.push(`<button class="d${key === today ? " today" : ""}${key === selDay ? " sel" : ""}${dayState(key)}" data-day="${key}">${d}<span class="marks">${n.slice(0, 3).map((e) => `<i style="background:${attr(e.teams?.accent_color || "var(--accent)")}"></i>`).join("")}</span></button>`);
     }
     const dayEvs = evs.filter((e) => ymd(e.starts_at) === selDay);
+    if (mode !== "timeline" && dayEvs.length) await enrichSchedules(dayEvs);
     const myTeamIds = new Set(state.myTeams.map((t) => t.id));
     const teamChips = (isAdmin() ? allTeams : allTeams.filter((t) => myTeamIds.has(t.id)));
     el.innerHTML = `<div class="pagehead">${inTeam ? "" : `<a class="back" href="#/">${icon("chevronLeft")}</a>`}<h1>${inTeam ? "Escalas" : scope === "meu" ? "Minhas escalas" : "Calendário"}</h1><button class="iconbtn" id="modebtn" aria-label="${mode === "timeline" ? "Ver em calendário" : "Ver em linha do tempo"}" title="${mode === "timeline" ? "Modo calendário" : "Modo linha do tempo"}">${icon(mode === "timeline" ? "calendar" : "list")}</button>${inTeam && canManageTeam(scope.slice(5)) ? `<a class="iconbtn add" id="addsched" href="#/escala/nova/${scope.slice(5)}?data=${selDay}" aria-label="Nova escala em ${fDate(selDay + "T12:00:00")}">${icon("plus")}</a>` : ""}</div>
