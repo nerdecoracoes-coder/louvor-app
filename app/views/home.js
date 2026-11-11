@@ -210,20 +210,25 @@ async function teamHome(team, el, alive) {
   ]);
   await enrichSchedules([...myScheds, ...others]).catch((e) => console.warn(e));
   if (!alive()) return;
-  const KIND = { reuniao: "Reunião", fraternizacao: "Fraternização", ensaio: "Ensaio", estudo: "Estudo", outro: "Evento" };
-  const miniCard = ({ at, ic, tag, title, sub, href, tid }) => {
-    const hour = Number(new Intl.DateTimeFormat("pt-BR", { hour: "numeric", hour12: false, timeZone: "America/Sao_Paulo" }).format(new Date(at)));
+  // cada tipo de compromisso tem a sua cor e o seu ícone: escala (azul), ensaio (âmbar), reunião/estudo (violeta), fraternização (rosa), outros (verde-água)
+  const KIND = {
+    ensaio: { label: "Ensaio", ic: "mic", rgb: "229,180,90" }, reuniao: { label: "Reunião", ic: "users", rgb: "167,139,250" }, estudo: { label: "Estudo", ic: "book", rgb: "167,139,250" },
+    fraternizacao: { label: "Fraternização", ic: "heart", rgb: "240,143,176" }, outro: { label: "Evento", ic: "calendar", rgb: "95,207,207" },
+  };
+  const miniCard = ({ at, kind, title, sub, href, tid }) => {
+    const k = KIND[kind] || KIND.outro;
     const tname = tid !== team.id ? findTeam(tid)?.name || state.orgTeams.find((t) => t.id === tid)?.name || "" : "";
-    return { at, tid, html: `<a class="scard" href="${href}" data-team="${tid}">
-      <div class="sc-top"><span class="sc-when">${icon(ic || (hour >= 18 || hour < 5 ? "moon" : "sun"))} ${esc(cap(fDow(at)).replace(/\.$/, ""))}, ${fTime(at)}</span><span class="sc-date">${Number(fDay(at))} ${MONTHS[Number(ymd(at).slice(5, 7)) - 1]}</span></div>
-      <h3>${esc(title)}</h3><div class="sc-sub"><span class="tag soft">${esc(tag)}</span>${tname ? `<span class="muted small ellipsis">${esc(tname)}</span>` : ""}</div>
+    return { at, tid, html: `<a class="scard k" style="--k:${k.rgb}" href="${href}" data-team="${tid}">
+      <span class="kmark">${icon(k.ic)}</span>
+      <div class="sc-top"><span class="sc-when">${icon(k.ic)} ${esc(cap(fDow(at)).replace(/\.$/, ""))}, ${fTime(at)}</span><span class="sc-date">${Number(fDay(at))} ${MONTHS[Number(ymd(at).slice(5, 7)) - 1]}</span></div>
+      <h3>${esc(title)}</h3><div class="sc-sub"><span class="tag k">${esc(k.label)}</span>${tname ? `<span class="muted small ellipsis">${esc(tname)}</span>` : ""}</div>
       ${sub ? `<div class="muted small ellipsis">${esc(sub)}</div>` : ""}</a>` };
   };
   const byId = new Map(myScheds.map((s) => [s.id, s]));
   const compromissos = [
     ...myScheds.map((s) => ({ at: s.starts_at, tid: s.team_id, html: schedCard(s, { showTeam: s.team_id !== team.id, ppl }).replace('<a class="scard"', `<a class="scard" data-team="${s.team_id}"`) })),
-    ...(rehs.data || []).filter((r) => byId.has(r.schedule_id)).map((r) => miniCard({ at: r.starts_at, ic: "music", tag: "Ensaio", title: `Ensaio · ${byId.get(r.schedule_id).title}`, sub: r.notes, href: `#/escala/${r.schedule_id}`, tid: byId.get(r.schedule_id).team_id })),
-    ...(evts.error ? [] : evts.data || []).map((e) => miniCard({ at: e.starts_at, tag: KIND[e.kind] || "Evento", title: e.title, sub: e.location, href: `#/times/${e.team_id}/eventos/${e.id}`, tid: e.team_id })),
+    ...(rehs.data || []).filter((r) => byId.has(r.schedule_id)).map((r) => miniCard({ at: r.starts_at, kind: "ensaio", title: `Ensaio · ${byId.get(r.schedule_id).title}`, sub: r.notes, href: `#/escala/${r.schedule_id}`, tid: byId.get(r.schedule_id).team_id })),
+    ...(evts.error ? [] : evts.data || []).map((e) => miniCard({ at: e.starts_at, kind: e.kind, title: e.title, sub: e.location, href: `#/times/${e.team_id}/eventos/${e.id}`, tid: e.team_id })),
   ].sort((a, b) => a.at.localeCompare(b.at)).slice(0, 12);
   const roleNames = roles.map((r) => r.music_roles).filter(Boolean).sort((a, b) => a.sort - b.sort).map((r) => r.name);
   const memberIds = new Set(members.map((m) => m.user_id));

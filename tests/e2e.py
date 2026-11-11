@@ -909,6 +909,11 @@ with sync_playwright() as pw:
       insert into schedule_assignments (schedule_id, org_id, team_id, user_id, role_name) select id, org_id, '{media_id}', '{bru}', 'Projeção' from s""")
     bruno.goto(f"{BASE}/#/"); bruno.reload()
     expect(bruno.get_by_text("Meus próximos compromissos")).to_be_visible(timeout=10000)
+    q(f"""insert into team_events (team_id, org_id, title, kind, starts_at, location) select id, org_id, 'Reunião de líderes', 'reuniao', now() + interval '2 days', 'Sala 2' from teams where name = 'Louvor Domingo';
+      insert into team_events (team_id, org_id, title, kind, starts_at) select id, org_id, 'Fraternização do time', 'fraternizacao', now() + interval '4 days' from teams where name = 'Louvor Domingo'""")
+    bruno.reload(); expect(bruno.locator("#ups a.scard.k")).not_to_have_count(0, timeout=10000); bruno.wait_for_timeout(600)
+    shot(bruno, "17-compromissos")
+    bruno.locator("#ups .scards").evaluate("e => { e.style.scrollSnapType = 'none'; e.scrollLeft = 640; }"); bruno.wait_for_timeout(300); shot(bruno, "17b-compromissos-tipos")
     bruno.locator(f"#ups a.scard[data-team='{media_id}']", has_text="Culto da Mídia").click()
     expect(bruno.locator(".sheet, .dialog, .modal").filter(has_text="Deseja trocar para esse time")).to_be_visible(timeout=10000)
     bruno.locator(".sheet [data-ok]").click(); bruno.wait_for_url(re.compile(r"/escala/[0-9a-f-]{36}"), timeout=10000)
