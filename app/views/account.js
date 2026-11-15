@@ -1,6 +1,6 @@
 // Conta, convites, primeira organização, perfil, notificações, configurações da igreja e o Google Drive do repertório.
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fRel,
-  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, TEAM_TYPES, isRepertoireStaff, CHURCH_SIGNUP } from "../core.js";
+  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, TEAM_TYPES, isRepertoireStaff, CHURCH_SIGNUP, isDeveloper } from "../core.js";
 import { colorPicker, readColor, bindColor } from "./teams.js";
 
 export function register(route) {
@@ -151,7 +151,7 @@ export function onboarding(el) {
   el.innerHTML = authShell(`${logo()}<h1>Olá, ${esc((state.profile?.full_name || "").split(" ")[0])}!</h1>
     <p class="sub">Sua conta está pronta. Crie a sua equipe de louvor ou entre em uma já existente.</p>
     <div class="list menu"><a class="li" href="#/nova-equipe">${icon("mic")}<span class="grow"><span class="t">Criar minha equipe de louvor</span><span class="s">Você será o líder da equipe</span></span>${icon("chevronRight", "chev")}</a>
-      ${CHURCH_SIGNUP ? `<a class="li" href="#/nova-org">${icon("org")}<span class="grow"><span class="t">Cadastrar uma igreja</span><span class="s">Você será o administrador geral</span></span>${icon("chevronRight", "chev")}</a>` : ""}
+      ${CHURCH_SIGNUP || isDeveloper() ? `<a class="li" href="#/nova-org">${icon("org")}<span class="grow"><span class="t">Cadastrar uma igreja</span><span class="s">Você será o administrador geral</span></span>${icon("chevronRight", "chev")}</a>` : ""}
       <button class="li" id="paste">${icon("link")}<span class="grow"><span class="t">Tenho um link de convite</span><span class="s">Cole o link enviado pelo líder</span></span>${icon("chevronRight", "chev")}</button></div>
     <button class="btn ghost block mt" id="out">${icon("logout")} Sair da conta</button>`);
   el.querySelector("#paste").onclick = () => {

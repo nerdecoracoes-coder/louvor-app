@@ -45,7 +45,9 @@ export const RESTRICT_TO_TEAMS = true;
 // o app hoje é um aplicativo de equipe de louvor: quem se cadastra cria a sua equipe (espaço próprio, org.team_only) e só vê a página dela.
 // Quando o sistema de igreja for liberado, basta ligar CHURCH_SIGNUP e/ou desligar team_only da igreja.
 export const CHURCH_SIGNUP = false;
-export const teamOnly = () => globalThis.SOMOS_OPEN !== true && state.myTeams.length > 0 && (!!state.org?.team_only || (RESTRICT_TO_TEAMS && !isAdmin()));
+// modo desenvolvedor (profiles.is_developer, ligado só pelo SQL Editor): enxerga o app completo enquanto o resto não é liberado
+export const isDeveloper = () => state.profile?.is_developer === true;
+export const teamOnly = () => globalThis.SOMOS_OPEN !== true && !isDeveloper() && state.myTeams.length > 0 && (!!state.org?.team_only || (RESTRICT_TO_TEAMS && !isAdmin()));
 // caminhos que ficam fechados nesse modo (nada além do que é do time e da própria pessoa)
 export function blockedInTeamOnly(path) {
   if (!teamOnly()) return false;

@@ -598,6 +598,11 @@ with sync_playwright() as pw:
     dani.locator("[data-act=menu], #menubtn, header button").first.click()
     expect(dani.locator("body")).not_to_contain_text("Visão geral da igreja")
     shot(dani, "18-equipe-independente"); ok("cadastro de equipe de louvor independente: só a página da equipe, sem área de igreja")
+    # modo desenvolvedor: a marca no perfil devolve o app completo, mesmo numa equipe "somente time"
+    subprocess.run(["psql", "-q", "-c", "update profiles set is_developer = true where full_name = 'Dani Souza'"], env=dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres"), check=True)
+    dani.reload(); dani.goto(BASE + "/#/igreja"); dani.wait_for_timeout(1000); expect(dani.locator(".toast").filter(has_text="não está liberada")).to_have_count(0)
+    expect(dani.locator("body")).to_contain_text("Avisos da igreja", timeout=10000)
+    ok("modo desenvolvedor enxerga o app completo")
     cx.close()
 
     # ------------------------------------------------------------------ várias organizações

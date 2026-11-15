@@ -29,4 +29,10 @@ describe("cadastro de equipe de louvor", () => {
   test("nome é obrigatório e é preciso estar logado", async () => {
     expect((await a.api.rpc("create_louvor_team", { p_name: "  " })).ok).toBe(false);
   });
+
+  test("a marca de desenvolvedor não pode ser ligada pelo próprio usuário", async () => {
+    await a.api.patch(`/profiles?id=eq.${a.id}`, { is_developer: true, about: "oi" });
+    const p = (await a.api.get(`/profiles?id=eq.${a.id}`)).data[0];
+    expect(p).toMatchObject({ about: "oi", is_developer: false });
+  });
 });
