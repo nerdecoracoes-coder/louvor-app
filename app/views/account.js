@@ -1,11 +1,12 @@
 // Conta, convites, primeira organização, perfil, notificações, configurações da igreja e o Google Drive do repertório.
 import { sb, state, must, esc, attr, icon, avatar, teamBadge, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fRel,
-  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, TEAM_TYPES, isRepertoireStaff } from "../core.js";
+  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, TEAM_TYPES, isRepertoireStaff, CHURCH_SIGNUP } from "../core.js";
 import { colorPicker, readColor, bindColor } from "./teams.js";
 
 export function register(route) {
   route("/convite/:token", (p, el) => inviteView(p.token), { public: true, noOrg: true });
   route("/nova-org", () => newOrgView(), { noOrg: true });
+  route("/nova-equipe", () => newTeamView(), { noOrg: true });
   route("/nova-senha", () => newPasswordView(), { noOrg: true });
   route("/perfil", profileView);
   route("/notificacoes", notificationsView);
@@ -148,8 +149,9 @@ export function onboarding(el) {
   let pending = null; try { pending = localStorage.getItem("louvor.pendingInvite"); } catch {}
   if (pending) return go(`/convite/${pending}`);
   el.innerHTML = authShell(`${logo()}<h1>Olá, ${esc((state.profile?.full_name || "").split(" ")[0])}!</h1>
-    <p class="sub">Sua conta está pronta, mas você ainda não participa de nenhuma igreja.</p>
-    <div class="list menu"><a class="li" href="#/nova-org">${icon("org")}<span class="grow"><span class="t">Cadastrar uma igreja</span><span class="s">Você será o administrador geral</span></span>${icon("chevronRight", "chev")}</a>
+    <p class="sub">Sua conta está pronta. Crie a sua equipe de louvor ou entre em uma já existente.</p>
+    <div class="list menu"><a class="li" href="#/nova-equipe">${icon("mic")}<span class="grow"><span class="t">Criar minha equipe de louvor</span><span class="s">Você será o líder da equipe</span></span>${icon("chevronRight", "chev")}</a>
+      ${CHURCH_SIGNUP ? `<a class="li" href="#/nova-org">${icon("org")}<span class="grow"><span class="t">Cadastrar uma igreja</span><span class="s">Você será o administrador geral</span></span>${icon("chevronRight", "chev")}</a>` : ""}
       <button class="li" id="paste">${icon("link")}<span class="grow"><span class="t">Tenho um link de convite</span><span class="s">Cole o link enviado pelo líder</span></span>${icon("chevronRight", "chev")}</button></div>
     <button class="btn ghost block mt" id="out">${icon("logout")} Sair da conta</button>`);
   el.querySelector("#paste").onclick = () => {
@@ -157,6 +159,26 @@ export function onboarding(el) {
     s.el.querySelector("#pf").onsubmit = (e) => { e.preventDefault(); const m = e.target.l.value.match(/convite\/([a-f0-9]{20,})/i) || e.target.l.value.match(/^([a-f0-9]{40,})$/i); if (!m) return toast("Link inválido", "err"); s.close(); go(`/convite/${m[1]}`); };
   };
   el.querySelector("#out").onclick = () => sb.auth.signOut();
+}
+
+function newTeamView() {
+  const el = root();
+  el.innerHTML = authShell(`${logo()}<h1>Sua equipe de louvor</h1><p class="sub">Você será o líder. Depois convide os integrantes, monte as escalas e conecte as multitracks.</p>
+    <form id="of"><label class="field"><span>Nome da equipe *</span><input name="name" required maxlength="120" placeholder="Ex.: Ministério de Louvor"></label>
+      <label class="field"><span>Nome da igreja (opcional)</span><input name="church" maxlength="60" placeholder="Ex.: Igreja Batista Central"></label>
+      <div class="field"><span>Cor de destaque</span>${colorPicker("color", "#3D8BFF")}</div>
+      <button class="btn primary block" id="go">Criar equipe</button></form>
+    <a class="btn ghost block mt-s" href="#/">Voltar</a>`);
+  const form = el.querySelector("#of"); bindColor(form, "color");
+  form.onsubmit = async (e) => {
+    e.preventDefault(); const btn = el.querySelector("#go"); busy(btn);
+    const r = await sb.rpc("create_louvor_team", { p_name: form.name.value, p_church: form.church.value || null, p_accent: readColor(form, "color") });
+    if (r.error) { busy(btn, false); return toast(errMsg(r.error), "err"); }
+    try { localStorage.setItem("louvor.org", r.data.org_id); } catch {}
+    toast("Equipe criada. Convide os integrantes quando quiser.");
+    document.dispatchEvent(new Event("session-reload"));
+    setTimeout(() => go(`/times/${r.data.team_id}`), 250);
+  };
 }
 
 function newOrgView() {

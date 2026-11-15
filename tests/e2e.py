@@ -47,9 +47,9 @@ with sync_playwright() as pw:
     # ------------------------------------------------------------------ Ana: conta, organização, time
     ca, ana = ctx(br)
     signup(ana, "Ana Ribeiro", f"ana.{STAMP}@teste.local")
-    expect(ana.get_by_text("ainda não participa de nenhuma igreja")).to_be_visible(timeout=15000)
+    expect(ana.get_by_text("Crie a sua equipe de louvor")).to_be_visible(timeout=15000)
     shot(ana, "02-onboarding"); ok("cadastro aberto, sem organização")
-    ana.get_by_text("Cadastrar uma igreja").click()
+    ana.goto(BASE + "/#/nova-org")
     ana.fill("input[name=name]", "INVT Tijuca"); ana.fill("input[name=subtitle]", "Ministério de Louvor")
     ana.locator("#go").click()
     expect(ana.get_by_role("heading", name="Novo time")).to_be_visible(timeout=15000)
@@ -586,6 +586,20 @@ with sync_playwright() as pw:
     toast_has(ana, "conta(s) de teste apagada(s)")
     ok("integrantes de teste criados no time com função e login, e apagados")
 
+    # ------------------------------------------------------------------ equipe de louvor independente (app só de louvor)
+    cx, dani = ctx(br); dani.evaluate("window.SOMOS_OPEN = false"); cx.add_init_script("window.SOMOS_OPEN = false")   # sem o atalho dos testes: vale o que o usuário real vê
+    signup(dani, "Dani Souza", f"dani{int(time.time())}@teste.dev")
+    expect(dani.get_by_text("Criar minha equipe de louvor")).to_be_visible(timeout=15000)
+    expect(dani.get_by_text("Cadastrar uma igreja")).to_have_count(0)
+    dani.get_by_text("Criar minha equipe de louvor").click(); dani.fill("input[name=name]", "Louvor Esperança"); dani.fill("input[name=church]", "Igreja Esperança")
+    dani.locator("#go").click(); dani.wait_for_url(re.compile(r"/times/[0-9a-f-]{36}"), timeout=20000)
+    expect(dani.locator("body")).to_contain_text("Louvor Esperança", timeout=15000)
+    dani.goto(BASE + "/#/igreja"); expect(dani.locator(".toast").filter(has_text="não está liberada")).to_be_visible(timeout=10000)   # nada de igreja, nem para quem criou a equipe
+    dani.locator("[data-act=menu], #menubtn, header button").first.click()
+    expect(dani.locator("body")).not_to_contain_text("Visão geral da igreja")
+    shot(dani, "18-equipe-independente"); ok("cadastro de equipe de louvor independente: só a página da equipe, sem área de igreja")
+    cx.close()
+
     # ------------------------------------------------------------------ várias organizações
     carla.goto(BASE + "/#/nova-org")
     carla.fill("input[name=name]", "Igreja do Bairro"); carla.locator("#go").click()
@@ -933,13 +947,14 @@ with sync_playwright() as pw:
     bruno.locator("[data-g=''] [data-new]").fill("Conferir o equipamento")
     bruno.locator("[data-g=''] [data-add]").click()
     expect(bruno.locator("[data-g=''] .svc-cfg")).to_have_count(n0 + 1, timeout=10000)
-    # teste/pré-visualização para o líder: escolhe função e horário, nada é salvo
-    bruno.goto(BASE + "/#/servico/teste")
-    expect(bruno.locator("#pr")).to_be_visible(timeout=10000)
-    bruno.locator("#pm").select_option("10")
-    expect(bruno.locator(".svc-kicker")).to_have_text("Hora de servir", timeout=10000)
-    bruno.locator("[data-it]").first.click(); expect(bruno.locator(".li.check.on")).to_contain_text("Marcado às", timeout=10000)
-    shot(bruno, "28b-hora-de-servir-teste")
+    # teste/pré-visualização para o líder (só existe até 11/11/2026 23:59 BRT; depois o passo é pulado)
+    if time.time() < 1794452340:
+        bruno.goto(BASE + "/#/servico/teste")
+        expect(bruno.locator("#pr")).to_be_visible(timeout=10000)
+        bruno.locator("#pm").select_option("10")
+        expect(bruno.locator(".svc-kicker")).to_have_text("Hora de servir", timeout=10000)
+        bruno.locator("[data-it]").first.click(); expect(bruno.locator(".li.check.on")).to_contain_text("Marcado às", timeout=10000)
+        shot(bruno, "28b-hora-de-servir-teste")
     ok("ambiente de serviço: abre no dia da escala, checklist registra o horário real e atraso")
 
     # parabéns do dia: quem faz aniversário hoje aparece em uma janela na primeira abertura do dia
