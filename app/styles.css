@@ -1232,3 +1232,78 @@ a.li:active, button.li:active { background: var(--glass-2); transform: scale(.98
 }
 .pinfo .tile.mixt b.tag { white-space: normal; background: none; padding: 0; font-size: 14px; font-weight: 600; color: var(--muted); max-width: 100%; }
 .pinfo .tile.mixt b.tag.soft { color: var(--accent); }
+
+
+/* ============================================================================
+   Camada visual 2 — mais humana e menos "de vitrine": grafite quente, sem brilhos
+   azuis nem degradê de fundo, tipografia do próprio sistema, listas agrupadas com
+   linhas finas, barra de abas com rótulos e botões chapados.
+   ============================================================================ */
+:root {
+  --ink: #121110; --ink-2: #171614; --surface: #1b1a18; --raised: #22211f; --raised-2: #2b2926;
+  --glass: rgba(255, 246, 230, .05); --glass-2: rgba(255, 246, 230, .09);
+  --line: rgba(255, 244, 225, .08); --line-2: rgba(255, 244, 225, .14);
+  --text: #f3efe8; --muted: #a8a299; --dim: #86817a;
+  --sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, "Helvetica Neue", system-ui, sans-serif;
+  --serif: var(--sans);
+  --nav-h: 56px;
+}
+body { letter-spacing: 0; }
+h1, h2, h3, h4 { letter-spacing: -.015em; }
+.backdrop { background: var(--ink); }
+.topbar { background: color-mix(in srgb, var(--ink) 80%, transparent); backdrop-filter: blur(20px) saturate(1.4); -webkit-backdrop-filter: blur(20px) saturate(1.4); }
+.pagehead h1 { font: 700 34px/1.1 var(--sans); letter-spacing: -.022em; }
+.hero h1 { font: 700 32px/1.1 var(--sans); letter-spacing: -.022em; }
+.sec { margin: 30px 0 8px; }
+.sec h2 { font-size: 20px; font-weight: 700; letter-spacing: -.015em; }
+.sec a, .sec .more { color: var(--accent); }
+.notice h3, .scard h3 { font-family: var(--sans); }
+
+/* botões: chapados, sem brilho */
+.iconbtn { background: var(--glass-2); box-shadow: none; backdrop-filter: none; -webkit-backdrop-filter: none; }
+.iconbtn.add { width: 44px; height: 44px; box-shadow: none; }
+.btn { border-radius: 12px; font-weight: 600; }
+.btn.primary { background: var(--accent); }
+.btn.ghost { background: var(--glass-2); }
+.fabsave { box-shadow: 0 6px 20px rgba(0, 0, 0, .4) !important; }
+.transport .pp { box-shadow: none !important; }
+.playbtn { background: var(--glass-2); box-shadow: none; }
+.chip { background: var(--glass-2); }
+
+/* cartões e listas agrupadas: um bloco só, linhas finas entre os itens */
+.card { background: var(--raised); border: 0; backdrop-filter: none; -webkit-backdrop-filter: none; border-radius: 14px; }
+.list { border-top: 0; background: var(--raised); border-radius: 14px; overflow: hidden; }
+.list > .li, .list > .song, .list > a, .list > label.li { border-bottom: 0; padding-left: 16px; padding-right: 16px;
+  background-image: linear-gradient(var(--line), var(--line)); background-repeat: no-repeat; background-position: 16px 100%; background-size: calc(100% - 16px) 1px; }
+.list > :last-child { background-image: none; }
+.list > .song:last-child { border-bottom: 0; }
+a.li:active, button.li:active { background-color: var(--glass-2); }
+.empty { padding: 24px 16px; }
+.empty .ic { width: 26px; height: 26px; }
+.tabsbar, .seg { background: var(--raised); box-shadow: none; }
+.tabsbar button.on, .seg button.on { background: var(--raised-2); box-shadow: none; }
+.field input:not([type=checkbox]):not([type=radio]):not([type=color]), .field select, .field textarea { background: var(--raised); border-color: transparent; border-radius: 12px; }
+.input:focus, .field input:focus, .field select:focus, .field textarea:focus { background: var(--raised-2); }
+.sheet { background: var(--surface); border-color: var(--line); }
+
+@media (max-width: 979px) {
+  /* barra de abas no rodapé: ícone + rótulo, vidro fosco e linha fina no topo */
+  .bottomnav { left: 0; right: 0; bottom: 0; transform: none; width: 100%; gap: 0; padding: 6px 6px calc(6px + env(safe-area-inset-bottom)); border-radius: 0;
+    background: color-mix(in srgb, var(--ink) 82%, transparent); box-shadow: 0 -1px 0 var(--line); backdrop-filter: blur(22px) saturate(1.5); -webkit-backdrop-filter: blur(22px) saturate(1.5); }
+  .bottomnav a { flex: 1; width: auto; height: auto; min-height: 46px; padding: 4px 0 2px; border-radius: 10px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    background: none; box-shadow: none; color: var(--dim); }
+  .bottomnav a span { position: static; width: auto; height: auto; clip: auto; overflow: visible; font-size: 11px; font-weight: 500; letter-spacing: .01em; line-height: 1; }
+  .bottomnav a .ic { width: 24px; height: 24px; stroke-width: 1.6; }
+  .bottomnav a.on { background: none; box-shadow: none; color: var(--accent); }
+  .bottomnav .fab { flex: 1; width: auto; height: auto; min-height: 46px; background: none; box-shadow: none; color: var(--accent); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; }
+  .bottomnav .fab .ic { width: 28px; height: 28px; }
+  .toast { bottom: calc(var(--nav-h) + 20px + env(safe-area-inset-bottom)); }
+}
+/* capas e artes sem brilho colorido; cartões de pessoa sem contorno */
+.cover, .notice .art { background-image: none; background-color: var(--raised-2); }
+.list .cover { background-color: var(--glass-2); }
+.pcard { box-shadow: none; }
+.notice { border: 0; background: var(--raised); }
+/* cartões de compromisso: sem a barra colorida na lateral; a cor do tipo fica no horário e na etiqueta */
+.scard, .scard.k { border: 0; }
+.scard.k { background: color-mix(in srgb, rgb(var(--k)) 9%, var(--raised)); box-shadow: none; }

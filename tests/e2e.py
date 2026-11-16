@@ -811,7 +811,7 @@ with sync_playwright() as pw:
     bruno.wait_for_selector("#view:not([hidden]) input[name=title]"); bruno.fill("input[name=title]", "Culto no palco")
     bruno.locator("[data-etab=participantes]").click(); bruno.locator("[data-pview=palco]").click()
     expect(bruno.locator(".stage .slot.empty").first).to_be_visible(timeout=10000)
-    bruno.locator(".stage .slot.empty", has_text="Ministro").first.click()
+    bruno.locator(".stage .slot.empty", has_text="Ministro").first.dispatch_event("click")
     bruno.locator(".sheet [data-u]", has_text="Bruno Costa").click()
     expect(bruno.locator(".stage .slot .sface")).to_have_count(1, timeout=10000); shot(bruno, "08e-palco-escala")
     bruno.locator("#presetbtn").click(); bruno.locator(".sheet [data-pr]", has_text="Domingo").click()

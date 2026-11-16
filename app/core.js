@@ -222,7 +222,10 @@ export function initials(name) { return String(name || "?").trim().split(/\s+/).
 export function avatar(p, size = 44, ring = true) {
   const name = p?.display_name || p?.full_name || "";
   const inner = p?.avatar_url ? `<img src="${attr(p.avatar_url)}" alt="" loading="lazy">` : `<span>${esc(initials(name))}</span>`;
-  return `<span class="av${ring ? " ring" : ""}" style="--s:${size}px">${inner}</span>`;
+  // sem foto: cada pessoa ganha um tom terroso fixo (a partir do nome), em vez de um azul igual para todos
+  const tones = ["#8c5b45", "#5f7b63", "#566a86", "#7e5a7d", "#98793e", "#4f7b7b", "#8b4f5c", "#6b6f4a"];
+  const tone = tones[[...name].reduce((a, c) => a + c.charCodeAt(0), 0) % tones.length];
+  return `<span class="av${ring ? " ring" : ""}" style="--s:${size}px${p?.avatar_url ? "" : `;background:${tone};color:#fff`}">${inner}</span>`;
 }
 export function teamBadge(t, size = 44) {
   const c = t?.accent_color || "var(--accent)";
