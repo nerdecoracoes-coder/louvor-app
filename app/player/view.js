@@ -21,8 +21,12 @@ const loaderHtml = (text, pct = 0) => `<div class="loadov" id="loadov" role="sta
 const fmt = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60), r = s - m * 60; return `${m}:${r.toFixed(1).padStart(4, "0")}`; };
 const dbLabel = (g) => { const d = gainToDb(g); return d === -Infinity ? "-∞" : (d > 0 ? "+" : "") + d.toFixed(1); };
 
-export async function openPlayer(songId, tomParam = null) {
+const playHref = (songId, key, lista, auto) => `#/player/${songId}?${[key ? "tom=" + encodeURIComponent(key) : "", lista ? "lista=" + lista : "", auto ? "auto=1" : ""].filter(Boolean).join("&")}`;
+
+export async function openPlayer(songId, tomParam = null, opts = {}) {
   closePlayer();
+  const lista = opts.lista || null;   // id da escala: a ordem das músicas dela vira a lista de reprodução
+  let queue = [], flushUsage = () => {}, usageT = 0;
   let st = 0;   // semitons aplicados às faixas (tom pedido pela escala ou ajustado no player)
   const root = document.createElement("div");
   root.className = "player";
@@ -35,7 +39,7 @@ export async function openPlayer(songId, tomParam = null) {
     if (engine.ctx.state !== "running") { engine.ctx.resume?.().catch(() => {}); setTimeout(() => { if (engine && engine.playing && engine.ctx.state !== "running") engine.pause(); }, 1500); }
   };
   document.addEventListener("visibilitychange", onVis);
-  const ctrl = { destroy() { document.removeEventListener("visibilitychange", onVis); engine?.destroy(); cancelAnimationFrame(raf); clearTimeout(saveT); root.remove(); document.body.classList.remove("noscroll"); window.__player = null; } };
+  const ctrl = { destroy() { flushUsage(); clearInterval(usageT); document.removeEventListener("visibilitychange", onVis); engine?.destroy(); cancelAnimationFrame(raf); clearTimeout(saveT); root.remove(); document.body.classList.remove("noscroll"); window.__player = null; } };
   current = ctrl;
   let engine = null, raf = 0, saveT = 0;
   root.querySelector("[data-x]").onclick = close;
@@ -44,6 +48,10 @@ export async function openPlayer(songId, tomParam = null) {
   try {
     const song = await must(sb.from("songs").select("*").eq("id", songId).maybeSingle());
     if (!song) throw new Error("Música não encontrada.");
+    if (lista) {
+      const rows = (await sb.from("schedule_songs").select("song_id,song_key,songs(status,current_project_id,song_key)").eq("schedule_id", lista).order("position")).data || [];
+      queue = rows.filter((r) => r.song_id && r.songs && r.songs.status === "ready" && r.songs.current_project_id).map((r) => ({ id: r.song_id, key: r.song_key || r.songs.song_key || null }));
+    }
     if (!song.current_project_id || song.status !== "ready") throw new Error(song.status === "removed" ? "Esta música saiu do repertório." : "Esta música ainda não tem projeto multitrack pronto.");
     const T0 = performance.now(), marks = {};
     warmOpus();                                  // compila o decodificador enquanto o resto carrega
@@ -89,6 +97,16 @@ export async function openPlayer(songId, tomParam = null) {
 
   function build(root, song, project, engine) {
     let tab = "faixas";
+    const qIdx = queue.findIndex((q) => q.id === song.id);
+    const goQ = (d) => { const q = queue[qIdx + d]; if (q) location.replace(playHref(q.id, q.key, lista, opts.auto)); };
+    root.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => goQ(Number(b.dataset.q))));
+    if (opts.auto && qIdx >= 0) engine.addEventListener("ended", () => goQ(1));
+    // tempo de uso: conta só enquanto a música toca e envia de tempos em tempos (o líder vê o total de cada integrante)
+    let acc = 0;
+    flushUsage = () => { if (acc >= 1) { const n = Math.round(acc); acc = 0; Promise.resolve(sb.rpc("log_listening", { p_song: song.id, p_seconds: n, p_schedule: lista })).catch(() => {}); } };
+    usageT = setInterval(() => { if (engine.playing) { acc += 1; if (acc >= 30) flushUsage(); } }, 1000);
+    document.addEventListener("visibilitychange", () => { if (document.visibilityState === "hidden") flushUsage(); });
+    if (opts.auto) setTimeout(() => { if (current === ctrl && !engine.playing) engine.play(); }, 300);
     const lyr = song.lyrics?.blocks || [];
     const regions = engine.markers.filter((m) => m.is_region && m.end_position != null);
     const marks = engine.markers.filter((m) => !m.is_region);
@@ -105,6 +123,7 @@ export async function openPlayer(songId, tomParam = null) {
       <div class="ph"><button class="back" data-x aria-label="Fechar">${icon("chevronDown")}</button>
         <span class="cover">${song.cover_url ? `<img src="${attr(song.cover_url)}" alt="">` : icon("music")}</span>
         <div class="grow" style="min-width:0"><h2 class="ellipsis">${esc(song.title)}</h2><div class="s ellipsis">${esc(song.artist || "")}</div></div>
+        ${qIdx >= 0 && queue.length > 1 ? `<span class="qnav"><button class="iconbtn" data-q="-1" aria-label="Música anterior"${qIdx === 0 ? " disabled" : ""}>${icon("prev")}</button><small>${qIdx + 1}/${queue.length}</small><button class="iconbtn" data-q="1" aria-label="Próxima música"${qIdx === queue.length - 1 ? " disabled" : ""}>${icon("next")}</button></span>` : ""}
         <button class="iconbtn" id="mixreset" title="Restaurar a mixagem do projeto" aria-label="Restaurar mix">${icon("refresh")}</button></div>
       <div class="ptabs"><button data-tab="faixas" class="on">${icon("tracks")} Faixas</button><button data-tab="mix">${icon("sliders")} Mix</button><button data-tab="letra">${icon("lyrics")} Letra</button></div>
       <div class="pbody" id="pbody"></div>

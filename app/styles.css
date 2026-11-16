@@ -1192,3 +1192,8 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .keygrid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0 4px; }
 .keygrid button { height: 52px; border-radius: 14px; border: 0; background: rgba(255,255,255,.08); color: var(--text); font: 700 18px var(--sans, inherit); }
 .keygrid button.on { background: var(--accent); color: #0a0a0f; }
+
+/* player: navegação da lista de reprodução da escala */
+.qnav { display: inline-flex; align-items: center; gap: 2px; flex: none; }
+.qnav small { min-width: 34px; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
+.qnav .iconbtn[disabled] { opacity: .3; pointer-events: none; }

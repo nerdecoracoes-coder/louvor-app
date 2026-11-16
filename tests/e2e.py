@@ -218,6 +218,17 @@ with sync_playwright() as pw:
     expect(bruno.locator(".pagehead h1", has_text="Culto de Celebração")).to_be_visible(timeout=10000)
     bruno.locator("[data-dtab=mus]").click(); expect(bruno.get_by_text("Emaús")).to_be_visible()
     sched_url = bruno.url.split("?")[0]
+    # lista de reprodução da escala + tempo de estudo (líder)
+    expect(bruno.locator("#playall")).to_contain_text("Tocar tudo"); expect(bruno.locator("#whostudied")).to_be_visible()
+    bruno.locator("#whostudied").click(); expect(bruno.locator(".sheet", has_text="Quem estudou")).to_be_visible(timeout=10000)
+    expect(bruno.locator(".sheet .li").first).to_be_visible(timeout=10000); bruno.locator(".sheet [data-m=eq]").click()
+    expect(bruno.locator(".sheet", has_text="Tempo no player")).to_be_visible(timeout=10000); bruno.locator(".sheet-wrap").click(position={"x": 5, "y": 5}); expect(bruno.locator(".sheet-wrap")).to_have_count(0, timeout=5000)
+    bruno.locator("#playall").click()
+    bruno.wait_for_function("window.__player && window.__player.playing", timeout=30000)
+    assert "lista=" in bruno.url and "auto=1" in bruno.url
+    bruno.wait_for_timeout(2200); bruno.goto(sched_url)   # fechar o player envia o tempo ouvido
+    bruno.wait_for_timeout(500)
+    ok("escala: tocar tudo abre o player na lista; líder vê quem estudou")
     ok("escala criada com sugestão, música do repertório e publicada")
 
     # ------------------------------------------------------------------ Carla vê, confirma; calendário

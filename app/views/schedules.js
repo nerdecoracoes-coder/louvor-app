@@ -735,6 +735,13 @@ async function detail(el, id, tab = "det") {
       ${rehs.map((r) => { const past = new Date(r.starts_at).getTime() < now - 3600e3; return `<div class="reh-i${past ? " past" : ""}${r === next ? " next" : ""}"><span class="reh-time">${fTime(r.starts_at)}</span><span class="grow"><b>${esc(cap(fDow(r.starts_at)).replace(/\.$/, ""))}, ${fDate(r.starts_at)}</b>${r.notes ? `<small>${esc(r.notes)}</small>` : ""}</span>${past ? `<span class="chip">Já passou</span>` : r === next ? "" : `<span class="reh-rel">${dayWord(r.starts_at)}</span>`}</div>`; }).join("")}
     </div>`;
   };
+  // lista de reprodução: toca as músicas da escala na ordem definida (só as que têm projeto pronto)
+  const playable = songs.filter((x) => x.song_id && x.songs && x.songs.status !== "removed" && x.songs.current_project_id);
+  const playAll = () => {
+    if (!playable.length) return "";
+    const f = playable[0];
+    return `<div class="row gap-s" style="margin-bottom:10px"><a class="btn primary sm" id="playall" href="#/player/${f.song_id}?${[(f.song_key || f.songs.song_key) ? `tom=${encodeURIComponent(f.song_key || f.songs.song_key)}` : "", `lista=${id}`, "auto=1"].filter(Boolean).join("&")}">${icon("play")} Tocar tudo${playable.length > 1 ? ` (${playable.length})` : ""}</a>${manage ? `<button class="btn ghost sm" id="whostudied" type="button">${icon("users")} Quem estudou</button>` : ""}</div>`;
+  };
   // situação do repertório na Multimídia (só para quem gerencia o time do Louvor)
   const mmBox = () => {
     if (!manage || s.teams?.team_type !== "louvor" || s.status !== "published" || !songs.length || !state.orgTeams.some((t) => t.team_type === "multimidia")) return "";
@@ -753,12 +760,12 @@ async function detail(el, id, tab = "det") {
       ${unseen ? `<button class="btn primary block mt" id="seen">${icon("eye")} Tomei conhecimento da escala</button>` : mine.length && askConf ? `<p class="small ok row gap-s mt">${icon("check")} Você confirmou que viu esta escala.</p>` : ""}
       ${s.notes ? `<div class="sec">${icon("edit")}<h2>Observações</h2></div><div class="card"><p style="margin:0">${linkify(s.notes)}</p></div>` : ""}
       ${(s.palettes || []).length ? `<div class="sec">${icon("shirt")}<h2>Vestimentas</h2></div><div class="card">${s.palettes.map((p) => `<div class="palview">${p.desc ? `<b class="small">${esc(p.desc)}</b>` : ""}<div class="pcolors">${(p.colors || []).map((c) => `<span class="pcol big" style="background:${attr(c)}" title="${attr(c)}"></span>`).join("")}</div></div>`).join("")}</div>` : ""}`,
-    mus: () => `${mmBox()}<div class="list">${songs.length ? songs.map((x, i) => {
+    mus: () => `${mmBox()}${playAll()}<div class="list">${songs.length ? songs.map((x, i) => {
       const live = x.songs && x.songs.status !== "removed";
       return `<div class="song"><span class="cover">${x.songs?.cover_url ? `<img src="${attr(x.songs.cover_url)}" alt="">` : `<b style="font-size:18px">${i + 1}</b>`}</span>
         <a class="grow" style="color:inherit;min-width:0" ${live ? `href="#/musica/${x.song_id}"` : ""}><div class="t ellipsis">${esc(x.title_snapshot)}</div>
           <div class="s">${esc(x.artist_snapshot || "")}<span>${x.version_name ? esc(x.version_name) : "Versão original"}</span>${(x.song_key || x.songs?.song_key) ? `<span>Tom ${esc(x.song_key || x.songs.song_key)}</span>` : `<span class="muted">Sem tom</span>`}${(x.bpm ?? x.songs?.bpm) ? `<span>${Number(x.bpm ?? x.songs.bpm)} BPM</span>` : ""}${!live ? `<span class="tag gray">fora do repertório</span>` : ""}</div></a>
-        ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}${(x.song_key || x.songs?.song_key) ? `?tom=${encodeURIComponent(x.song_key || x.songs.song_key)}` : ""}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
+        ${live && x.songs.current_project_id ? `<a class="playbtn" href="#/player/${x.song_id}?${[(x.song_key || x.songs?.song_key) ? `tom=${encodeURIComponent(x.song_key || x.songs.song_key)}` : "", `lista=${id}`].filter(Boolean).join("&")}" aria-label="Tocar">${icon("play")}</a>` : live && x.songs.youtube_url ? `<a class="playbtn" href="${attr(x.songs.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : ""}</div>`;
     }).join("") : `<div class="li muted small">Nenhuma música definida.</div>`}</div>`,
     par: () => parBar() + (pv === "palco" && stage.slots.length ? stagePane() : parList()),
     rot: () => `<div id="extras"></div>`,
@@ -775,6 +782,7 @@ async function detail(el, id, tab = "det") {
   if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
   el.querySelectorAll("[data-pv]").forEach((b) => b.addEventListener("click", () => { try { localStorage.setItem(PVIEW_KEY, b.dataset.pv); } catch { /* ok */ } detail(el, id, tab); }));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
+  el.querySelector("#whostudied")?.addEventListener("click", () => listeningSheet(s, songs));
   el.querySelector("#mmsend")?.addEventListener("click", async (e) => {
     const b = e.currentTarget; busy(b);
     const r = await sb.rpc("send_repertoire", { p_schedule: id, p_sig: repSig(songs) });
@@ -1053,4 +1061,24 @@ async function panorama(_, el, alive) {
     }
   });
   await draw();
+}
+
+// tempo que cada integrante do time usou o player (só o líder/administrador vê): desta escala ou da equipe nos últimos 30 dias
+const fTimeSpent = (sec) => { sec = Math.round(sec || 0); if (sec < 60) return sec ? `${sec} s` : "0"; const m = Math.round(sec / 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`; };
+async function listeningSheet(s, songs) {
+  const sh = sheet(`<h3>Quem estudou</h3><div class="seg" id="lsseg" style="margin:4px 0 6px"><button type="button" data-m="esc" class="on">Esta escala</button><button type="button" data-m="eq">Equipe · 30 dias</button></div><div id="lsbody"><p class="muted small">Carregando…</p></div>`);
+  const [members, map] = await Promise.all([must(sb.from("team_members").select("user_id").eq("team_id", s.team_id)), people()]);
+  const draw = async (mode) => {
+    const body = sh.el.querySelector("#lsbody"); body.innerHTML = `<p class="muted small">Carregando…</p>`;
+    const r = await sb.rpc("team_listening", mode === "esc" ? { p_team: s.team_id, p_schedule: s.id } : { p_team: s.team_id, p_since: new Date(Date.now() - 30 * 864e5).toISOString().slice(0, 10) });
+    if (r.error) { body.innerHTML = `<p class="warn small">${esc(errMsg(r.error))}</p>`; return; }
+    const tot = new Map(), n = new Map();
+    for (const x of r.data || []) { tot.set(x.user_id, (tot.get(x.user_id) || 0) + Number(x.seconds)); n.set(x.user_id, (n.get(x.user_id) || 0) + 1); }
+    const rows = members.map((m) => ({ id: m.user_id, sec: tot.get(m.user_id) || 0, n: n.get(m.user_id) || 0 })).sort((a, b) => b.sec - a.sec);
+    const max = Math.max(1, ...rows.map((x) => x.sec)), nSongs = new Set(songs.map((x) => x.song_id).filter(Boolean)).size;
+    body.innerHTML = `<p class="small muted" style="margin:4px 0 10px">${mode === "esc" ? "Tempo ouvindo as músicas desta escala, desde que ela foi criada." : "Tempo no player, somando todas as músicas."} Conta só o tempo em que a música realmente tocou.</p>
+      <div class="list">${rows.map((x) => `<div class="li" style="flex-wrap:wrap"><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(personName(map, x.id))}</span><span class="s">${x.sec ? `${mode === "esc" ? `${x.n} de ${nSongs} ${nSongs === 1 ? "música" : "músicas"}` : `${x.n} ${x.n === 1 ? "música" : "músicas"}`}` : "Ainda não ouviu"}</span></span><b>${fTimeSpent(x.sec)}</b><span style="flex-basis:100%;height:4px;border-radius:2px;background:var(--glass-2);overflow:hidden"><i style="display:block;height:100%;width:${Math.round((x.sec / max) * 100)}%;background:var(--accent)"></i></span></div>`).join("") || `<div class="li muted small">Nenhum integrante no time.</div>`}</div>`;
+  };
+  on(sh.el, "click", "[data-m]", (e, b) => { sh.el.querySelectorAll("[data-m]").forEach((x) => x.classList.toggle("on", x === b)); draw(b.dataset.m); });
+  draw("esc");
 }
