@@ -1197,3 +1197,12 @@ fieldset.of input::placeholder, fieldset.of textarea::placeholder { color: var(-
 .qnav { display: inline-flex; align-items: center; gap: 2px; flex: none; }
 .qnav small { min-width: 34px; text-align: center; color: var(--muted); font-variant-numeric: tabular-nums; }
 .qnav .iconbtn[disabled] { opacity: .3; pointer-events: none; }
+
+/* início da igreja: pastores e líderes, cada um com a foto redonda */
+.leaders { display: flex; gap: 18px; overflow-x: auto; margin: 0 -20px; padding: 4px 20px 8px; scrollbar-width: none; }
+.leaders::-webkit-scrollbar { display: none; }
+.leader { flex: none; width: 112px; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.leader .av { box-shadow: 0 0 0 2px var(--line-2), 0 6px 18px rgba(0, 0, 0, .25); }
+.leader b { max-width: 100%; font-size: 14px; }
+.leader span:not(.av) { max-width: 100%; font-size: 12px; color: var(--muted); }
+@media (max-width: 520px) { .leaders { margin: 0 -16px; padding-left: 16px; padding-right: 16px; } }

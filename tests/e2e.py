@@ -653,7 +653,11 @@ with sync_playwright() as pw:
     ana.fill("input[name=title]", "Ensaio Geral"); ana.fill("input[name=tag]", "Reunião"); ana.fill("textarea[name=body]", "Todos os times. Tragam os instrumentos.")
     ana.fill("input[name=date]", nxt); ana.fill("input[name=time]", "19:30"); ana.locator("#save").click()
     toast_has(ana, "Aviso publicado")
+    subprocess.run(["psql", "-q", "-c", "update org_members set church_title = 'Pastor presidente' where user_id in (select id from profiles where full_name = 'Bruno Costa')"], env=dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres"), check=True)
     bruno.goto(BASE + "/#/igreja"); bruno.reload(); expect(bruno.locator(".notice", has_text="Ensaio Geral")).to_be_visible(timeout=10000)  # avisos gerais ficam na área da igreja
+    expect(bruno.locator(".leaders .leader")).to_have_count(1); expect(bruno.locator(".leader")).to_contain_text("Pastor presidente")
+    assert bruno.evaluate("""() => { const h = document.querySelector('.hero').getBoundingClientRect(), l = document.querySelector('.leaders').getBoundingClientRect(), n = document.querySelector('.notice').getBoundingClientRect(); const a = document.querySelector('.leader .av').getBoundingClientRect(); return l.top >= h.bottom - 1 && l.top < n.top && a.width >= 80 && Math.abs(a.width - a.height) < 1 && getComputedStyle(document.querySelector('.leader .av')).borderRadius !== '0px'; }""")
+    shot(bruno, "17b-igreja-lideranca"); ok("início da igreja: liderança logo abaixo do nome, fotos redondas grandes")
     shot(bruno, "17-inicio-lider"); ok("aviso da organização publicado e exibido")
     expect(bruno.get_by_text("Agenda da igreja").first).to_be_visible(); expect(bruno.get_by_text("Minhas próximas escalas")).to_have_count(0)
     ana.goto(BASE + "/#/agenda"); ana.locator("#newev").click(); ana.fill(".sheet input[name=title]", "Culto de celebração"); ana.select_option(".sheet select[name=kind]", "culto"); ana.fill(".sheet input[name=start]", "23:59")

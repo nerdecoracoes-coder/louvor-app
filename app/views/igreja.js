@@ -143,6 +143,10 @@ export async function churchHome(el, alive) {
   el.innerHTML = `
   <section class="hero"><div class="grow"><p class="hello">Igreja</p><h1>${esc(o.name)}</h1>${o.subtitle ? `<p class="roles">${esc(o.subtitle)}</p>` : ""}</div></section>
 
+  <div class="sec"><h2>Liderança</h2>${isAdmin() ? `<span class="row gap-s"><button class="more" id="edcoord">${icon("calendar")} Agenda</button><button class="more" id="edlead">${icon("edit")} Cargos</button></span>` : ""}</div>
+  ${leaders.length ? `<div class="leaders">${leaders.map((p) => `<div class="leader">${avatar(p, 92, false)}<b class="ellipsis">${esc(p.display_name)}</b><span class="ellipsis">${esc(p.church_title)}</span></div>`).join("")}</div>`
+    : `<div class="card">${empty("crown", "Pastores e líderes", isAdmin() ? "Toque em Cargos para informar quem são os pastores e líderes da igreja." : "Em breve aparecem aqui.")}</div>`}
+
   <div id="pend"></div>
   <div class="sec"><h2>Avisos da igreja</h2><a href="#/avisos">Todos ${icon("chevronRight")}</a></div>
   ${notices.length ? `<div class="carousel" id="notices">${notices.map(noticeCard).join("")}</div>`
@@ -150,10 +154,6 @@ export async function churchHome(el, alive) {
 
   <div class="sec"><h2>Agenda da igreja</h2><a href="#/agenda">Ver tudo ${icon("chevronRight")}</a></div>
   ${evs.length ? `<div class="list">${evs.slice(0, 4).map(eventRow).join("")}</div>` : `<div class="card">${empty("calendar", "Nada na agenda", canEditAgenda() ? `<button class="link" id="newev">Marcar o primeiro evento</button>` : "Os eventos da igreja aparecem aqui.")}</div>`}
-
-  <div class="sec"><h2>Liderança</h2>${isAdmin() ? `<span class="row gap-s"><button class="more" id="edcoord">${icon("calendar")} Agenda</button><button class="more" id="edlead">${icon("edit")} Cargos</button></span>` : ""}</div>
-  ${leaders.length ? `<div class="list">${leaders.map((p) => `<div class="li">${avatar(p, 40, false)}<span class="grow"><span class="t">${esc(p.display_name)}</span><span class="s">${esc(p.church_title)}</span></span></div>`).join("")}</div>`
-    : `<div class="card">${empty("crown", "Pastores e líderes", isAdmin() ? "Toque em Cargos para informar quem são os pastores e líderes da igreja." : "Em breve aparecem aqui.")}</div>`}
 
   <div class="sec"><h2>Ministérios e times</h2><a href="#/times">Todos ${icon("chevronRight")}</a></div>
   <div class="list">${teams.map((t) => `<button class="li" data-team="${t.id}">${teamBadge(t, 40)}<span class="grow"><span class="t">${esc(t.name)}</span><span class="s">${esc(teamTypeLabel(t))}${mine.has(t.id) ? " · Você participa" : ""}</span></span>${icon("chevronRight")}</button>`).join("") || `<div class="li muted small">Nenhum time criado ainda.</div>`}</div>
