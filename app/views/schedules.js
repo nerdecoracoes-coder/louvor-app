@@ -782,7 +782,7 @@ async function detail(el, id, tab = "det") {
   if (tab === "rot") scheduleExtras(el.querySelector("#extras"), s).catch((e) => console.warn(e));
   el.querySelectorAll("[data-pv]").forEach((b) => b.addEventListener("click", () => { try { localStorage.setItem(PVIEW_KEY, b.dataset.pv); } catch { /* ok */ } detail(el, id, tab); }));
   el.querySelectorAll("[data-dtab]").forEach((b) => b.addEventListener("click", () => detail(el, id, b.dataset.dtab)));
-  el.querySelector("#whostudied")?.addEventListener("click", () => listeningSheet(s, songs));
+  el.querySelector("#whostudied")?.addEventListener("click", () => listeningSheet(s, songs, uniq));
   el.querySelector("#mmsend")?.addEventListener("click", async (e) => {
     const b = e.currentTarget; busy(b);
     const r = await sb.rpc("send_repertoire", { p_schedule: id, p_sig: repSig(songs) });
@@ -1065,7 +1065,7 @@ async function panorama(_, el, alive) {
 
 // tempo que cada integrante do time usou o player (só o líder/administrador vê): desta escala ou da equipe nos últimos 30 dias
 const fTimeSpent = (sec) => { sec = Math.round(sec || 0); if (sec < 60) return sec ? `${sec} s` : "0"; const m = Math.round(sec / 60); return m < 60 ? `${m} min` : `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, "0")} min`; };
-async function listeningSheet(s, songs) {
+async function listeningSheet(s, songs, scaled = []) {
   const sh = sheet(`<h3>Quem estudou</h3><div class="seg" id="lsseg" style="margin:4px 0 6px"><button type="button" data-m="esc" class="on">Esta escala</button><button type="button" data-m="eq">Equipe · 30 dias</button></div><div id="lsbody"><p class="muted small">Carregando…</p></div>`);
   const [members, map] = await Promise.all([must(sb.from("team_members").select("user_id").eq("team_id", s.team_id)), people()]);
   const draw = async (mode) => {
@@ -1074,10 +1074,11 @@ async function listeningSheet(s, songs) {
     if (r.error) { body.innerHTML = `<p class="warn small">${esc(errMsg(r.error))}</p>`; return; }
     const tot = new Map(), n = new Map();
     for (const x of r.data || []) { tot.set(x.user_id, (tot.get(x.user_id) || 0) + Number(x.seconds)); n.set(x.user_id, (n.get(x.user_id) || 0) + 1); }
-    const rows = members.map((m) => ({ id: m.user_id, sec: tot.get(m.user_id) || 0, n: n.get(m.user_id) || 0 })).sort((a, b) => b.sec - a.sec);
+    const who = mode === "esc" ? scaled : members.map((m) => m.user_id);   // na escala: só quem está escalado; na equipe: todos os integrantes
+    const rows = who.map((uid) => ({ id: uid, sec: tot.get(uid) || 0, n: n.get(uid) || 0 })).sort((a, b) => b.sec - a.sec);
     const max = Math.max(1, ...rows.map((x) => x.sec)), nSongs = new Set(songs.map((x) => x.song_id).filter(Boolean)).size;
     body.innerHTML = `<p class="small muted" style="margin:4px 0 10px">${mode === "esc" ? "Tempo ouvindo as músicas desta escala, desde que ela foi criada." : "Tempo no player, somando todas as músicas."} Conta só o tempo em que a música realmente tocou.</p>
-      <div class="list">${rows.map((x) => `<div class="li" style="flex-wrap:wrap"><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(personName(map, x.id))}</span><span class="s">${x.sec ? `${mode === "esc" ? `${x.n} de ${nSongs} ${nSongs === 1 ? "música" : "músicas"}` : `${x.n} ${x.n === 1 ? "música" : "músicas"}`}` : "Ainda não ouviu"}</span></span><b>${fTimeSpent(x.sec)}</b><span style="flex-basis:100%;height:4px;border-radius:2px;background:var(--glass-2);overflow:hidden"><i style="display:block;height:100%;width:${Math.round((x.sec / max) * 100)}%;background:var(--accent)"></i></span></div>`).join("") || `<div class="li muted small">Nenhum integrante no time.</div>`}</div>`;
+      <div class="list">${rows.map((x) => `<div class="li" style="flex-wrap:wrap"><span class="grow" style="min-width:0"><span class="t ellipsis">${esc(personName(map, x.id))}</span><span class="s">${x.sec ? `${mode === "esc" ? `${x.n} de ${nSongs} ${nSongs === 1 ? "música" : "músicas"}` : `${x.n} ${x.n === 1 ? "música" : "músicas"}`}` : "Ainda não ouviu"}</span></span><b>${fTimeSpent(x.sec)}</b><span style="flex-basis:100%;height:4px;border-radius:2px;background:var(--glass-2);overflow:hidden"><i style="display:block;height:100%;width:${Math.round((x.sec / max) * 100)}%;background:var(--accent)"></i></span></div>`).join("") || `<div class="li muted small">${mode === "esc" ? "Ninguém foi escalado ainda." : "Nenhum integrante no time."}</div>`}</div>`;
   };
   on(sh.el, "click", "[data-m]", (e, b) => { sh.el.querySelectorAll("[data-m]").forEach((x) => x.classList.toggle("on", x === b)); draw(b.dataset.m); });
   draw("esc");
