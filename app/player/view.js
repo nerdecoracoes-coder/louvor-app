@@ -147,30 +147,41 @@ export async function openPlayer(songId, tomParam = null, opts = {}) {
         <button data-t="next" aria-label="Próximo marcador">${icon("next")}</button>
         <button data-t="rep" aria-label="Repetir">${icon("repeat")}</button>
       </div>
-      <div class="pinfo"><span class="tile keytile"><button type="button" data-ks="-1" aria-label="Descer um semitom">−</button><span class="kb"><b id="kname">${esc(song.song_key ? transposeKey(song.song_key, st) : (st ? (st > 0 ? "+" : "") + st : "—"))}</b><small id="ksub">tom</small></span><button type="button" data-ks="1" aria-label="Subir um semitom">+</button></span>${song.bpm ? `<span class="tile"><b>${Number(song.bpm)}</b><small>bpm</small></span>` : ""}
-        ${project.time_sig_num ? `<span class="tile"><b>${project.time_sig_num}/${project.time_sig_den}</b><small>compasso</small></span>` : ""}
-        <span class="tile mixt"><b id="mixtag">Mix do projeto</b><small id="buf" class="hidden">Carregando…</small></span></div>
+      <div class="pinfo"><button type="button" class="chip-i keytile" id="keychip" aria-haspopup="dialog" aria-label="Mudar o tom"><small>Tom</small><b id="kname">${esc(song.song_key ? transposeKey(song.song_key, st) : (st ? (st > 0 ? "+" : "") + st : "—"))}</b>${icon("chevronDown")}</button>${song.bpm ? `<span class="chip-i"><b>${Number(song.bpm)}</b><small>bpm</small></span>` : ""}${project.time_sig_num ? `<span class="chip-i"><b>${project.time_sig_num}/${project.time_sig_den}</b></span>` : ""}<span class="chip-i mixt"><b id="mixtag">Mix do projeto</b><small id="buf" class="hidden">Carregando…</small></span></div>
       <div class="tiny muted" id="diag"></div>${loaderHtml("Carregando faixas…")}`;
     root.querySelector("[data-x]").onclick = close;
     root.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => goQ(Number(b.dataset.q))));
     root.querySelector(".ph h2").onclick = () => root.classList.toggle("diag");   // toque no título: mostra os tempos de carregamento
     const body = root.querySelector("#pbody");
-    // ---------- tom: − / + em semitons (o andamento não muda)
-    const kname = root.querySelector("#kname"), ksub = root.querySelector("#ksub");
+    // ---------- tom: toque no "Tom" abre uma janelinha com − / + em semitons (o andamento não muda)
+    const kname = root.querySelector("#kname"), chip = root.querySelector("#keychip");
+    let pop = null;
+    const keyText = () => (song.song_key && parseKey(song.song_key) ? transposeKey(song.song_key, st) : (st ? (st > 0 ? "+" : "") + st : "—"));
     const paintKey = () => {
-      kname.textContent = song.song_key && parseKey(song.song_key) ? transposeKey(song.song_key, st) : (st ? (st > 0 ? "+" : "") + st : "—");
-      ksub.textContent = st === 0 ? (song.song_key ? "tom original" : "tom") : `${st > 0 ? "+" : ""}${st} · original ${song.song_key || "—"}`;
-      root.querySelector(".keytile").classList.toggle("shifted", st !== 0);
+      kname.textContent = keyText();
+      chip.classList.toggle("shifted", st !== 0);
+      if (pop) { pop.querySelector(".kbig").textContent = keyText(); pop.querySelector(".ksub2").textContent = st === 0 ? (song.song_key ? `Tom original (${song.song_key})` : "Tom original") : `${st > 0 ? "+" : ""}${st} semitom${Math.abs(st) === 1 ? "" : "s"} · original ${song.song_key || "—"}`; pop.querySelector("[data-kreset]").disabled = st === 0; }
     };
-    paintKey();
-    root.querySelectorAll("[data-ks]").forEach((b) => b.onclick = async () => {
-      const n = Math.max(-12, Math.min(12, st + Number(b.dataset.ks)));
-      if (n === st) return;
+    const setSt = async (n) => {
+      n = Math.max(-12, Math.min(12, n)); if (n === st) return;
       st = n; paintKey();
       const okp = await engine.setSemitones(st);
       if (okp === false && st !== 0) { toast("Este aparelho não consegue mudar o tom.", "err"); st = 0; paintKey(); await engine.setSemitones(0); }
-    });
-    root.querySelector(".keytile .kb").onclick = async () => { if (st === 0) return; st = 0; paintKey(); await engine.setSemitones(0); };
+    };
+    const closePop = () => { pop?.remove(); pop = null; document.removeEventListener("pointerdown", outside, true); };
+    const outside = (e) => { if (pop && !pop.contains(e.target) && !chip.contains(e.target)) closePop(); };
+    chip.onclick = () => {
+      if (pop) return closePop();
+      pop = document.createElement("div"); pop.className = "kpop"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", "Mudar o tom");
+      pop.innerHTML = `<div class="krow"><button type="button" data-ks="-1" aria-label="Descer um semitom">−</button><b class="kbig"></b><button type="button" data-ks="1" aria-label="Subir um semitom">+</button></div><small class="ksub2"></small><button type="button" class="kreset" data-kreset>Voltar ao tom original</button>`;
+      root.appendChild(pop);
+      const r = chip.getBoundingClientRect(), pr = root.getBoundingClientRect();
+      pop.style.left = `${Math.max(12, Math.min(r.left - pr.left, pr.width - pop.offsetWidth - 12))}px`; pop.style.bottom = `${pr.bottom - r.top + 8}px`;
+      pop.querySelectorAll("[data-ks]").forEach((b) => (b.onclick = () => setSt(st + Number(b.dataset.ks))));
+      pop.querySelector("[data-kreset]").onclick = () => setSt(0);
+      document.addEventListener("pointerdown", outside, true); paintKey();
+    };
+    paintKey();
 
     // ---------- abas
     const drawTab = () => {

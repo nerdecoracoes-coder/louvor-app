@@ -351,12 +351,14 @@ with sync_playwright() as pw:
     assert loop and abs(loop[0] - 3.428571) < 0.01, loop
     ok("pause, próximo marcador e repetição de região")
     # tom no player: − / + muda o tom sem mexer no andamento; tocar no tom volta ao original
+    expect(carla.locator('[data-ks="1"]')).to_have_count(0)   # os botões ± só aparecem depois de tocar no tom
+    carla.locator("#keychip").click(); expect(carla.locator(".kpop")).to_be_visible()
     carla.locator('[data-ks="1"]').click(); carla.locator('[data-ks="1"]').click()
     carla.wait_for_function("window.__player.semitones === 2 && !!window.__player.pitchNode", timeout=15000)
     expect(carla.locator(".keytile.shifted")).to_be_visible()
     assert carla.evaluate("window.__player.tracks.filter((t) => t.unpitched).map((t) => t.name).sort().join()") == "Click,Drums,Guide"
     assert carla.evaluate("window.__player.delayP.delayTime.value") > 0.02, "percussão precisa de atraso igual ao do filtro"
-    carla.locator(".keytile .kb").click()
+    carla.locator("[data-kreset]").click(); carla.locator(".tabs, .ptabs").first.click(position={"x": 5, "y": 5}); expect(carla.locator(".kpop")).to_have_count(0, timeout=5000)
     carla.wait_for_function("window.__player.semitones === 0", timeout=15000)
     # abrir já no tom da escala: #/player/ID?tom=…
     sid_song = re.search(r"/player/([0-9a-f-]{36})", carla.url).group(1)

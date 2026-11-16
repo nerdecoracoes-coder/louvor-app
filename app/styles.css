@@ -1307,3 +1307,24 @@ a.li:active, button.li:active { background-color: var(--glass-2); }
 /* cartões de compromisso: sem a barra colorida na lateral; a cor do tipo fica no horário e na etiqueta */
 .scard, .scard.k { border: 0; }
 .scard.k { background: color-mix(in srgb, rgb(var(--k)) 9%, var(--raised)); box-shadow: none; }
+
+/* player: faixa de informações compacta (tom, bpm, compasso, mix) — sobra mais tela para as faixas */
+.pinfo { gap: 6px; padding: 0 14px calc(8px + env(safe-area-inset-bottom)); flex-wrap: nowrap; justify-content: center; }
+.chip-i { display: inline-flex; align-items: baseline; gap: 5px; height: 30px; padding: 0 11px; border-radius: 99px; background: var(--glass-2); color: var(--text); align-items: center; white-space: nowrap; min-width: 0; }
+.chip-i b { font-size: 14px; font-weight: 600; line-height: 1; }
+.chip-i small { font-size: 12px; color: var(--muted); line-height: 1; }
+.chip-i.mixt { flex: 0 1 auto; overflow: hidden; }
+.chip-i.mixt b.tag { background: none; padding: 0; font-size: 12px; font-weight: 500; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.chip-i.mixt b.tag.soft { color: var(--accent); }
+.chip-i .ic { width: 14px; height: 14px; color: var(--muted); margin-left: -1px; }
+.keytile.chip-i.shifted { background: color-mix(in srgb, var(--accent) 22%, transparent); }
+.keytile.chip-i.shifted b { color: var(--accent); }
+.kpop { position: absolute; z-index: 60; width: 232px; padding: 14px; border-radius: 18px; background: var(--raised-2); box-shadow: inset 0 0 0 1px var(--line-2), 0 18px 48px rgba(0, 0, 0, .55);
+  display: flex; flex-direction: column; align-items: center; gap: 8px; animation: up .18s var(--ease); }
+.kpop .krow { display: flex; align-items: center; justify-content: space-between; width: 100%; }
+.kpop .krow button { width: 48px; height: 48px; border-radius: 50%; background: var(--glass-2); font-size: 26px; line-height: 1; color: var(--text); }
+.kpop .krow button:active { transform: scale(.92); background: var(--glass-2); }
+.kpop .kbig { font-size: 34px; font-weight: 700; letter-spacing: -.02em; }
+.kpop .ksub2 { color: var(--muted); font-size: 12px; text-align: center; }
+.kpop .kreset { color: var(--accent); font-size: 14px; font-weight: 600; padding: 6px 10px; }
+.kpop .kreset[disabled] { opacity: .35; pointer-events: none; }
