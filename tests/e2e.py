@@ -223,9 +223,22 @@ with sync_playwright() as pw:
     bruno.locator("#whostudied").click(); expect(bruno.locator(".sheet", has_text="Quem estudou")).to_be_visible(timeout=10000)
     expect(bruno.locator(".sheet .li").first).to_be_visible(timeout=10000); bruno.locator(".sheet [data-m=eq]").click()
     expect(bruno.locator(".sheet", has_text="Tempo no player")).to_be_visible(timeout=10000); bruno.locator(".sheet-wrap").click(position={"x": 5, "y": 5}); expect(bruno.locator(".sheet-wrap")).to_have_count(0, timeout=5000)
+    # segunda música na escala (direto no banco) para testar próxima/anterior
+    envp = dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres")
+    sid2 = sched_url.split("/")[-1]
+    subprocess.run(["psql", "-q", "-c", f"""insert into schedule_songs (schedule_id, org_id, team_id, song_id, position, title_snapshot)
+      select '{sid2}', sc.org_id, sc.team_id, so.id, 9, so.title from schedules sc, songs so where sc.id = '{sid2}' and so.org_id = sc.org_id and so.status = 'ready' and so.current_project_id is not null
+        and so.id not in (select song_id from schedule_songs where schedule_id = '{sid2}' and song_id is not null) limit 1"""], env=envp, check=True)
+    bruno.goto(sched_url); bruno.reload(); bruno.locator("[data-dtab=mus]").click()
     bruno.locator("#playall").click()
     bruno.wait_for_function("window.__player && window.__player.playing", timeout=30000)
     assert "lista=" in bruno.url and "auto=1" in bruno.url
+    first_title = bruno.locator(".player .ph h2").inner_text()
+    expect(bruno.locator(".player .qbar small")).to_have_text("Música 1 de 2")
+    bruno.locator('.player [data-q="1"]').click()
+    expect(bruno.locator(".player .qbar small")).to_have_text("Música 2 de 2", timeout=30000)
+    assert bruno.locator(".player .ph h2").inner_text() != first_title
+    bruno.wait_for_function("window.__player && window.__player.playing", timeout=30000)
     bruno.wait_for_timeout(2200); bruno.goto(sched_url)   # fechar o player envia o tempo ouvido
     bruno.wait_for_timeout(500)
     ok("escala: tocar tudo abre o player na lista; líder vê quem estudou")
