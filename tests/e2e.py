@@ -234,11 +234,15 @@ with sync_playwright() as pw:
     bruno.wait_for_function("window.__player && window.__player.playing", timeout=30000)
     assert "lista=" in bruno.url and "auto=1" in bruno.url
     first_title = bruno.locator(".player .ph h2").inner_text()
-    expect(bruno.locator(".player .qbar small")).to_have_text("Música 1 de 2")
+    expect(bruno.locator(".player .qnav small")).to_have_text("1/2")
+    bruno.evaluate("window.__player.pause()")   # sem terminar a música: a troca tem de vir do botão, não do avanço automático
     bruno.locator('.player [data-q="1"]').click()
-    expect(bruno.locator(".player .qbar small")).to_have_text("Música 2 de 2", timeout=30000)
+    expect(bruno.locator(".player .qnav small")).to_have_text("2/2", timeout=30000)
     assert bruno.locator(".player .ph h2").inner_text() != first_title
     bruno.wait_for_function("window.__player && window.__player.playing", timeout=30000)
+    bruno.evaluate("window.__player.pause()")
+    bruno.locator('.player [data-q="-1"]').click(); expect(bruno.locator(".player .qnav small")).to_have_text("1/2", timeout=30000)
+    assert bruno.locator(".player .ph h2").inner_text() == first_title and "lista=" in bruno.url
     bruno.wait_for_timeout(2200); bruno.goto(sched_url)   # fechar o player envia o tempo ouvido
     bruno.wait_for_timeout(500)
     ok("escala: tocar tudo abre o player na lista; líder vê quem estudou")

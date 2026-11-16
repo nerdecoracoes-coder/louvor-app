@@ -98,8 +98,12 @@ export async function openPlayer(songId, tomParam = null, opts = {}) {
   function build(root, song, project, engine) {
     let tab = "faixas";
     const qIdx = queue.findIndex((q) => q.id === song.id);
-    const goQ = (d) => { const q = queue[qIdx + d]; if (q) location.replace(playHref(q.id, q.key, lista, opts.auto)); };
-    root.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => goQ(Number(b.dataset.q))));
+    // troca de música da lista: abre direto a próxima/anterior (sem depender do roteador), mantendo o endereço em dia
+    const goQ = (d) => {
+      const q = queue[qIdx + d]; if (!q) return;
+      try { history.replaceState(history.state, "", playHref(q.id, q.key, lista, opts.auto)); } catch { /* ok */ }
+      openPlayer(q.id, q.key, opts).catch((e) => toast(errMsg(e), "err"));
+    };
     if (opts.auto && qIdx >= 0) engine.addEventListener("ended", () => goQ(1));
     // tempo de uso: conta só enquanto a música toca e envia de tempos em tempos (o líder vê o total de cada integrante)
     let acc = 0;
@@ -124,6 +128,7 @@ export async function openPlayer(songId, tomParam = null, opts = {}) {
         <span class="cover">${song.cover_url ? `<img src="${attr(song.cover_url)}" alt="">` : icon("music")}</span>
         <div class="grow" style="min-width:0"><h2 class="ellipsis">${esc(song.title)}</h2><div class="s ellipsis">${esc(song.artist || "")}</div></div>
         
+        ${qIdx >= 0 && queue.length > 1 ? `<span class="qnav"><button type="button" class="iconbtn" data-q="-1" aria-label="Música anterior"${qIdx === 0 ? " disabled" : ""}>${icon("prev")}</button><small>${qIdx + 1}/${queue.length}</small><button type="button" class="iconbtn" data-q="1" aria-label="Próxima música"${qIdx === queue.length - 1 ? " disabled" : ""}>${icon("next")}</button></span>` : ""}
         <button class="iconbtn" id="mixreset" title="Restaurar a mixagem do projeto" aria-label="Restaurar mix">${icon("refresh")}</button></div>
       <div class="ptabs"><button data-tab="faixas" class="on">${icon("tracks")} Faixas</button><button data-tab="mix">${icon("sliders")} Mix</button><button data-tab="letra">${icon("lyrics")} Letra</button></div>
       <div class="pbody" id="pbody"></div>
@@ -133,7 +138,6 @@ export async function openPlayer(songId, tomParam = null, opts = {}) {
         <div class="rail"></div><div class="prog" id="prog"></div><div class="head" id="head"></div></div>
       <div class="times"><span id="tcur">0:00.0</span><span id="tmark"></span><span>${fmt(L)}</span></div>
       ${parts.length ? `<div class="parts" id="parts">${parts.map((x) => `<button class="part" data-part="${x.id}" style="${x.color ? `--pc:${x.color.join(",")}` : ""}"><b class="ellipsis">${esc(x.name)}</b><span>${fmt(x.start).replace(/\.\d$/, "")}</span></button>`).join("")}</div>` : ""}
-      ${qIdx >= 0 && queue.length > 1 ? `<div class="qbar"><button type="button" data-q="-1"${qIdx === 0 ? " disabled" : ""}>${icon("prev")} Anterior</button><small>Música ${qIdx + 1} de ${queue.length}</small><button type="button" class="primary" data-q="1"${qIdx === queue.length - 1 ? " disabled" : ""}>Próxima música ${icon("next")}</button></div>` : ""}
       <div class="transport">
         <button data-t="prev" aria-label="Marcador anterior">${icon("prev")}</button>
         <button data-t="rew" aria-label="Retroceder 5 segundos">${icon("rew")}</button>
@@ -148,6 +152,7 @@ export async function openPlayer(songId, tomParam = null, opts = {}) {
         <span class="tile mixt"><b id="mixtag">Mix do projeto</b><small id="buf" class="hidden">Carregando…</small></span></div>
       <div class="tiny muted" id="diag"></div>${loaderHtml("Carregando faixas…")}`;
     root.querySelector("[data-x]").onclick = close;
+    root.querySelectorAll("[data-q]").forEach((b) => (b.onclick = () => goQ(Number(b.dataset.q))));
     root.querySelector(".ph h2").onclick = () => root.classList.toggle("diag");   // toque no título: mostra os tempos de carregamento
     const body = root.querySelector("#pbody");
     // ---------- tom: − / + em semitons (o andamento não muda)
