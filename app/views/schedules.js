@@ -942,7 +942,9 @@ async function panorama(_, el, alive) {
   const cache = new Map(); // mês -> dados, para trocar de mês sem piscar
   const mkey = () => `${flt.month.getFullYear()}-${flt.month.getMonth()}`;
   const roleOrder = new Map();
-  try { for (const r of await must(sb.from("music_roles").select("name,sort").eq("org_id", state.org.id))) roleOrder.set(r.name, r.sort); } catch { /* sem ordem */ }
+  // dentro de um time, só as funções daquele tipo de time (Louvor não mostra funções do Multimídia e vice-versa)
+  const spaceType = state.space?.team_type || null;
+  try { for (const r of await must(sb.from("music_roles").select("name,sort,team_type").eq("org_id", state.org.id))) if (!spaceType || !r.team_type || r.team_type === spaceType) roleOrder.set(r.name, r.sort); } catch { /* sem ordem */ }
 
   async function load() {
     const k = mkey();
@@ -1006,7 +1008,7 @@ async function panorama(_, el, alive) {
     const f = { ...flt, dows: [...flt.dows] };
     const members = [...new Set([...cache.values()].flatMap((d) => d.as.map((a) => a.user_id)))].sort((a, b) => personName(ppl, a).localeCompare(personName(ppl, b)));
     const allUsers = [...(state.space ? [] : [])];
-    const opts = (members.length ? members : [...ppl.keys()]).map((u) => `<option value="${u}" ${f.user === u ? "selected" : ""}>${esc(personName(ppl, u))}</option>`).join("");
+    const opts = (members.length ? members : (state.space ? [] : [...ppl.keys()])).map((u) => `<option value="${u}" ${f.user === u ? "selected" : ""}>${esc(personName(ppl, u))}</option>`).join("");
     const paint = () => {
       el.innerHTML = `<div class="pagehead"><button class="back" id="fback" aria-label="Voltar">${icon("chevronLeft")}</button><h1 style="font-size:22px">Filtros</h1></div>
         <div class="calhead"><button class="iconbtn" data-fm="-1">${icon("chevronLeft")}</button><b class="accent">${fMonthYear(f.month)}</b><button class="iconbtn" data-fm="1">${icon("chevronRight")}</button></div>

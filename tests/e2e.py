@@ -721,9 +721,12 @@ with sync_playwright() as pw:
     carla.locator("#go").click(); expect(carla.locator("#go")).to_contain_text("Parar"); carla.locator("#go").click()
     carla.goto(BASE + "/#/"); carla.locator(".menubtn").click()
     carla.locator(".drawer a", has_text="Panorama de escalas").click()
+    subprocess.run(["psql", "-q", "-c", "insert into music_roles (org_id, name, sort, team_type) select id, 'Operador de projeção', 500, 'multimidia' from organizations limit 1 on conflict do nothing"], env=dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres"), check=True)
+    carla.reload(); carla.wait_for_timeout(500)
     expect(carla.locator(".pagehead h1")).to_have_text("Panorama de escalas", timeout=10000)
     expect(carla.locator(".pgrid")).to_be_visible(timeout=10000)
     expect(carla.locator(".pgrid .ph.role", has_text="Vocal feminino")).to_be_visible()
+    assert carla.locator(".pgrid .ph.role", has_text="Operador de projeção").count() == 0   # função do Multimídia não aparece no panorama do Louvor
     expect(carla.locator(".pgrid .pcell .pav").first).to_be_visible()
     shot(carla, "22-panorama")
     carla.locator("#ppeople").click(); expect(carla.locator(".sheet .pano")).to_contain_text("Carla Dias"); carla.locator(".sheet-wrap").click(position={"x":5,"y":5})
