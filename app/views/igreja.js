@@ -145,7 +145,7 @@ export async function churchHome(el, alive) {
 
   <div class="sec"><h2>Liderança</h2>${isAdmin() ? `<span class="row gap-s"><button class="more" id="edcoord">${icon("calendar")} Agenda</button><button class="more" id="edlead">${icon("edit")} Cargos</button></span>` : ""}</div>
   ${leaders.length ? `<div class="leaders">${leaders.map((p) => `<div class="leader">${avatar(p, 92, false)}<b class="ellipsis">${esc(p.display_name)}</b><span class="ellipsis">${esc(p.church_title)}</span></div>`).join("")}</div>`
-    : `<div class="card">${empty("crown", "Pastores e líderes", isAdmin() ? "Toque em Cargos para informar quem são os pastores e líderes da igreja." : "Em breve aparecem aqui.")}</div>`}
+    : `<p class="small muted" style="margin:0 0 8px">${isAdmin() ? "Toque em Cargos para informar quem são os pastores e líderes da igreja." : "Em breve os pastores e líderes aparecem aqui."}</p>`}
 
   <div id="pend"></div>
   <div class="sec"><h2>Avisos da igreja</h2><a href="#/avisos">Todos ${icon("chevronRight")}</a></div>
