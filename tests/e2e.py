@@ -708,8 +708,10 @@ with sync_playwright() as pw:
         expect(carla.locator(".drawer").get_by_text(t, exact=True)).to_be_visible()
     assert carla.locator(".drawer").get_by_text("Avisos", exact=True).count() == 0
     shot(carla, "21-menu-lateral")
-    for t in ["Trocar de time", "Minhas escalas", "Músicas tocadas", "Aniversariantes", "Metrônomo", "Sair da conta"]:
+    for t in ["Trocar de time", "Músicas tocadas", "Aniversariantes", "Metrônomo", "Sair da conta"]:
         expect(carla.locator(".drawer").get_by_text(t, exact=True)).to_be_visible()
+    for t in ["Minhas escalas", "Eventos do time", "Devocional"]:   # já estão no início do time (com "Ver mais")
+        assert carla.locator(".drawer").get_by_text(t, exact=True).count() == 0
     carla.locator(".drawer [data-menuact=switch]").click()
     expect(carla.locator(".sheet", has_text="Meus times")).to_be_visible(); carla.keyboard.press("Escape"); carla.goto(BASE + "/#/"); carla.wait_for_timeout(300)
     for r_, h1 in [("/#/calendario/meu", "Minhas escalas"), ("/#/aniversariantes", "Aniversariantes"), ("/#/musicas/tocadas", "Músicas tocadas"), ("/#/metronomo", "Metrônomo")]:

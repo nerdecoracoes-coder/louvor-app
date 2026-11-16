@@ -132,11 +132,8 @@ function openMenu() {
   // [ícone, texto, link ou ação]
   const items = t ? [
     ...(teamOnly() ? (state.myTeams.length > 1 ? [["swap", "Trocar de time", "act:switch"]] : []) : [["org", "Visão geral da igreja", "#/igreja"], ["swap", "Trocar de time", "act:switch"]]),
-    ["calendar", "Minhas escalas", "#/calendario/meu"],
     ["userOff", "Indisponibilidades", "#/bloqueios"],
     ["bars", "Panorama de escalas", "#/panorama"],
-    ...(teamHas(t, "eventos") ? [["calendar", "Eventos do time", `#/times/${t.id}/eventos`]] : []),
-    ...(teamHas(t, "devocional") ? [["play", "Devocional", `#/times/${t.id}/devocional`]] : []),
     ...(estudio_ ? [["layers", "Estúdio de mídia", `#/times/${t.id}/estudio`], ["lyrics", "Letras", `#/times/${t.id}/letras`]] : []),
     ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"], ["clock", "Metrônomo", "#/metronomo"]] : []),
     ...(teamOnly() ? [] : [["gift", "Aniversariantes", "#/aniversariantes"]]),

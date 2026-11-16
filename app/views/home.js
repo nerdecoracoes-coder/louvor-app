@@ -153,7 +153,7 @@ async function homeView(_, el, alive) {
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div id="pend"></div>
-  <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/calendario/meu">Agenda ${icon("chevronRight")}</a></div>
+  <div class="sec"><h2>Minhas próximas escalas</h2><a href="#/calendario/meu">Ver mais ${icon("chevronRight")}</a></div>
   <div id="ups">${ups.length ? `<div class="scards">${ups.map((s) => schedCard(s, { ppl })).join("")}</div>` : empty("calendar", "Nenhuma escala por enquanto", "Quando um líder publicar uma escala com você, ela aparece aqui.")}</div>
 
   <div class="sec"><h2>Avisos</h2><a href="#/avisos">Todos ${icon("chevronRight")}</a></div>
