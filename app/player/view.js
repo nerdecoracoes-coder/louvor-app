@@ -124,7 +124,7 @@ export async function openPlayer(songId, tomParam = null, opts = {}) {
     const other = engine.tracks.filter((t) => !["audio", "folder"].includes(t.kind));
     const warnings = [...(project.warnings || []), ...engine.tracks.flatMap((t) => (t.warnings || []).map((w) => `${t.name}: ${w}`))];
     root.innerHTML = `<div class="backdrop"></div>
-      <div class="ph"><button class="back" data-x aria-label="Fechar">${icon("chevronDown")}</button>
+      <div class="ph"${song.cover_url ? ` style="--cv:url('${attr(song.cover_url).replace(/'/g, "%27")}')"` : ""}><button class="back" data-x aria-label="Fechar">${icon("chevronDown")}</button>
         <span class="cover">${song.cover_url ? `<img src="${attr(song.cover_url)}" alt="">` : icon("music")}</span>
         <div class="grow" style="min-width:0"><h2 class="ellipsis">${esc(song.title)}</h2><div class="s ellipsis">${esc(song.artist || "")}</div></div>
         
