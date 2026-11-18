@@ -327,4 +327,18 @@ describe("importação do Drive", () => {
     expect((await member.api.get(`/schedule_songs?schedule_id=eq.${sch.id}`)).data[0].song_id).toBe(novo.id);
     expect((await db.select("songs", `id=eq.${a.id}`))[0].status).toBe("removed");
   });
+  test("cor no Drive: pasta pronta fica azul; incompleta fica como estava; volta ao cinza se deixar de estar pronta", async () => {
+    await makeProject({ root: ROOT, folder: "Sem Foto - Banda", rppName: "Sem Foto - Banda - 90 BPM (D).rpp", seconds: 2, photo: false }); await ageAll(ROOT);
+    await syncOrg(deps(), org, "manual");
+    const pronta = drive.idOf(join(ROOT, "Emaús - Morada"));
+    expect(drive.colors.get(pronta)).toBe("#4986e7");
+    const incompleta = drive.idOf(join(ROOT, "Sem Foto - Banda"));
+    expect(drive.colors.get(incompleta)).toBeUndefined();
+    unlinkSync(join(ROOT, "Emaús - Morada", "Emaús.jpg")); await ageAll(ROOT);
+    const { readdirSync } = await import("node:fs");
+    for (const n of readdirSync(join(ROOT, "Emaús - Morada"))) if (/\.jpe?g$/i.test(n)) unlinkSync(join(ROOT, "Emaús - Morada", n));
+    await syncOrg(deps(), org, "manual");
+    expect(drive.colors.get(pronta)).toBe("#8f8f8f");
+    expect((await song("Emaús - Morada")).status).toBe("waiting_files");
+  });
 });

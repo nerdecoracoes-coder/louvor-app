@@ -77,6 +77,8 @@ export function pickCover(files: FolderFile[]): FolderFile | null {
   return imgs.sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))[0];
 }
 
+export const READY_COLOR = "#4986e7";
+const DEFAULT_COLOR = "#8f8f8f";
 // Padrão exato exigido para a pasta ser considerada pronta.
 export const READY_NAME = /^.+ - .+ - \d{2,3} BPM \(\s*[A-Ga-g][#b♯♭]?m?\s*\)$/;
 export function folderReadiness(files: FolderFile[]): { ready: boolean; reason: string } {
@@ -179,6 +181,24 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
       try { return { folder: f, files: (await walk(drive, f.id)).filter((x) => !IGNORE.test(x.name)), error: null as string | null }; }
       catch (e) { return { folder: f, files: [] as FolderFile[], error: String((e as Error).message ?? e) }; }
     });
+
+    // Cor no Drive: pasta pronta = azul; incompleta volta ao cinza padrão (só se fomos nós que pintamos de azul).
+    // Se o compartilhamento ainda for só leitura, avisa uma vez e segue sem pintar.
+    if (drive.setFolderColor) {
+      let denied = false;
+      for (const { folder, files, error } of listings) {
+        if (error || denied) continue;
+        const color = (folder.folderColorRgb ?? "").toLowerCase();
+        const ready = folderReadiness(files).ready;
+        const want = ready ? READY_COLOR : color === READY_COLOR ? DEFAULT_COLOR : null;
+        if (!want || color === want) continue;
+        try { await drive.setFolderColor(folder.id, want); }
+        catch (e) {
+          if (/ (403|404) /.test(String((e as Error).message))) { denied = true; await event("warn", "Não foi possível pintar as pastas no Drive: compartilhe a pasta multitracks com a conta de serviço como Editor.", {}); }
+          else await event("warn", `"${folder.name}": não foi possível mudar a cor (${(e as Error).message}).`, { folder_id: folder.id });
+        }
+      }
+    }
 
     // espelho dos itens do Drive (identificação única por ID de arquivo)
     const rows = listings.flatMap(({ folder, files }) => files.map((x) => ({
