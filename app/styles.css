@@ -1345,3 +1345,60 @@ a.li:active, button.li:active { background-color: var(--glass-2); }
   .player .ph::before, .player .ph::after { display: none; }
   .player .ph .cover { width: 30px; height: 30px; border-radius: 8px; box-shadow: none; } .player .ph h2 { font-size: 16px; } .player .ph .s { display: none; }
 }
+
+/* ============================================================================
+   Computador (≥ 980 px): estrutura de aplicativo — barra lateral fixa com o time no topo,
+   faixa superior só com menu e avisos, conteúdo centralizado e cartões em grade.
+   ============================================================================ */
+@media (min-width: 980px) {
+  :root { --side: 256px; }
+  body { background: var(--ink); }
+  .shell { max-width: none; margin: 0; padding: 0; display: grid; grid-template-columns: var(--side) minmax(0, 1fr); grid-template-rows: 72px 1fr; column-gap: 0; min-height: 100dvh; }
+  .topbar { display: contents; }
+  .topbar .brand, .topbar .menubtn, .topbar .hdr-actions, .topbar > a.iconbtn { position: relative; }
+  .topbar .brand { grid-column: 1; grid-row: 1; z-index: 60; align-self: center; margin: 0 12px 0 14px; padding: 8px 10px; border-radius: 12px; flex: none; transition: background .15s; }
+  .topbar .brand:hover { background: var(--glass); }
+  .topbar .menubtn { grid-column: 2; grid-row: 1; justify-self: end; margin: 0 100px 0 0; align-self: center; z-index: 60; }
+  .topbar .hdr-actions { grid-column: 2; grid-row: 1; justify-self: end; margin: 0 156px 0 0; align-self: center; z-index: 60; }
+  .topbar > a.iconbtn { grid-column: 2; grid-row: 1; justify-self: end; margin: 0 40px 0 0; align-self: center; z-index: 60; }
+  .bottomnav { grid-column: 1; grid-row: 1 / span 2; position: sticky; top: 0; height: 100dvh; align-self: start; width: auto; left: auto; right: auto; bottom: auto; transform: none;
+    padding: 88px 12px 24px; display: flex; flex-direction: column; gap: 2px; background: var(--ink-2); box-shadow: 1px 0 0 var(--line); border-radius: 0; overflow-y: auto; }
+  .bottomnav a { flex: none; flex-direction: row; justify-content: flex-start; gap: 14px; min-height: 44px; padding: 0 14px; font-size: 15px; border-radius: 10px; color: var(--muted); }
+  .bottomnav a span { font-size: 15px; font-weight: 500; letter-spacing: 0; }
+  .bottomnav a .ic { width: 22px; height: 22px; }
+  .bottomnav a:hover { background: var(--glass); color: var(--text); }
+  .bottomnav a.on { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: none; color: var(--text); }
+  .bottomnav a.on .ic { color: var(--accent); }
+  .bottomnav .fab { width: 100%; min-height: 44px; border-radius: 10px; margin: 0 0 12px; order: -1; background: var(--accent); color: #fff; flex-direction: row; justify-content: center; gap: 8px; }
+  .bottomnav .fab .ic { width: 20px; height: 20px; color: #fff; }
+  .bottomnav .fab::after { content: "Adicionar"; font-size: 15px; font-weight: 600; }
+  main.view { grid-column: 2; grid-row: 2; width: 100%; max-width: 960px; margin: 0 auto; padding: 8px 40px 72px; min-width: 0; }
+  main.view[data-route="/"], main.view[data-route="/igreja"], main.view[data-route="/panorama"], main.view[data-route^="/agenda"], main.view[data-route^="/calendario"], main.view[data-route^="/escala"] { max-width: 1160px; }
+  .sec { margin-top: 40px; }
+  .pagehead { margin-top: 12px; }
+  /* calendário: células de altura fixa (no computador o quadrado ficava gigante) */
+  .cal .d { aspect-ratio: auto; height: 56px; border-radius: 14px; }
+  .cal { gap: 4px; }
+  .hero h1 { font-size: 38px; }
+
+  /* cartões em grade em vez de carrossel */
+  .scards, .carousel { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; overflow: visible; margin: 0; padding: 2px 0 6px; scroll-snap-type: none; }
+  .scards > *, .carousel > * { width: auto; min-width: 0; flex: none; }
+  .bdays { margin: 0; padding: 6px 0 2px; flex-wrap: wrap; overflow: visible; }
+  .leaders { margin: 0; padding: 4px 0 8px; flex-wrap: wrap; overflow: visible; }
+  .menulist { max-width: 640px; }
+
+  /* janelas centralizadas e mais estreitas; foco visível para teclado */
+  .sheet { max-width: 520px; }
+  .list > a.li:hover, .list > button.li:hover, .list > .song:hover { background-color: var(--glass); cursor: pointer; }
+  a, button { cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .toast { bottom: 32px; }
+  .fabsave { right: 40px; bottom: 32px; }
+
+  /* player: conteúdo centralizado, com respiro nas laterais */
+  .player > :not(.backdrop):not(.timeline) { padding-left: max(32px, calc((100vw - 1240px) / 2)); padding-right: max(32px, calc((100vw - 1240px) / 2)); }
+  .player > .timeline { margin-left: max(32px, calc((100vw - 1240px) / 2)); margin-right: max(32px, calc((100vw - 1240px) / 2)); }
+  ::-webkit-scrollbar { width: 12px; height: 12px; } ::-webkit-scrollbar-thumb { background: var(--raised-2); border-radius: 8px; border: 3px solid var(--ink); } ::-webkit-scrollbar-track { background: transparent; }
+}
+@media (min-width: 1500px) { main.view[data-route="/"], main.view[data-route="/igreja"] { max-width: 1280px; } }

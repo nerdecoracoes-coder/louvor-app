@@ -687,6 +687,8 @@ with sync_playwright() as pw:
     desk.fill("input[name=email]", f"bruno.{STAMP}@teste.local"); desk.fill("input[name=password]", "senha-forte-123"); desk.locator("#go").click()
     expect(desk.locator(".hero")).to_be_visible(timeout=15000)
     shot(desk, "18-desktop-inicio")
+    for nm, hh in [("escalas", "/#/times/__T__/escalas"), ("musicas", "/#/musicas"), ("igreja", "/#/igreja"), ("agenda", "/#/agenda"), ("panorama", "/#/panorama")]:
+        desk.goto(BASE + hh.replace("__T__", louvor_id)); desk.wait_for_timeout(1400); shot(desk, f"18-desktop-{nm}")
     desk.goto(f"{BASE}/#/player/{emaus_id}"); expect(desk.locator(".player .trk")).to_have_count(9, timeout=20000)
     desk.wait_for_timeout(2500); shot(desk, "19-desktop-player")
     desk.locator('[data-tab="mix"]').click(); desk.wait_for_timeout(400); shot(desk, "20-desktop-mix")
