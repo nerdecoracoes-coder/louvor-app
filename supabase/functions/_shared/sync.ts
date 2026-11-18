@@ -15,7 +15,7 @@
 import type { Db } from "./db.ts";
 import { q } from "./db.ts";
 import { FOLDER_MIME, type DriveClient, type DriveFile } from "./drive.ts";
-import { bestName } from "./naming.ts";
+import { bestName, parseProjectName } from "./naming.ts";
 import { parseRpp, compactTree, RppError, type RppProject } from "./rpp.ts";
 import { parseWavHeader, WavNeedMore, isWavName, mimeFor, type WavFormat } from "./wav.ts";
 import { resolveRef, type FolderFile } from "./resolve.ts";
@@ -80,15 +80,18 @@ export function pickCover(files: FolderFile[]): FolderFile | null {
 export const READY_COLOR = "#4986e7";
 const DEFAULT_COLOR = "#8f8f8f";
 // Padrão exato exigido para a pasta ser considerada pronta.
-export const READY_NAME = /^.+ - .+ - \d{2,3} BPM \(\s*[A-Ga-g][#b♯♭]?m?\s*\)$/;
 export function folderReadiness(files: FolderFile[]): { ready: boolean; reason: string } {
   const root = files.filter((f) => !f.relPath.includes("/"));
-  const okProject = root.some((f) => /\.rpp$/i.test(f.name) && READY_NAME.test(f.name.replace(/\.rpp$/i, "").normalize("NFC").trim()));
-  const okPhoto = root.some((f) => /\.jpe?g$/i.test(f.name));
-  if (okProject && okPhoto) return { ready: true, reason: "" };
+  const rpps = root.filter((f) => /\.rpp$/i.test(f.name));
+  const photos = root.filter((f) => /\.jpe?g$/i.test(f.name));
+  const okProject = rpps.some((f) => { const n = parseProjectName(f.name); return n.matched && !!n.artist && n.bpm != null && !!n.key; });
+  if (okProject && photos.length) return { ready: true, reason: "" };
   const miss: string[] = [];
-  if (!okProject) miss.push('projeto do Reaper com o nome "Música - Cantor - 140 BPM (Tom)"');
-  if (!okPhoto) miss.push("foto em JPEG");
+  if (!okProject) miss.push('projeto do Reaper com o nome "Música - Cantor - 140 BPM (Tom)"' + (rpps.length ? ` (encontrado: ${rpps.map((f) => f.name).slice(0, 2).join("; ")})` : " (nenhum .rpp na pasta)"));
+  if (!photos.length) {
+    const imgs = root.filter((f) => IMAGE_EXT.test(f.name));
+    miss.push("foto em JPEG" + (imgs.length ? ` (encontrado só: ${imgs.map((f) => f.name).slice(0, 2).join("; ")})` : " (nenhuma imagem na pasta)"));
+  }
   return { ready: false, reason: "Pasta incompleta: falta " + miss.join(" e ") + "." };
 }
 
