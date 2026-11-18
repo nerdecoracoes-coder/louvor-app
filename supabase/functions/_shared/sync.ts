@@ -32,7 +32,7 @@ export interface SyncDeps {
   projectConcurrency?: number;  // projetos processados ao mesmo tempo
 }
 // muda quando a leitura dos nomes ganha uma regra nova: todas as músicas são relidas uma vez
-const NAMING_V = "naming2\n";
+const NAMING_V = "naming3-pronta\n";
 export interface SyncStats { busy?: boolean; processed?: number; editing?: number; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
 const IGNORE = /(\.rpp-bak|\.reapeaks|\.rpp-undo|\.reapindex|\.ds_store|desktop\.ini|thumbs\.db)$/i;
@@ -75,6 +75,19 @@ export function pickCover(files: FolderFile[]): FolderFile | null {
   if (!imgs.length) return null;
   const score = (f: FolderFile) => (/(capa|cover|artwork|folder|front)/i.test(f.name) ? 0 : 1);
   return imgs.sort((a, b) => score(a) - score(b) || a.name.localeCompare(b.name))[0];
+}
+
+// Padrão exato exigido para a pasta ser considerada pronta.
+export const READY_NAME = /^.+ - .+ - \d{2,3} BPM \(\s*[A-Ga-g][#b♯♭]?m?\s*\)$/;
+export function folderReadiness(files: FolderFile[]): { ready: boolean; reason: string } {
+  const root = files.filter((f) => !f.relPath.includes("/"));
+  const okProject = root.some((f) => /\.rpp$/i.test(f.name) && READY_NAME.test(f.name.replace(/\.rpp$/i, "").normalize("NFC").trim()));
+  const okPhoto = root.some((f) => /\.jpe?g$/i.test(f.name));
+  if (okProject && okPhoto) return { ready: true, reason: "" };
+  const miss: string[] = [];
+  if (!okProject) miss.push('projeto do Reaper com o nome "Música - Cantor - 140 BPM (Tom)"');
+  if (!okPhoto) miss.push("foto em JPEG");
+  return { ready: false, reason: "Pasta incompleta: falta " + miss.join(" e ") + "." };
 }
 
 async function syncCover(deps: SyncDeps, orgId: string, song: any, files: FolderFile[]) {
@@ -317,6 +330,15 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
 
   const rpps = files.filter((f) => /\.rpp$/i.test(f.name));
   if (!rpps.length) return incomplete("nenhum arquivo .RPP encontrado na pasta");
+  // Pasta "pronta" = projeto no padrão exato "Música - Cantor - 140 BPM (Tom)" + uma foto JPEG na pasta.
+  // Sem os dois, a música aparece no repertório, mas fica sem player.
+  const readiness = folderReadiness(files);
+  if (!readiness.ready) {
+    await db.update("songs", `id=eq.${song.id}`, { status: "waiting_files", status_message: readiness.reason, drive_folder_name: folder.name,
+      current_project_id: null, drive_signature: signature, retry_count: 0, next_retry_at: null });
+    await event("info", `"${folder.name}": ${readiness.reason}`, base);
+    return "waiting";
+  }
   const rootFirst = (f: FolderFile) => (f.relPath.includes("/") ? 1 : 0);
   rpps.sort((a, b) => rootFirst(a) - rootFirst(b) || Number(bestName(b.name, "").matched) - Number(bestName(a.name, "").matched)
     || String(b.modifiedTime).localeCompare(String(a.modifiedTime)));

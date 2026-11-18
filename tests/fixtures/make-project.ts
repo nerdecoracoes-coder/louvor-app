@@ -5,7 +5,7 @@ import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { $ } from "bun";
 
-export interface FixtureOpts { root: string; folder?: string; rppName?: string; seconds?: number; variant?: "v1" | "v2" }
+export interface FixtureOpts { root: string; folder?: string; rppName?: string; seconds?: number; variant?: "v1" | "v2"; photo?: boolean }
 
 const guid = (n: number) => `{${n.toString(16).padStart(8, "0").toUpperCase()}-1111-2222-3333-444455556666}`;
 
@@ -129,6 +129,7 @@ ${track(1, "Click", item("Tracks 1\\Click.wav", 0, secs), vp(1, 0))}${track(2, "
 `, vp(1, 0))}>
 `;
   writeFileSync(join(dir, rppName), rpp);
+  if (o.photo !== false) writeFileSync(join(dir, "Zfoto.jpg"), Buffer.from("/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAAAP/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AT//Z", "base64"));
   // backup do REAPER que deve ser ignorado
   writeFileSync(join(dir, rppName.replace(/\.rpp$/i, ".rpp-bak")), rpp);
   return { dir, rppPath: join(dir, rppName) };

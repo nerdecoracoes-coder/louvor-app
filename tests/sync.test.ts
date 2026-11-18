@@ -196,11 +196,12 @@ describe("importação do Drive", () => {
     const st = await syncOrg(deps(), org, "manual");
     expect(st.errors).toBe(0);
     const g = await song("Grande É o Senhor");
-    expect(g).toMatchObject({ status: "ready", title: "Grande É o Senhor", artist: "Morada" }); // artista vem da pasta do grupo
+    expect(g).toMatchObject({ status: "waiting_files", title: "Grande É o Senhor", artist: "Morada", current_project_id: null }); // artista vem da pasta do grupo; nome fora do padrão = sem player
+    expect(g.status_message).toContain("Música - Cantor - 140 BPM (Tom)");
     expect((await song("Emaús - Morada")).status).toBe("ready");                                 // música solta continua
     expect((await db.select("songs", `org_id=eq.${org}&drive_folder_id=eq.${drive.idOf(grp)}`))).toHaveLength(0);
     // o player pode ler os áudios das músicas dentro do grupo
-    const fileId = (await db.select("project_media", `project_id=eq.${g.current_project_id}&limit=1`))[0].drive_file_id;
+    const fileId = (await db.select("project_media", `project_id=eq.${(await song("Ousado Amor - Isaias Saad")).current_project_id}&limit=1`))[0].drive_file_id;
     expect((await member.api.rpc("can_read_drive_file", { p_file_id: fileId })).data).toBe(true);
     // rodar de novo não reprocessa
     const st2 = await syncOrg(deps(), org, "cron");
@@ -227,6 +228,7 @@ describe("importação do Drive", () => {
     const store = new Map<string, Uint8Array>(); const removed: string[] = [];
     const covers = { put: async (p: string, b: Uint8Array) => { store.set(p, b); return `https://x.supabase.co/storage/v1/object/public/media/${p}`; }, remove: async (p: string) => { removed.push(p); } };
     const dir = join(ROOT, "Emaús - Morada");
+    { const { readdirSync, statSync } = await import("node:fs"); const rm = (d: string) => { for (const n of readdirSync(d)) { const q = join(d, n); if (statSync(q).isDirectory()) rm(q); else if (n === "Zfoto.jpg") unlinkSync(q); } }; rm(ROOT); } // fotos padrão da fixture saem; "Emaús.jpg" é a capa deste teste
     writeFileSync(join(dir, "Emaús.jpg"), new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]));
     writeFileSync(join(dir, "Tracks 1", "foto-da-sessao.jpg"), new Uint8Array([0xff, 0xd8, 9])); // em subpasta: não é capa
     await ageAll(ROOT);
