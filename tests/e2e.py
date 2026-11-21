@@ -799,9 +799,17 @@ with sync_playwright() as pw:
     bruno.locator("[data-pback]").click(); expect(bruno.locator("#openpal")).to_contain_text("2 paletas")
     bruno.locator("#savebtn").click(); songs_ok(bruno); bruno.locator(".dialog .btn.primary, .sheet .btn.primary, [data-ok]").first.click()
     bruno.wait_for_url(re.compile(r"/escalas$"), timeout=15000)
-    bruno.locator("#modebtn").click(); bruno.locator(".tlcard", has_text="Ensaio semanal").first.wait_for(timeout=10000)
+    bruno.locator("#modebtn").click()
+    def acha_ensaio():
+        TL = ".tl-day, :text('Nenhuma escala neste mês')"
+        bruno.locator(TL).first.wait_for(timeout=10000)
+        for _ in range(2):   # a linha do tempo mostra um mês por vez: a data do teste (daqui a 10 dias) pode cair no mês seguinte
+            if bruno.locator(".tlcard", has_text="Ensaio semanal").count(): break
+            bruno.locator("[data-m='1']").first.click(); bruno.locator(TL).first.wait_for(timeout=10000)
+        bruno.locator(".tlcard", has_text="Ensaio semanal").first.wait_for(timeout=10000)
+    acha_ensaio()
     bruno.locator(".tlcard", has_text="Ensaio semanal").first.click(); expect(bruno.locator(".palview")).to_have_count(2, timeout=10000)
-    bruno.go_back(); bruno.locator(".tlcard", has_text="Ensaio semanal").first.wait_for(timeout=10000)
+    bruno.go_back(); acha_ensaio()
     assert bruno.locator(".tlcard", has_text="Ensaio semanal").count() >= 1 and bruno.locator(".tlcard .tag", has_text="Pendente").count() >= 0
     bruno.locator("#modebtn").click()
     ok("escala com repetição semanal, sem confirmação e com cor")

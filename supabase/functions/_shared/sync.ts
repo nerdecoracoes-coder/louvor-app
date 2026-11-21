@@ -28,6 +28,7 @@ export interface SyncDeps {
   maxProjectsPerRun?: number;   // limite de projetos reprocessados por execução (tempo da função)
   settleMinutes?: number;       // tempo de espera por arquivos ainda sendo enviados
   concurrency?: number;
+  paintBudgetMs?: number; maxPaintPerRun?: number;
   timeBudgetMs?: number;        // depois disso, não começa projetos novos (o resto fica para a próxima rodada)
   projectConcurrency?: number;  // projetos processados ao mesmo tempo
 }
@@ -136,7 +137,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
   const integ = await db.one("drive_integrations", `org_id=eq.${orgId}`);
   if (!integ) throw new Error("Organização sem integração com o Google Drive.");
   // rodadas que ficaram "em andamento" porque o servidor encerrou a função antes do fim
-  const stale = new Date(runStart.getTime() - 7 * 60_000).toISOString();
+  const stale = new Date(runStart.getTime() - 4 * 60_000).toISOString();
   await db.update("sync_runs", `org_id=eq.${orgId}&status=eq.running&started_at=lt.${q(stale)}`,
     { status: "error", finished_at: runStart.toISOString(), error: "Interrompida pelo servidor (tempo limite). As músicas que faltaram continuam na próxima rodada." }).catch(() => {});
   // só uma rodada por vez (cron, aviso do Drive e botão podem chegar juntos)
@@ -184,24 +185,6 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
       try { return { folder: f, files: (await walk(drive, f.id)).filter((x) => !IGNORE.test(x.name)), error: null as string | null }; }
       catch (e) { return { folder: f, files: [] as FolderFile[], error: String((e as Error).message ?? e) }; }
     });
-
-    // Cor no Drive: pasta pronta = azul; incompleta volta ao cinza padrão (só se fomos nós que pintamos de azul).
-    // Se o compartilhamento ainda for só leitura, avisa uma vez e segue sem pintar.
-    if (drive.setFolderColor) {
-      let denied = false;
-      for (const { folder, files, error } of listings) {
-        if (error || denied) continue;
-        const color = (folder.folderColorRgb ?? "").toLowerCase();
-        const ready = folderReadiness(files).ready;
-        const want = ready ? READY_COLOR : color === READY_COLOR ? DEFAULT_COLOR : null;
-        if (!want || color === want) continue;
-        try { await drive.setFolderColor(folder.id, want); }
-        catch (e) {
-          if (/ (403|404) /.test(String((e as Error).message))) { denied = true; await event("warn", "Não foi possível pintar as pastas no Drive: compartilhe a pasta multitracks com a conta de serviço como Editor.", {}); }
-          else await event("warn", `"${folder.name}": não foi possível mudar a cor (${(e as Error).message}).`, { folder_id: folder.id });
-        }
-      }
-    }
 
     // espelho dos itens do Drive (identificação única por ID de arquivo)
     const rows = listings.flatMap(({ folder, files }) => files.map((x) => ({
@@ -303,6 +286,27 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
       stats.removed++;
     }
     await db.delete("drive_items", `org_id=eq.${orgId}&seen_at=lt.${q(runStart.toISOString())}`);
+    // Cor no Drive (por último, para nunca atrasar a importação das músicas): pasta pronta = azul; incompleta volta ao
+    // cinza padrão (só se fomos nós que pintamos de azul). Em paralelo, com limite de tempo e de pastas por rodada;
+    // o que sobrar é pintado na rodada seguinte. Se o compartilhamento ainda for só leitura, avisa uma vez e segue.
+    if (drive.setFolderColor) {
+      let denied = false, left = deps.maxPaintPerRun ?? 40;
+      const paintLimitMs = deps.paintBudgetMs ?? 110_000;
+      const todo = listings.filter((l) => !l.error).map((l) => {
+        const color = (l.folder.folderColorRgb ?? "").toLowerCase();
+        const want = folderReadiness(l.files).ready ? READY_COLOR : color === READY_COLOR ? DEFAULT_COLOR : null;
+        return { folder: l.folder, color, want };
+      }).filter((x) => x.want && x.color !== x.want);
+      await pool(todo, 4, async ({ folder, want }) => {
+        if (denied || left <= 0 || now().getTime() - runStart.getTime() > paintLimitMs) return;
+        left--;
+        try { await drive.setFolderColor!(folder.id, want!); }
+        catch (e) {
+          if (/ (403|404) /.test(String((e as Error).message))) { if (!denied) { denied = true; await event("warn", "Não foi possível pintar as pastas no Drive: compartilhe a pasta multitracks com a conta de serviço como Editor.", {}); } }
+          else await event("warn", `"${folder.name}": não foi possível mudar a cor (${(e as Error).message}).`, { folder_id: folder.id });
+        }
+      });
+    }
     const status = stats.errors ? "partial" : "ok";
     await db.update("sync_runs", `id=eq.${run.id}`, { status, finished_at: now().toISOString(), stats });
     await db.update("drive_integrations", `org_id=eq.${orgId}`, { status: "connected", last_sync_at: now().toISOString(), last_success_at: now().toISOString(), last_error: null });
