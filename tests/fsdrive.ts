@@ -21,15 +21,12 @@ export class FsDrive implements DriveClient {
     }
     return null;
   }
-  colors = new Map<string, string>();
-  async setFolderColor(id: string, rgb: string) { this.colors.set(id, rgb); }
   private meta(p: string): DriveFile {
     const st = statSync(p);
     const dir = st.isDirectory();
     return { id: this.idOf(p), name: basename(p), mimeType: dir ? FOLDER_MIME : "application/octet-stream",
       md5Checksum: dir ? undefined : createHash("md5").update(readFileSync(p)).digest("hex"),
-      size: dir ? undefined : String(st.size), modifiedTime: st.mtime.toISOString(), capabilities: { canEdit: false, canDownload: true },
-      folderColorRgb: dir ? this.colors.get(this.idOf(p)) : undefined };
+      size: dir ? undefined : String(st.size), modifiedTime: st.mtime.toISOString(), capabilities: { canEdit: false, canDownload: true } };
   }
   async getFile(id: string) { this.calls++; const p = this.pathOf(id); if (!p) throw new Error("Google Drive 404: File not found"); return this.meta(p); }
   async listChildren(id: string) {

@@ -9,7 +9,7 @@
 export interface DriveFile {
   id: string; name: string; mimeType: string; md5Checksum?: string; size?: string;
   modifiedTime?: string; parents?: string[]; trashed?: boolean; owners?: Array<{ emailAddress?: string; displayName?: string }>;
-  capabilities?: { canEdit?: boolean; canDownload?: boolean }; folderColorRgb?: string;
+  capabilities?: { canEdit?: boolean; canDownload?: boolean };
 }
 export interface DriveClient {
   serviceEmail(): string;
@@ -20,14 +20,11 @@ export interface DriveClient {
   media(id: string, range: string | null): Promise<Response>;
   watchChanges?(address: string, channelId: string, token: string, ttlMs: number): Promise<{ resourceId: string; expiration: string }>;
   startPageToken?(): Promise<string>;
-  setFolderColor?(id: string, rgb: string): Promise<void>;   // opcional: só funciona com a pasta compartilhada como Editor
 }
 
 export const FOLDER_MIME = "application/vnd.google-apps.folder";
 const API = "https://www.googleapis.com/drive/v3";
-// Escopo "drive": necessário só para mudar a cor das pastas (files.update). O app nunca apaga nem edita arquivos;
-// o alcance real continua limitado ao que foi compartilhado com a conta de serviço.
-const SCOPE = "https://www.googleapis.com/auth/drive";
+const SCOPE = "https://www.googleapis.com/auth/drive.readonly";
 
 interface ServiceAccount { client_email: string; private_key: string; token_uri?: string }
 
@@ -93,17 +90,12 @@ export class GoogleDrive implements DriveClient {
     let pageToken = "";
     do {
       const q = encodeURIComponent(`'${folderId.replace(/'/g, "")}' in parents and trashed = false`);
-      const r = await this.call(`/files?q=${q}&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=nextPageToken,files(id,name,mimeType,md5Checksum,size,modifiedTime,parents,folderColorRgb)${pageToken ? "&pageToken=" + pageToken : ""}`);
+      const r = await this.call(`/files?q=${q}&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true&fields=nextPageToken,files(id,name,mimeType,md5Checksum,size,modifiedTime,parents)${pageToken ? "&pageToken=" + pageToken : ""}`);
       const j = await r.json();
       out.push(...j.files);
       pageToken = j.nextPageToken ?? "";
     } while (pageToken);
     return out;
-  }
-  async setFolderColor(id: string, rgb: string) {
-    await this.call(`/files/${encodeURIComponent(id)}?supportsAllDrives=true&fields=id`, {
-      method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ folderColorRgb: rgb }),
-    });
   }
   async downloadText(id: string) {
     const r = await this.call(`/files/${encodeURIComponent(id)}?alt=media&supportsAllDrives=true`);
