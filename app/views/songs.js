@@ -44,12 +44,12 @@ async function library(_, el, alive) {
   const fc = new Map(); for (const f of files) fc.set(f.song_id, (fc.get(f.song_id) || 0) + 1);
   rows.forEach((r) => (r.files_count = fc.get(r.id) || 0));
   const NOART = "Sem artista";
-  let q = "", tab = "musicas", artist = null, searching = false;
-  headerActions(`<button class="iconbtn" id="lupa" aria-label="Pesquisar">${icon("search")}</button>`);
+  let q = "", tab = "musicas", artist = null;
   const draw = () => {
-    const ql = q.toLowerCase();
+    const fold = (x) => String(x || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();   // sem diferença de acento ou maiúscula
+    const ql = fold(q);
     let list = rows.filter((r) => r.status !== "removed")
-      .filter((r) => !ql || r.title.toLowerCase().includes(ql) || (r.artist || "").toLowerCase().includes(ql));
+      .filter((r) => !ql || fold(r.title).includes(ql) || fold(r.artist).includes(ql));
     if (tab === "vs") list = list.filter((r) => r.current_project_id);
     const box = el.querySelector("#list");
     let count;
@@ -74,15 +74,10 @@ async function library(_, el, alive) {
   el.innerHTML = `<div class="pagehead"><h1>Músicas</h1>${isStaff() ? `<a class="iconbtn" href="#/org/drive" aria-label="Google Drive">${icon("cloud")}</a><a class="iconbtn add" href="#/musicas/nova" aria-label="Adicionar música">${icon("plus")}</a>` : ""}</div>
     ${processing ? `<div class="card mb row gap small">${icon("refresh", "accent")}<span>${processing} música(s) ainda sendo processada(s) a partir do Google Drive.</span></div>` : ""}
     <div class="tabsbar" role="tablist"><button class="on" data-tab="musicas">Músicas</button><button data-tab="artistas">Artistas</button><button data-tab="vs">Com VS</button></div>
-    <label class="search srch hidden" id="sbox" style="display:block">${icon("search")}<input class="input" id="q" placeholder="Pesquisar por título ou artista"></label>
+    <label class="search srch" id="sbox" style="display:block">${icon("search")}<input class="input" id="q" type="search" enterkeyhint="search" autocomplete="off" placeholder="Pesquisar música ou artista"></label>
     <div class="small muted" id="count"></div>
     <div class="list mt-s" id="list"></div>`;
   draw();
-  const sbox = el.querySelector("#sbox");
-  document.getElementById("lupa")?.addEventListener("click", () => {
-    searching = !searching; sbox.classList.toggle("hidden", !searching);
-    if (searching) el.querySelector("#q").focus(); else { q = ""; el.querySelector("#q").value = ""; draw(); }
-  });
   el.querySelector("#q").oninput = (e) => { q = e.target.value.trim(); draw(); };
   on(el, "click", "[data-tab]", (e, b) => { tab = b.dataset.tab; artist = null; el.querySelectorAll("[data-tab]").forEach((x) => x.classList.toggle("on", x === b)); draw(); });
   on(el, "click", "[data-art]", (e, b) => { artist = b.dataset.art; draw(); });

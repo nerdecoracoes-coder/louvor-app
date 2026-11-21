@@ -341,4 +341,13 @@ describe("importação do Drive", () => {
     expect(drive.colors.get(pronta)).toBe("#8f8f8f");
     expect((await song("Emaús - Morada")).status).toBe("waiting_files");
   });
+  test("cor no Drive: sem permissão de Editor (403) avisa uma vez e a sincronização segue", async () => {
+    const { DriveError } = await import("../supabase/functions/_shared/drive.ts");
+    drive.colors.clear();   // pastas sem cor: há o que pintar
+    drive.setFolderColor = async () => { throw new DriveError(403, "Google Drive 403: The user does not have sufficient permissions for this file."); };
+    const st = await syncOrg(deps(), org, "manual");
+    expect(st.errors).toBe(0);
+    const ev = await db.select("sync_events", `org_id=eq.${org}&message=like.*como%20Editor*&order=created_at.desc`);
+    expect(ev.length).toBe(1);   // um aviso só, mesmo com várias pastas a pintar
+  });
 });

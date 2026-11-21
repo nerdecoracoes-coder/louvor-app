@@ -302,7 +302,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
         left--;
         try { await drive.setFolderColor!(folder.id, want!); }
         catch (e) {
-          if (/ (403|404) /.test(String((e as Error).message))) { if (!denied) { denied = true; await event("warn", "Não foi possível pintar as pastas no Drive: compartilhe a pasta multitracks com a conta de serviço como Editor.", {}); } }
+          if ([403, 404].includes((e as { status?: number }).status ?? 0) || /\b(403|404)\b/.test(String((e as Error).message))) { if (!denied) { denied = true; await event("warn", "Não foi possível pintar as pastas no Drive: compartilhe a pasta multitracks com a conta de serviço como Editor.", {}); } }
           else await event("warn", `"${folder.name}": não foi possível mudar a cor (${(e as Error).message}).`, { folder_id: folder.id });
         }
       });

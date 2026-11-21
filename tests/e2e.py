@@ -186,7 +186,7 @@ with sync_playwright() as pw:
     expect(ana.locator("[data-art]", has_text="Isaias Saad")).to_be_visible()
     ana.locator("[data-art]", has_text="Isaias Saad").click(); expect(ana.locator(".song", has_text="Bondade de Deus")).to_be_visible()
     ana.locator("[data-tab=musicas]").click()
-    ana.locator("#lupa").click(); ana.fill("#q", "Bondade"); expect(ana.locator(".song")).to_have_count(1); ana.locator("#lupa").click()
+    expect(ana.locator("#q")).to_be_visible(); ana.fill("#q", "bondáde"); expect(ana.locator(".song")).to_have_count(1); ana.fill("#q", "")
     ok("música manual identificada sem VS; abas Artistas e Com VS; lupa de pesquisa")
 
     # letra
