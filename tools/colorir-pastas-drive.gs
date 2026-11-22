@@ -1,7 +1,8 @@
 /**
  * Pinta de AZUL, na SUA visão do Google Drive, as pastas de música que estão prontas.
  * Pronta = tem, direto na pasta, um projeto do Reaper chamado "Música - Cantor - 140 BPM (Tom)" e uma foto JPEG.
- * As demais ficam como estão. É a mesma regra que o Somos usa para liberar o player.
+ * As demais ficam como estão. Só mexe nas pastas DENTRO da "multitracks"; o restante do Drive nunca é tocado.
+ * O script apenas lê nomes e muda a cor: não renomeia, move, apaga nem edita nenhum arquivo. É a mesma regra que o Somos usa para liberar o player.
  *
  * Como usar: script.google.com > Novo projeto > cole este código > troque PASTA_ID abaixo >
  * Executar "colorirPastas" (autorize na primeira vez). Para rodar sozinho: execute "ativarAutomatico" uma vez.
@@ -48,7 +49,10 @@ function colorirPastas() {
     }
   };
 
-  visitar(DriveApp.getFolderById(PASTA_ID), 1);
+  // Trava de segurança: só trabalha dentro da pasta indicada, e só se ela se chamar "multitracks".
+  const raiz = DriveApp.getFolderById(PASTA_ID);
+  if (raiz.getName().toLowerCase() !== "multitracks") throw new Error('PASTA_ID não é a pasta "multitracks" — nada foi alterado.');
+  visitar(raiz, 1);
   gravarAzuis_(props, agora);
   Logger.log("Prontas (azul): " + azuis + " · Incompletas: " + incompletas);
 }
