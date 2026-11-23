@@ -1,15 +1,15 @@
 /**
- * Pinta de AZUL, na SUA visão do Google Drive, as pastas de música que estão prontas.
- * Pronta = tem, direto na pasta, um projeto do Reaper chamado "Música - Cantor - 140 BPM (Tom)" e uma foto JPEG.
- * As demais ficam como estão. Só mexe nas pastas DENTRO da "multitracks"; o restante do Drive nunca é tocado.
- * O script apenas lê nomes e muda a cor: não renomeia, move, apaga nem edita nenhum arquivo. É a mesma regra que o Somos usa para liberar o player.
+ * Pinta de AZUL, na SUA visao do Google Drive, as pastas de musica que estao prontas.
+ * Pronta = tem, direto na pasta, um projeto do Reaper chamado "Musica - Cantor - 140 BPM (Tom)" e uma foto JPEG.
+ * As demais ficam como estao. So mexe nas pastas DENTRO da "multitracks"; o restante do Drive nunca e tocado.
+ * O script apenas le nomes e muda a cor: nao renomeia, move, apaga nem edita nenhum arquivo. E a mesma regra que o Somos usa para liberar o player.
  *
- * Como usar: script.google.com > Novo projeto > cole este código > troque PASTA_ID abaixo >
+ * Como usar: script.google.com > Novo projeto > cole este codigo > troque PASTA_ID abaixo >
  * Executar "colorirPastas" (autorize na primeira vez). Para rodar sozinho: execute "ativarAutomatico" uma vez.
  */
 const PASTA_ID = "COLE_AQUI_O_ID_DA_PASTA_MULTITRACKS";   // o trecho depois de /folders/ no link da pasta
 
-const NOME_PRONTO = /^(.+?)\s*-\s*(.+?)\s*-\s*\d{2,3}([.,]\d+)?\s*bpms?\s*\(\s*[A-Ga-g][#b♯♭]?m?\s*\)$/i;
+const NOME_PRONTO = /^(.+?)\s*-\s*(.+?)\s*-\s*\d{2,3}([.,]\d+)?\s*bpms?\s*\(\s*[A-Ga-g][#b\u266F\u266D]?m?\s*\)$/i;
 
 function prontaPasta_(pasta) {
   let projeto = false, foto = false;
@@ -37,9 +37,9 @@ function colorirPastas() {
     while (subs.hasNext()) {
       if (Date.now() - inicio > 5 * 60 * 1000) return;   // limite do Apps Script: 6 min
       const f = subs.next();
-      // pasta de cantor/grupo: sem arquivos próprios, só subpastas
+      // pasta de cantor/grupo: sem arquivos proprios, so subpastas
       if (nivel < 2 && !temArquivos_(f) && f.getFolders().hasNext()) { visitar(f, nivel + 1); continue; }
-      if (/-\s*editar\s*$/i.test(f.getName())) continue;   // pastas "- Editar" são ignoradas, como no app
+      if (/-\s*editar\s*$/i.test(f.getName())) continue;   // pastas "- Editar" sao ignoradas, como no app
       if (prontaPasta_(f)) {
         f.setColor(DriveApp.Color.BLUE); agora.push(f.getId()); azuis++;
       } else {
@@ -49,12 +49,12 @@ function colorirPastas() {
     }
   };
 
-  // Trava de segurança: só trabalha dentro da pasta indicada, e só se ela se chamar "multitracks".
-  const raiz = DriveApp.getFolderById(PASTA_ID);
-  if (raiz.getName().toLowerCase() !== "multitracks") throw new Error('PASTA_ID não é a pasta "multitracks" — nada foi alterado.');
+  // Trava de seguranca: so trabalha dentro da pasta indicada, e so se ela se chamar "multitracks".
+  const raiz = DriveApp.getFolderById(String(PASTA_ID).split("?")[0].trim());   // aceita o ID mesmo com "?hl=pt-br" colado junto
+  if (raiz.getName().toLowerCase() !== "multitracks") throw new Error('PASTA_ID nao e a pasta "multitracks" - nada foi alterado.');
   visitar(raiz, 1);
   gravarAzuis_(props, agora);
-  Logger.log("Prontas (azul): " + azuis + " · Incompletas: " + incompletas);
+  Logger.log("Prontas (azul): " + azuis + " - Incompletas: " + incompletas);
 }
 
 function ativarAutomatico() {   // roda a cada hora
@@ -62,7 +62,7 @@ function ativarAutomatico() {   // roda a cada hora
   ScriptApp.newTrigger("colorirPastas").timeBased().everyHours(1).create();
 }
 
-// guarda quais pastas pintamos (as propriedades têm limite de tamanho: 100 ids por chave)
+// guarda quais pastas pintamos (as propriedades tem limite de tamanho: 100 ids por chave)
 function lerAzuis_(props) {
   const out = [];
   for (let i = 0; ; i++) { const v = props.getProperty("azuis" + i); if (!v) break; out.push(...v.split(",")); }
