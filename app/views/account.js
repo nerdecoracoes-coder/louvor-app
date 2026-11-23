@@ -230,6 +230,7 @@ async function profileView(_, el) {
       <label class="field"><span>Cidade</span><input name="city" maxlength="80" value="${attr(p.city || "")}"></label>
       <label class="field"><span>Sobre</span><textarea name="about" maxlength="500">${esc(p.about || "")}</textarea></label>
       <button class="btn primary block" id="save">Salvar perfil</button></form>
+    <div id="mypersonhost" class="mt"></div>
     <div class="sec">${icon("sparkle")}<h2>Aparência</h2></div>
     <div class="card"><div class="themepick" id="thm"><button type="button" data-th="dark" class="${getTheme() === "dark" ? "on" : ""}">${icon("moon")} Escuro</button><button type="button" data-th="light" class="${getTheme() === "light" ? "on" : ""}">${icon("sun")} Claro</button></div>
       <p class="small muted mt-s">Fica salvo neste aparelho. O padrão é o escuro.</p></div>
@@ -239,6 +240,7 @@ async function profileView(_, el) {
     <div class="sec">${icon("org")}<h2>Igrejas</h2></div>
     <div class="list">${state.orgs.map((o) => `<div class="li"><span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : o.role === "guest" ? "Convidado" : "Membro"}${o.display_name ? ` · aparece como "${esc(o.display_name)}"` : ""}</span></span></div>`).join("")}</div>
     <div class="row gap mt wrap"><button class="btn ghost" id="pw">${icon("lock")} Alterar senha</button><button class="btn danger" id="out">${icon("logout")} Sair</button></div>`;
+  if (state.org) import("./pessoas.js").then((m) => m.myRegistrationCard(el.querySelector("#mypersonhost"))).catch(() => {});
   el.querySelectorAll("#thm [data-th]").forEach((b) => b.onclick = () => { setTheme(b.dataset.th); el.querySelectorAll("#thm [data-th]").forEach((x) => x.classList.toggle("on", x === b)); });
   el.querySelector("#av").onclick = () => el.querySelector("#ph").click();
   el.querySelector("#ph").onclick = async () => {

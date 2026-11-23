@@ -70,7 +70,10 @@ export const isGeneralLeader = () => !!state.access?.general_leader;
 // pode configurar redes e liderança: administrador, desenvolvedor ou liderança geral com a ação "administrar"
 export const canAdminOrg = () => isDeveloper() || isAdmin() || (state.access?.general_leader?.actions || []).includes("administer");
 // SOMOS Chamados: desenvolvedor, administrador, liderança geral, supervisor de rede ou líder de algum ministério
-export const canChamados = () => !!state.access && (state.access.developer || state.access.admin || !!state.access.general_leader || myNetworks().length > 0 || (state.access.leader_of || []).length > 0);
+export const peopleCan = (a) => (state.access?.people || []).includes(a);
+// cadastro de pessoas: só quem recebeu alguma permissão do módulo (administrador ou concessão); ser líder não basta
+export const canPeople = () => ["people_view", "people_edit", "people_approve", "people_import"].some(peopleCan);
+export const canChamados = () => !!state.access && (state.access.developer || state.access.admin || !!state.access.general_leader || !!state.access.secretary || canPeople() || myNetworks().length > 0 || (state.access.leader_of || []).length > 0);
 export const environments = () => [
   ...(!teamOnly() && (state.access?.member || isDeveloper()) ? [{ key: "um", label: "SOMOS Um" }] : []),
   ...(state.myTeams.length || (isDeveloper() && (state.orgTeams || []).length) ? [{ key: "servos", label: "SOMOS Servos" }] : []),
@@ -225,6 +228,7 @@ const P = {
   flame: '<path d="M12 21.5c-3.9 0-6.5-2.6-6.5-6.2 0-2.7 1.6-4.5 3-6 1-1.1 1.7-2.3 1.7-4.3 3.2 1.5 5.3 3.8 5.8 6.5.6-.4 1.1-1.1 1.3-2 1.2 1.4 1.7 3.1 1.7 4.6 0 3.6-3.1 7.4-7 7.4z"/><path d="M12 21.5c-1.7 0-2.8-1.2-2.8-2.8 0-1.3.9-2.1 1.6-3 .4-.5.7-1 .8-1.7 1.9 1.1 3.2 2.6 3.2 4.7 0 1.6-1.1 2.8-2.8 2.8z"/>',
   star: '<path d="m12 2.8 2.8 5.8 6.4.9-4.6 4.5 1.1 6.4L12 17.4 6.3 20.4l1.1-6.4L2.8 9.5l6.4-.9z"/>',
   video: '<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5z"/>',
+  userPlus: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M19 8v6M16 11h6"/>', upload: '<path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
   church: '<path d="M12 2v4M10 4h4"/><path d="m12 6-5 4v11h10V10z"/><path d="M10 21v-5a2 2 0 0 1 4 0v5"/><path d="M7 12.5H2.5V21H7M17 12.5h4.5V21H17"/>',
   book: '<path d="M12 6.500C10 5 7.500 4.500 4 4.500v14c3.500 0 6 .5 8 2 2-1.500 4.500-2 8-2v-14c-3.500 0-6 .5-8 2z"/><path d="M12 6.500v14"/>',
 };

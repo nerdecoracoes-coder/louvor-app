@@ -1,12 +1,14 @@
 // SOMOS Chamados: ambiente de quem lidera (líderes de ministério, pastores supervisores de rede, liderança geral).
 // Pessoa ≠ conta ≠ vínculo ≠ função ≠ permissão: aqui só se enxerga e configura o que o servidor libera (my_access / RPCs).
-import { sb, state, esc, attr, icon, people, personName, teamBadge, teamTypeLabel, sheet, toast, errMsg, busy, on, empty, spinner, confirmDialog, canAdminOrg, canChamados, myNetworks, isGeneralLeader, isDeveloper } from "../core.js";
+import { sb, state, esc, attr, icon, people, personName, teamBadge, teamTypeLabel, sheet, toast, errMsg, busy, on, empty, spinner, confirmDialog, canAdminOrg, canChamados, canPeople, myNetworks, isGeneralLeader, isDeveloper } from "../core.js";
 
 export function register(route) { route("/chamados", (p, el, a) => view(el, a)); }
 
 const SETUP = `<div class="card small">Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-23-ambientes.sql</b> no SQL Editor do Supabase.</div>`;
 const ACTIONS = [["view", "Ver"], ["create", "Criar"], ["edit", "Editar"], ["delete", "Excluir"], ["approve", "Aprovar"], ["manage", "Gerenciar"], ["administer", "Administrar"]];
-const actLabel = (a) => (ACTIONS.find((x) => x[0] === a) || [a, a])[1];
+const PEOPLE_ACTIONS = [["people_view", "Ver a base de pessoas"], ["people_edit", "Cadastrar e editar pessoas"], ["people_approve", "Aprovar cadastros"], ["people_import", "Importar e vincular pessoas"]];
+const actLabel = (a) => ([...ACTIONS, ...PEOPLE_ACTIONS].find((x) => x[0] === a) || [a, a])[1];
+const chipsOf = (list, on) => list.map(([k, l]) => `<label class="chip"><input type="checkbox" value="${k}" ${on.includes(k) ? "checked" : ""}> ${l}</label>`).join("");
 
 async function view(el, alive) {
   if (!state.access) { el.innerHTML = `<div class="pagehead"><h1>SOMOS Chamados</h1></div>${SETUP}`; return; }
@@ -37,13 +39,16 @@ async function view(el, alive) {
     const netTeams = (id) => (nt.data || []).filter((x) => x.network_id === id).map((x) => teamsById.get(x.team_id)).filter(Boolean);
     const supers = (id) => grants.filter((g) => g.role_key === "network_supervisor" && g.network_id === id);
     const leaders = grants.filter((g) => g.role_key === "general_leader");
-    el.innerHTML = `<div class="pagehead"><h1>SOMOS Chamados</h1><p class="muted small">Ministérios e pessoas sob sua responsabilidade.${isDeveloper() ? " · Acesso de desenvolvedor" : ""}</p></div>
-    <h3>Ministérios</h3>
+    el.innerHTML = `<div class="pagehead"><h1>SOMOS Chamados</h1></div><p class="muted small" style="margin:-8px 0 14px">Ministérios e pessoas sob sua responsabilidade.${isDeveloper() ? " · Acesso de desenvolvedor" : ""}</p>
+    ${canPeople() || isDeveloper() ? `<h3>Pessoas</h3><div class="list menu"><a class="li" href="#/pessoas">${icon("users")}<span class="grow"><span class="t">Cadastro de pessoas</span><span class="s">Membros, frequentadores e visitantes</span></span>${icon("chevronRight", "chev")}</a></div>` : ""}
+    <h3${canPeople() || isDeveloper() ? ' class="mt"' : ""}>Ministérios</h3>
     <div class="list menu">${teams.map(teamRow).join("") || `<div class="li muted small">Nenhum ministério sob sua responsabilidade ainda.</div>`}</div>
     ${(nets.data || []).length || admin ? `<div class="row between mt"><h3>Redes de supervisão</h3>${admin ? `<button class="btn ghost sm" data-net="">${icon("plus")} Nova rede</button>` : ""}</div>
     <div class="list">${(nets.data || []).map((n) => `<div class="li col"><div class="row between"><b>${esc(n.name)}</b>${admin ? `<span class="row gap-s"><button class="btn ghost sm" data-net="${n.id}">Editar</button><button class="btn ghost sm" data-sup="${n.id}">Supervisor</button></span>` : ""}</div>
       <div class="s muted small">${netTeams(n.id).map((t) => esc(t.name)).join(", ") || "Sem ministérios"}</div>
       ${supers(n.id).map((g) => `<div class="row between small"><span>${icon("badge")} ${esc(nm(g.user_id))}${g.title ? ` · ${esc(g.title)}` : ""}</span>${admin ? `<button class="btn ghost sm" data-rm="${g.id}">Remover</button>` : ""}</div>`).join("")}</div>`).join("") || `<div class="li muted small">Nenhuma rede criada.</div>`}</div>` : ""}
+    ${admin ? `<div class="row between mt"><h3>Secretaria</h3><button class="btn ghost sm" data-sec>${icon("plus")} Adicionar</button></div>
+    <div class="list">${grants.filter((g) => g.role_key === "secretary").map((g) => `<div class="li col"><div class="row between"><span>${icon("badge")} <b>${esc(nm(g.user_id))}</b>${g.title ? ` · ${esc(g.title)}` : ""}</span><button class="btn ghost sm" data-rm="${g.id}">Remover</button></div><div class="s muted small">${(g.actions || []).map(actLabel).join(", ")}</div></div>`).join("") || `<div class="li muted small">Ninguém na secretaria. A secretaria cuida do cadastro de pessoas.</div>`}</div>` : ""}
     ${admin ? `<div class="row between mt"><h3>Liderança geral</h3><button class="btn ghost sm" data-gl>${icon("plus")} Adicionar</button></div>
     <div class="list">${leaders.map((g) => `<div class="li col"><div class="row between"><span>${icon("crown")} <b>${esc(nm(g.user_id))}</b>${g.title ? ` · ${esc(g.title)}` : ""}</span><button class="btn ghost sm" data-rm="${g.id}">Remover</button></div><div class="s muted small">${(g.actions || []).map(actLabel).join(", ")}</div></div>`).join("") || `<div class="li muted small">Ninguém na liderança geral.</div>`}</div>` : ""}`;
   };
@@ -55,13 +60,16 @@ async function view(el, alive) {
     s.el.querySelector("#ok").onclick = async (e) => { const b = e.currentTarget; busy(b); try { if (await onSave(s.el.querySelector("#u").value, s.el.querySelector("#ti").value.trim() || null, s.el)) s.close(); } finally { busy(b, false); } };
   };
   el.addEventListener("click", async (e) => {
-    const b = e.target.closest("[data-net],[data-sup],[data-gl],[data-rm]"); if (!b) return;
+    const b = e.target.closest("[data-net],[data-sup],[data-gl],[data-sec],[data-rm]"); if (!b) return;
     if (b.dataset.rm) { if (await confirmDialog("Remover esta função? A pessoa continua na igreja e nos times.", "Remover")) await call("grant_remove", { p_id: b.dataset.rm }, "Função removida"); return; }
     if ("gl" in b.dataset) {
-      return pick("Liderança geral", `<div class="fld">Permissões<div class="chips">${ACTIONS.filter((a) => a[0] !== "delete").map(([k, l]) => `<label class="chip"><input type="checkbox" value="${k}" ${["view", "approve", "manage"].includes(k) ? "checked" : ""}> ${l}</label>`).join("")}</div></div>`,
+      return pick("Liderança geral", `<div class="fld">Permissões<div class="chips" style="flex-wrap:wrap">${chipsOf([...ACTIONS.filter((a) => a[0] !== "delete"), ...PEOPLE_ACTIONS], ["view", "approve", "manage"])}</div></div>`,
         (u, ti, root) => call("grant_set", { p_org: org, p_user: u, p_role: "general_leader", p_network: null, p_title: ti, p_actions: [...root.querySelectorAll(".chips input:checked")].map((i) => i.value) }, "Liderança geral salva"));
     }
-    if (b.dataset.sup) return pick("Pastor supervisor", "", (u, ti) => call("grant_set", { p_org: org, p_user: u, p_role: "network_supervisor", p_network: b.dataset.sup, p_title: ti, p_actions: null }, "Supervisor definido"));
+    if (b.dataset.sup) return pick("Pastor supervisor", `<div class="fld">Cadastro de pessoas (opcional)<div class="chips" style="flex-wrap:wrap">${chipsOf([PEOPLE_ACTIONS[0]], [])}</div><span class="tiny muted">Dá acesso apenas às pessoas com conta que servem nos ministérios desta rede.</span></div>`,
+      (u, ti, root) => call("grant_set", { p_org: org, p_user: u, p_role: "network_supervisor", p_network: b.dataset.sup, p_title: ti, p_actions: ["view", "approve", "manage", ...[...root.querySelectorAll(".chips input:checked")].map((i) => i.value)] }, "Supervisor definido"));
+    if ("sec" in b.dataset) return pick("Secretaria", `<div class="fld">Permissões<div class="chips" style="flex-wrap:wrap">${chipsOf(PEOPLE_ACTIONS, PEOPLE_ACTIONS.map((x) => x[0]))}</div></div>`,
+      (u, ti, root) => { const acts = [...root.querySelectorAll(".chips input:checked")].map((i) => i.value); if (!acts.length) { toast("Marque ao menos uma permissão."); return false; } return call("grant_set", { p_org: org, p_user: u, p_role: "secretary", p_network: null, p_title: ti || "Secretaria", p_actions: acts }, "Secretaria definida"); });
     const cur = (nets.data || []).find((n) => n.id === b.dataset.net), has = new Set((nt.data || []).filter((x) => x.network_id === cur?.id).map((x) => x.team_id));
     const s = sheet(`<h3>${cur ? "Editar rede" : "Nova rede"}</h3><label class="fld">Nome<input id="nn" maxlength="60" value="${attr(cur?.name || "")}"></label><div class="fld">Ministérios<div class="list">${state.orgTeams.map((t) => `<label class="li"><input type="checkbox" value="${t.id}" ${has.has(t.id) ? "checked" : ""}><span class="grow">${esc(t.name)}</span></label>`).join("")}</div></div><div class="row gap-s mt"><button class="btn grow" id="ok">Salvar</button>${cur ? `<button class="btn ghost" id="del">Excluir</button>` : ""}</div>`);
     s.el.querySelector("#ok").onclick = async (ev) => { const name = s.el.querySelector("#nn").value.trim(); if (!name) return toast("Dê um nome à rede."); const b2 = ev.currentTarget; busy(b2); try { if (await call("network_save", { p_org: org, p_id: cur?.id || null, p_name: name, p_teams: [...s.el.querySelectorAll(".list input:checked")].map((i) => i.value) }, "Rede salva")) s.close(); } finally { busy(b2, false); } };

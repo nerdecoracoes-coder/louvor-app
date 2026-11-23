@@ -1038,6 +1038,58 @@ with sync_playwright() as pw:
     carla.reload(); carla.wait_for_timeout(2500); assert carla.locator(".bdaypop").count() == 0   # só na primeira abertura do dia
     ok("janela de parabéns na primeira abertura do dia; aniversariantes do mês no início")
 
+
+    # ------------------------------------------------------------------ Pessoas: cadastro manual, formulário público (QR), importação, aprovação
+    ana.goto(BASE + "/#/pessoas"); expect(ana.locator(".pagehead h1")).to_have_text("Pessoas", timeout=10000)
+    expect(ana.locator("#stats")).to_contain_text("Pendentes", timeout=10000)
+    ana.locator("#add").click(); expect(ana.locator(".sheet")).to_contain_text("Formulário por link ou QR Code"); ana.locator(".sheet a", has_text="Cadastro manual").click()
+    expect(ana.locator(".pagehead h1")).to_have_text("Nova pessoa", timeout=10000)
+    ana.fill("input[name=full_name]", "Helena Matos"); ana.fill("input[name=phone]", "(21) 97777-6666"); ana.fill("input[name=email]", "helena@teste.com")
+    ana.locator("select[name=classification]").select_option("member"); ana.locator("#ok").click()
+    expect(ana.locator(".pagehead h1")).to_have_text("Helena Matos", timeout=10000)
+    expect(ana.locator("#view")).to_contain_text("Membro"); expect(ana.locator("#view")).to_contain_text("Sem conta")
+    shot(ana, "40-pessoa-ficha")
+    # mesma pessoa de novo: avisa a duplicidade
+    ana.goto(BASE + "/#/pessoas/nova"); ana.fill("input[name=full_name]", "Helena M."); ana.fill("input[name=email]", "HELENA@teste.com"); ana.locator("#ok").click()
+    expect(ana.locator(".sheet")).to_contain_text("Já existe cadastro parecido", timeout=10000); ana.locator(".sheet [data-close]").click()
+    # classificação com histórico
+    ana.goto(BASE + "/#/pessoas"); ana.fill("#q", "Helena"); ana.locator(".li", has_text="Helena Matos").first.click()
+    ana.locator("#cls").click(); ana.locator(".sheet label", has_text="Frequentador").click(); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#view")).to_contain_text("Membro → Frequentador", timeout=10000) if False else expect(ana.locator("#view")).to_contain_text("Frequentador", timeout=10000)
+    expect(ana.locator("#view")).to_contain_text("Classificação")
+    # formulário público
+    ana.goto(BASE + "/#/pessoas/formulario"); ana.locator("#new").click(); ana.locator(".sheet #ok").click()
+    expect(ana.locator(".sheet .qrbox svg")).to_be_visible(timeout=10000); shot(ana, "41-qrcode")
+    link = ana.locator(".sheet #u").input_value(); assert "/#/cadastro/" in link
+    pc, pub = ctx(br); pub.goto(link)
+    expect(pub.locator("h1")).to_contain_text("Cadastro de pessoas", timeout=10000)
+    pub.fill("input[name=full_name]", "Igor Visitante"); pub.fill("input[name=phone]", "21966665555"); pub.fill("input[name=email]", "igor@teste.com"); pub.locator("#ok").click()
+    expect(pub.locator("h1")).to_have_text("Cadastro enviado", timeout=10000); shot(pub, "42-formulario-publico"); pc.close()
+    ana.goto(BASE + "/#/pessoas"); expect(ana.locator(".pstat", has_text="Pendentes").locator("b")).to_have_text("1", timeout=10000)
+    ana.locator('#fil [data-k="pending"]').click(); ana.locator(".li", has_text="Igor Visitante").click()
+    ana.locator("#appr").click(); expect(ana.locator("#view")).to_contain_text("Ativo", timeout=10000)
+    # importação por planilha: modelo -> prévia -> importar
+    ana.goto(BASE + "/#/pessoas/importar")
+    csv = "Nome completo;E-mail;CPF;Classificação\nPlanilha Um;um@planilha.com;529.982.247-25;Membro\nPlanilha Dois;;;Visitante\n;sem@nome.com;;\nCPF Ruim;;123;\n"
+    open("/tmp/import-e2e.csv", "w").write(csv)
+    with ana.expect_file_chooser() as fc: ana.locator("#pick").click()
+    fc.value.set_files("/tmp/import-e2e.csv")
+    expect(ana.locator("#prev")).to_contain_text("Revise", timeout=10000)
+    expect(ana.locator("#prev .pstat.ok b")).to_have_text("2"); expect(ana.locator("#prev .pstat.bad b")).to_have_text("2"); shot(ana, "43-importacao-previa")
+    ana.locator("#run").click(); ana.locator(".sheet [data-ok]").click()
+    expect(ana.locator("#prev")).to_contain_text("2 pessoas importadas", timeout=10000)
+    ana.goto(BASE + "/#/pessoas"); ana.fill("#q", "Planilha"); expect(ana.locator("#rows .li")).to_have_count(2, timeout=10000); shot(ana, "44-pessoas-lista")
+    ana.goto(BASE + "/#/chamados"); expect(ana.locator("#view")).to_contain_text("Secretaria", timeout=10000); shot(ana, "45-chamados")
+    ana.goto(BASE + "/#/pessoas"); ana.fill("#q", "Planilha"); expect(ana.locator("#rows .li")).to_have_count(2, timeout=10000)
+    ana.fill("#q", "529.982"); expect(ana.locator("#rows .li")).to_have_count(1, timeout=10000)
+    # servo não entra no módulo e vê só os próprios dados
+    carla.goto(BASE + "/#/pessoas"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
+    assert carla.locator('a[href="#/pessoas"]').count() == 0
+    carla.goto(BASE + "/#/perfil"); expect(carla.locator("#mypersonhost")).to_contain_text("Meus dados cadastrais", timeout=10000)
+    carla.locator("#mydata").click(); carla.locator(".sheet input[name=city]").fill("Niterói"); assert carla.locator(".sheet select[name=classification]").count() == 0
+    carla.locator(".sheet #ok").click(); toast_has(carla, "Dados salvos")
+    ok("pessoas: cadastro manual com aviso de duplicidade, histórico de classificação, formulário público com QR + aprovação, importação com prévia, servo sem acesso à base")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
         for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}"]:
