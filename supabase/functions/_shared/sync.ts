@@ -108,7 +108,7 @@ async function syncCover(deps: SyncDeps, orgId: string, song: any, files: Folder
     url = await deps.covers.put(`songs/${orgId}/${song.id}/${tag}.${ext}`, bytes, ext === "jpg" ? "image/jpeg" : `image/${ext}`);
   }
   const old = song.cover_url?.match(/\/object\/public\/media\/(.+)$/)?.[1];
-  await deps.db.update("songs", `id=eq.${song.id}`, { cover_url: url });
+  await deps.db.updateQuiet("songs", `id=eq.${song.id}`, { cover_url: url });
   song.cover_url = url;
   if (old && deps.covers.remove) await deps.covers.remove(decodeURIComponent(old));
 }
@@ -135,13 +135,13 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
   if (!integ) throw new Error("Organização sem integração com o Google Drive.");
   // rodadas que ficaram "em andamento" porque o servidor encerrou a função antes do fim
   const stale = new Date(runStart.getTime() - 4 * 60_000).toISOString();
-  await db.update("sync_runs", `org_id=eq.${orgId}&status=eq.running&started_at=lt.${q(stale)}`,
+  await db.updateQuiet("sync_runs", `org_id=eq.${orgId}&status=eq.running&started_at=lt.${q(stale)}`,
     { status: "error", finished_at: runStart.toISOString(), error: "Interrompida pelo servidor (tempo limite). As músicas que faltaram continuam na próxima rodada." }).catch(() => {});
   // só uma rodada por vez (cron, aviso do Drive e botão podem chegar juntos)
   if (await db.one("sync_runs", `org_id=eq.${orgId}&status=eq.running&select=id&limit=1`)) return { ...stats, busy: true };
   const [run] = await db.insert("sync_runs", { org_id: orgId, trigger });
   const event = (level: "info" | "warn" | "error", message: string, extra: Record<string, unknown> = {}) =>
-    db.insert("sync_events", { org_id: orgId, run_id: run.id, level, message, ...extra }).catch(() => {});
+    db.insertQuiet("sync_events", { org_id: orgId, run_id: run.id, level, message, ...extra }).catch(() => {});
 
   try {
     const rootKids = await drive.listChildren(integ.folder_id);
@@ -188,7 +188,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
       org_id: orgId, file_id: x.id, song_folder_id: folder.id, name: x.name, rel_path: x.relPath, mime_type: x.mimeType,
       md5: x.md5, size: x.size, modified_time: x.modifiedTime, seen_at: runStart.toISOString(),
     })));
-    for (let i = 0; i < rows.length; i += 500) await db.upsert("drive_items", rows.slice(i, i + 500), "org_id,file_id");
+    for (let i = 0; i < rows.length; i += 500) await db.upsertQuiet("drive_items", rows.slice(i, i + 500), "org_id,file_id");
 
     // 1º as pastas novas ou alteradas mais recentemente (um envio novo aparece logo, mesmo com fila grande)
     const work: { folder: DriveFile & { group?: string }; files: FolderFile[]; song: any; signature: string; latest: string }[] = [];
@@ -258,7 +258,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
         const used = s.current_project_id ? [1] : await db.select("schedule_songs", `song_id=eq.${s.id}&select=id&limit=1`);
         if (!used.length) { await db.delete("songs", `id=eq.${s.id}`); continue; }
         if (s.status === "removed") continue;
-        await db.update("songs", `id=eq.${s.id}`, { status: "removed", status_message: "A pasta no Drive está marcada como \"- Editar\". Tire o \"- Editar\" do nome quando a música estiver pronta.", drive_signature: null });
+        await db.updateQuiet("songs", `id=eq.${s.id}`, { status: "removed", status_message: "A pasta no Drive está marcada como \"- Editar\". Tire o \"- Editar\" do nome quando a música estiver pronta.", drive_signature: null });
         await event("info", `"${s.title}" saiu do repertório (pasta marcada "- Editar").`, { song_id: s.id, folder_id: s.drive_folder_id });
         stats.removed++;
         continue;
@@ -278,19 +278,19 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
         await db.update("songs", `duplicate_of=eq.${s.id}`, { duplicate_of: null }).catch(() => {});
         await event("info", `"${s.title}": as escalas foram passadas para a pasta nova com o mesmo nome.`, { song_id: h.id, folder_id: h.drive_folder_id });
       }
-      await db.update("songs", `id=eq.${s.id}`, { status: "removed", status_message: "A pasta foi removida do Google Drive. O histórico das escalas foi preservado.", drive_signature: null });
+      await db.updateQuiet("songs", `id=eq.${s.id}`, { status: "removed", status_message: "A pasta foi removida do Google Drive. O histórico das escalas foi preservado.", drive_signature: null });
       await event("info", `"${s.title}" saiu do repertório (pasta removida do Drive).`, { song_id: s.id, folder_id: s.drive_folder_id });
       stats.removed++;
     }
     await db.delete("drive_items", `org_id=eq.${orgId}&seen_at=lt.${q(runStart.toISOString())}`);
     const status = stats.errors ? "partial" : "ok";
-    await db.update("sync_runs", `id=eq.${run.id}`, { status, finished_at: now().toISOString(), stats });
-    await db.update("drive_integrations", `org_id=eq.${orgId}`, { status: "connected", last_sync_at: now().toISOString(), last_success_at: now().toISOString(), last_error: null });
+    await db.updateQuiet("sync_runs", `id=eq.${run.id}`, { status, finished_at: now().toISOString(), stats });
+    await db.updateQuiet("drive_integrations", `org_id=eq.${orgId}`, { status: "connected", last_sync_at: now().toISOString(), last_success_at: now().toISOString(), last_error: null });
     return stats;
   } catch (e) {
     const msg = String((e as Error).message ?? e);
-    await db.update("sync_runs", `id=eq.${run.id}`, { status: "error", finished_at: now().toISOString(), stats, error: msg });
-    await db.update("drive_integrations", `org_id=eq.${orgId}`, { status: "error", last_sync_at: now().toISOString(), last_error: msg });
+    await db.updateQuiet("sync_runs", `id=eq.${run.id}`, { status: "error", finished_at: now().toISOString(), stats, error: msg });
+    await db.updateQuiet("drive_integrations", `org_id=eq.${orgId}`, { status: "error", last_sync_at: now().toISOString(), last_error: msg });
     await event("error", `Falha na sincronização: ${msg}`);
     throw e;
   }
@@ -309,7 +309,7 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
   const incomplete = async (msg: string): Promise<Outcome> => {
     const keepReady = song.status === "ready" && song.current_project_id;
     if (stillUploading) {
-      await db.update("songs", `id=eq.${song.id}`, {
+      await db.updateQuiet("songs", `id=eq.${song.id}`, {
         status: keepReady ? "ready" : "waiting_files", status_message: (keepReady ? "Nova versão aguardando arquivos: " : "") + msg,
         drive_folder_name: folder.name, next_retry_at: new Date(now().getTime() + 2 * 60_000).toISOString(),
       });
@@ -322,7 +322,7 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
     const keepReady = song.status === "ready" && song.current_project_id;
     const n = (song.retry_count ?? 0) + 1;
     const wait = transient ? Math.min(60, 2 ** n) : Math.min(24 * 60, 15 * 2 ** n);
-    await db.update("songs", `id=eq.${song.id}`, {
+    await db.updateQuiet("songs", `id=eq.${song.id}`, {
       status: keepReady ? "ready" : "error", status_message: (keepReady ? "Não foi possível atualizar: " : "") + msg,
       drive_folder_name: folder.name, retry_count: n, next_retry_at: new Date(now().getTime() + wait * 60_000).toISOString(),
       drive_signature: transient ? null : signature, // erro permanente: só tenta de novo quando a pasta mudar (ou no próximo horário)
@@ -337,7 +337,7 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
   // Sem os dois, a música aparece no repertório, mas fica sem player.
   const readiness = folderReadiness(files);
   if (!readiness.ready) {
-    await db.update("songs", `id=eq.${song.id}`, { status: "waiting_files", status_message: readiness.reason, drive_folder_name: folder.name,
+    await db.updateQuiet("songs", `id=eq.${song.id}`, { status: "waiting_files", status_message: readiness.reason, drive_folder_name: folder.name,
       current_project_id: null, drive_signature: signature, retry_count: 0, next_retry_at: null });
     await event("info", `"${folder.name}": ${readiness.reason}`, base);
     return "waiting";
@@ -425,8 +425,8 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
       warnings: allWarnings, lyrics_raw: project.lyrics, raw,
     });
     projectId = p.id;
-    await db.insert("project_media", media.map((m) => ({ ...m, project_id: projectId, org_id: orgId })));
-    await db.insert("project_tracks", project.tracks.map((t) => ({
+    await db.insertQuiet("project_media", media.map((m) => ({ ...m, project_id: projectId, org_id: orgId })));
+    await db.insertQuiet("project_tracks", project.tracks.map((t) => ({
       project_id: projectId, org_id: orgId, idx: t.idx, guid: t.guid, name: t.name, kind: t.kind,
       volume: t.volume, pan: t.pan, muted: t.muted, soloed: t.soloed, phase_invert: t.phaseInvert, color: t.color,
       folder_depth: t.folderDepth, parent_idx: t.parentIdx, sends_to_parent: t.sendsToParent,
@@ -438,12 +438,12 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
       }),
       warnings: [...t.warnings, ...t.items.flatMap((i) => i.warnings)],
     })));
-    if (project.markers.length) await db.insert("project_markers", project.markers.map((m) => ({
+    if (project.markers.length) await db.insertQuiet("project_markers", project.markers.map((m) => ({
       project_id: projectId, org_id: orgId, idx: m.idx, name: m.name, position: m.position, end_position: m.end, is_region: m.isRegion, color: m.color,
     })));
   }
-  await db.update("multitrack_projects", `song_id=eq.${song.id}&id=neq.${projectId}&is_current=eq.true`, { is_current: false });
-  await db.update("multitrack_projects", `id=eq.${projectId}`, { is_current: true });
+  await db.updateQuiet("multitrack_projects", `song_id=eq.${song.id}&id=neq.${projectId}&is_current=eq.true`, { is_current: false });
+  await db.updateQuiet("multitrack_projects", `id=eq.${projectId}`, { is_current: true });
 
   const isNew = !song.current_project_id;
   const [updated] = await db.update("songs", `id=eq.${song.id}`, {
@@ -465,7 +465,7 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
   const dups: any[] = await db.select("songs", `org_id=eq.${orgId}&id=neq.${song.id}&status=neq.removed&title=ilike.${q(pat(updated.title))}` +
     (updated.artist ? `&artist=ilike.${q(pat(updated.artist))}` : `&artist=is.null`) + `&order=created_at.asc&limit=1`);
   const dupOf = dups[0] && new Date(dups[0].created_at) < new Date(updated.created_at) ? dups[0].id : null;
-  if (dupOf !== (updated.duplicate_of ?? null)) await db.update("songs", `id=eq.${song.id}`, { duplicate_of: dupOf });
+  if (dupOf !== (updated.duplicate_of ?? null)) await db.updateQuiet("songs", `id=eq.${song.id}`, { duplicate_of: dupOf });
   if (dupOf) await event("warn", `"${updated.title}" parece duplicada de outra música do repertório (pasta "${dups[0].drive_folder_name ?? dups[0].title}").`, base);
   return existing && !isNew ? "unchanged" : isNew ? "created" : "updated";
 }

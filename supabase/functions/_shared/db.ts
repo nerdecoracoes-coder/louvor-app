@@ -19,6 +19,10 @@ export class Db {
     return this.req("POST", `/${table}?on_conflict=${onConflict}`, rows, "return=representation,resolution=merge-duplicates");
   }
   update<T = any>(table: string, filter: string, patch: unknown): Promise<T[]> { return this.req("PATCH", `/${table}?${filter}`, patch); }
+  // variantes que NÃO pedem as linhas de volta: mesma gravação, sem gastar tráfego (egress) com uma resposta que ninguém lê
+  async insertQuiet(table: string, rows: unknown): Promise<void> { await this.req("POST", `/${table}`, rows, "return=minimal"); }
+  async upsertQuiet(table: string, rows: unknown, onConflict: string): Promise<void> { await this.req("POST", `/${table}?on_conflict=${onConflict}`, rows, "return=minimal,resolution=merge-duplicates"); }
+  async updateQuiet(table: string, filter: string, patch: unknown): Promise<void> { await this.req("PATCH", `/${table}?${filter}`, patch, "return=minimal"); }
   delete(table: string, filter: string) { return this.req("DELETE", `/${table}?${filter}`, undefined, "return=minimal"); }
   rpc<T = any>(fn: string, args: unknown): Promise<T> { return this.req("POST", `/rpc/${fn}`, args); }
 }

@@ -100,7 +100,7 @@ export async function handleSync(req: Request, env: Env): Promise<Response> {
     const body = await req.json().catch(() => ({}));
     for (const it of (body.items ?? []) as any[]) {
       const prev = await db.one("light_audio", `drive_file_id=eq.${encodeURIComponent(it.drive_file_id)}&src=eq.${encodeURIComponent(it.src)}`);
-      await db.upsert("light_audio", {
+      await db.upsertQuiet("light_audio", {
         org_id: it.org_id, drive_file_id: it.drive_file_id, src: it.src, key: it.error ? null : it.key, info: it.error ? null : it.info,
         bytes: it.error ? null : it.bytes ?? null, error: it.error ? String(it.error).slice(0, 500) : null,
         attempts: it.error ? (prev?.attempts ?? 0) + 1 : prev?.attempts ?? 0, updated_at: new Date().toISOString(),
