@@ -25,26 +25,37 @@ function prontaPasta_(pasta) {
 
 function temArquivos_(pasta) { return pasta.getFiles().hasNext(); }
 
+var AZUL = "#4986e7", CINZA = "#8f8f8f";
+
+// O Apps Script nao tem comando de cor para pastas: usamos a API do Drive com a sua propria autorizacao.
+function api_(id, metodo, corpo) {
+  const r = UrlFetchApp.fetch("https://www.googleapis.com/drive/v3/files/" + id + "?supportsAllDrives=true&fields=id,folderColorRgb", {
+    method: metodo, contentType: "application/json", payload: corpo ? JSON.stringify(corpo) : null,
+    headers: { Authorization: "Bearer " + ScriptApp.getOAuthToken() }, muteHttpExceptions: true,
+  });
+  if (r.getResponseCode() >= 300) throw new Error("Drive " + r.getResponseCode() + ": " + r.getContentText().slice(0, 200));
+  return JSON.parse(r.getContentText());
+}
+
 function colorirPastas() {
   const inicio = Date.now();
-  const props = PropertiesService.getScriptProperties();
-  const antes = new Set(lerAzuis_(props));
-  const agora = [];
-  let azuis = 0, incompletas = 0;
+  let azuis = 0, incompletas = 0, mudadas = 0;
 
   const visitar = (pasta, nivel) => {
     const subs = pasta.getFolders();
     while (subs.hasNext()) {
-      if (Date.now() - inicio > 5 * 60 * 1000) return;   // limite do Apps Script: 6 min
+      if (Date.now() - inicio > 5 * 60 * 1000) { Logger.log("Tempo esgotado: rode de novo para continuar."); return; }
       const f = subs.next();
       // pasta de cantor/grupo: sem arquivos proprios, so subpastas
       if (nivel < 2 && !temArquivos_(f) && f.getFolders().hasNext()) { visitar(f, nivel + 1); continue; }
       if (/-\s*editar\s*$/i.test(f.getName())) continue;   // pastas "- Editar" sao ignoradas, como no app
+      const cor = (api_(f.getId(), "get").folderColorRgb || "").toLowerCase();
       if (prontaPasta_(f)) {
-        f.setColor(DriveApp.Color.BLUE); agora.push(f.getId()); azuis++;
+        azuis++;
+        if (cor !== AZUL) { api_(f.getId(), "patch", { folderColorRgb: AZUL }); mudadas++; }
       } else {
         incompletas++;
-        if (antes.has(f.getId())) f.setColor(DriveApp.Color.GRAY);   // deixou de estar pronta: volta ao cinza
+        if (cor === AZUL) { api_(f.getId(), "patch", { folderColorRgb: CINZA }); mudadas++; }   // deixou de estar pronta: volta ao cinza
       }
     }
   };
@@ -53,22 +64,10 @@ function colorirPastas() {
   const raiz = DriveApp.getFolderById(String(PASTA_ID).split("?")[0].trim());   // aceita o ID mesmo com "?hl=pt-br" colado junto
   if (raiz.getName().toLowerCase() !== "multitracks") throw new Error('PASTA_ID nao e a pasta "multitracks" - nada foi alterado.');
   visitar(raiz, 1);
-  gravarAzuis_(props, agora);
-  Logger.log("Prontas (azul): " + azuis + " - Incompletas: " + incompletas);
+  Logger.log("Prontas (azul): " + azuis + " - Incompletas: " + incompletas + " - Cores alteradas agora: " + mudadas);
 }
 
 function ativarAutomatico() {   // roda a cada hora
   ScriptApp.getProjectTriggers().forEach((t) => ScriptApp.deleteTrigger(t));
   ScriptApp.newTrigger("colorirPastas").timeBased().everyHours(1).create();
-}
-
-// guarda quais pastas pintamos (as propriedades tem limite de tamanho: 100 ids por chave)
-function lerAzuis_(props) {
-  const out = [];
-  for (let i = 0; ; i++) { const v = props.getProperty("azuis" + i); if (!v) break; out.push(...v.split(",")); }
-  return out;
-}
-function gravarAzuis_(props, ids) {
-  for (let i = 0; i < 100; i++) props.deleteProperty("azuis" + i);
-  for (let i = 0; i * 100 < ids.length; i++) props.setProperty("azuis" + i, ids.slice(i * 100, i * 100 + 100).join(","));
 }
