@@ -1,5 +1,5 @@
 // Conta, convites, primeira organização, perfil, notificações, configurações da igreja e o Google Drive do repertório.
-import { sb, state, must, esc, attr, icon, avatar, teamBadge, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fRel,
+import { brandLogo, getTheme, setTheme, sb, state, must, esc, attr, icon, avatar, teamBadge, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fRel,
   uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, TEAM_TYPES, isRepertoireStaff, CHURCH_SIGNUP, isDeveloper } from "../core.js";
 import { colorPicker, readColor, bindColor } from "./teams.js";
 
@@ -14,7 +14,7 @@ export function register(route) {
   route("/org/drive", driveSettings);
 }
 
-const logo = () => `<div class="logo"><span class="brandmark"><img src="icon-192.png" alt=""><b>Somos</b></span></div>`;
+const logo = () => `<div class="logo">${brandLogo()}</div>`;
 const root = () => document.getElementById("app");
 const authShell = (inner) => `<div class="backdrop"><svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="rgba(30,167,255,.45)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="rgba(30,167,255,.25)" stroke-width="1" fill="none"/></svg></div><div class="auth"><div class="box">${inner}</div></div>`;
 
@@ -214,7 +214,10 @@ function newPasswordView() {
 // ---------------------------------------------------------------- perfil
 async function profileView(_, el) {
   const p = state.profile || {};
-  const tmr = await must(sb.from("team_member_roles").select("team_id,music_roles(name),teams(name)").eq("user_id", state.user.id));
+  const tmr0 = await must(sb.from("team_member_roles").select("team_id,music_roles(name)").eq("user_id", state.user.id));
+  const tids = [...new Set(tmr0.map((r) => r.team_id))];
+  const tnames = new Map((tids.length ? await must(sb.from("teams").select("id,name").in("id", tids)) : []).map((t) => [t.id, t.name]));
+  const tmr = tmr0.map((r) => ({ ...r, teams: { name: tnames.get(r.team_id) || "" } }));
   const byTeam = new Map(); for (const r of tmr) { const k = r.teams?.name || ""; if (!byTeam.has(k)) byTeam.set(k, []); if (r.music_roles) byTeam.get(k).push(r.music_roles.name); }
   let photo = p.avatar_url || null;
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Meu perfil</h1></div>
@@ -227,12 +230,16 @@ async function profileView(_, el) {
       <label class="field"><span>Cidade</span><input name="city" maxlength="80" value="${attr(p.city || "")}"></label>
       <label class="field"><span>Sobre</span><textarea name="about" maxlength="500">${esc(p.about || "")}</textarea></label>
       <button class="btn primary block" id="save">Salvar perfil</button></form>
+    <div class="sec">${icon("sparkle")}<h2>Aparência</h2></div>
+    <div class="card"><div class="themepick" id="thm"><button type="button" data-th="dark" class="${getTheme() === "dark" ? "on" : ""}">${icon("moon")} Escuro</button><button type="button" data-th="light" class="${getTheme() === "light" ? "on" : ""}">${icon("sun")} Claro</button></div>
+      <p class="small muted mt-s">Fica salvo neste aparelho. O padrão é o escuro.</p></div>
     <div class="sec">${icon("music")}<h2>Minhas funções</h2></div>
     ${byTeam.size ? `<div class="list">${[...byTeam.entries()].map(([t, rs]) => `<div class="li"><span class="grow"><span class="t">${esc(t)}</span><span class="s">${rs.length ? rs.map(esc).join(" · ") : "Sem função definida"}</span></span></div>`).join("")}</div>`
       : `<p class="small muted">As funções são definidas pelos líderes de cada time.</p>`}
     <div class="sec">${icon("org")}<h2>Igrejas</h2></div>
     <div class="list">${state.orgs.map((o) => `<div class="li"><span class="grow"><span class="t">${esc(o.organizations.name)}</span><span class="s">${o.role === "admin" ? "Administrador geral" : o.role === "guest" ? "Convidado" : "Membro"}${o.display_name ? ` · aparece como "${esc(o.display_name)}"` : ""}</span></span></div>`).join("")}</div>
     <div class="row gap mt wrap"><button class="btn ghost" id="pw">${icon("lock")} Alterar senha</button><button class="btn danger" id="out">${icon("logout")} Sair</button></div>`;
+  el.querySelectorAll("#thm [data-th]").forEach((b) => b.onclick = () => { setTheme(b.dataset.th); el.querySelectorAll("#thm [data-th]").forEach((x) => x.classList.toggle("on", x === b)); });
   el.querySelector("#av").onclick = () => el.querySelector("#ph").click();
   el.querySelector("#ph").onclick = async () => {
     const f = await pickFile("image/*"); if (!f) return;

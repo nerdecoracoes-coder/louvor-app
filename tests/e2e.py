@@ -24,6 +24,7 @@ def ok(name):
 def ctx(browser, w=390, h=844):
     c = browser.new_context(viewport={"width": w, "height": h}, device_scale_factor=2, locale="pt-BR", timezone_id="America/Sao_Paulo")
     c.add_init_script("window.SOMOS_OPEN = true")  # os testes enxergam tudo; o modo restrito tem teste próprio
+    if os.environ.get("E2E_THEME") == "light": c.add_init_script("localStorage.setItem('somos.theme','light')")
     p = c.new_page()
     p.on("console", lambda m: m.type == "error" and not any(x in m.text for x in IGNORED) and errors.append(f"[{w}] {m.text}"))
     p.on("pageerror", lambda e: errors.append(f"pageerror [{w}]: {e}"))

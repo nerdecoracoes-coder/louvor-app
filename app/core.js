@@ -347,14 +347,32 @@ export function pickFile(accept = "image/*", capture) {
 
 // ---------------------------------------------------------------- tema
 export function hexToRgb(h) { const m = /^#?([0-9a-f]{6})$/i.exec(h || ""); if (!m) return null; const n = parseInt(m[1], 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; }
+// ---------------------------------------------------------------- aparência (escuro é o padrão; claro é opcional e fica salvo neste aparelho)
+const THEME_KEY = "somos.theme";
+export const getTheme = () => { try { return localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark"; } catch { return "dark"; } };
+export function applyTheme(t = getTheme()) {
+  const root = document.documentElement;
+  if (t === "light") root.setAttribute("data-theme", "light"); else root.removeAttribute("data-theme");
+  const meta = document.querySelector('meta[name="theme-color"]'); if (meta) meta.setAttribute("content", t === "light" ? "#f4f5f9" : "#121318");
+}
+export function setTheme(t) { try { localStorage.setItem(THEME_KEY, t === "light" ? "light" : "dark"); } catch {} applyTheme(t); applyOrgTheme(); document.dispatchEvent(new CustomEvent("theme-changed", { detail: t })); }
+// logo da marca nas duas versões (a que não é do tema atual fica escondida pelo CSS)
+export const brandLogo = (cls = "") => `<img class="logo-img lg-dark ${cls}" src="app/assets/brand/logo-dark.png" alt="Somos"><img class="logo-img lg-light ${cls}" src="app/assets/brand/logo-light.png" alt="Somos">`;
+
+const LEGACY_ACCENTS = new Set(["#3d8bff", "#1ea7ff"]);   // cores padrão antigas: contam como "sem cor própria" e usam a identidade Somos
 export function applyAccent(el, hex) {
-  const rgb = hexToRgb(hex) || [61, 139, 255];
-  el.style.setProperty("--accent", `rgb(${rgb.join(",")})`);
-  el.style.setProperty("--accent-rgb", rgb.join(","));
+  const rgb = !LEGACY_ACCENTS.has(String(hex || "").toLowerCase()) && hexToRgb(hex);
+  const st = el.style;
+  if (!rgb) { for (const k of ["--accent", "--accent-rgb", "--accent-ink", "--grad-btn", "--glow-1", "--glow-2"]) st.removeProperty(k); return; }
+  const light = getTheme() === "light", c = `rgb(${rgb.join(",")})`;
+  st.setProperty("--accent", c); st.setProperty("--accent-rgb", rgb.join(","));
+  st.setProperty("--accent-ink", light ? `color-mix(in srgb, ${c} 78%, #000)` : `color-mix(in srgb, ${c} 62%, #fff)`);
+  st.setProperty("--grad-btn", `linear-gradient(135deg, color-mix(in srgb, ${c} 82%, #fff), ${c})`);
+  st.setProperty("--glow-1", `rgba(${rgb.join(",")}, ${light ? .12 : .34})`); st.setProperty("--glow-2", `rgba(${rgb.join(",")}, ${light ? .06 : .12})`);
 }
 export function applyOrgTheme() {
   const t = state.space;
-  applyAccent(document.documentElement, (t?.apply_theme && t.accent_color) || state.org?.accent_color || "#3D8BFF");
+  applyAccent(document.documentElement, (t?.apply_theme && t.accent_color) || state.org?.accent_color || "");
 }
 
 // ---------------------------------------------------------------- dados da sessão

@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, isEditPath, canGoBack, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, canChamados, myName, headerActions, confirmDialog } from "./core.js";
+import { sb, configured, state, route, matchRoute, go, isEditPath, canGoBack, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, canChamados, getTheme, setTheme, applyTheme, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as servico from "./views/servico.js";
 import * as multimidia from "./views/multimidia.js";
@@ -19,6 +19,7 @@ import * as chamados from "./views/chamados.js";
 import * as extras from "./views/extras.js";
 import { openPlayer, closePlayer } from "./player/view.js";
 
+applyTheme();
 const app = document.getElementById("app");
 const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w1" viewBox="0 0 1200 300" preserveAspectRatio="none"><defs><linearGradient id="g1" x1="0" x2="1"><stop offset="0" stop-color="rgb(var(--accent-rgb))" stop-opacity="0"/><stop offset=".6" stop-color="rgb(var(--accent-rgb))" stop-opacity=".55"/><stop offset="1" stop-color="rgb(var(--accent-rgb))" stop-opacity="0"/></linearGradient></defs>
@@ -159,7 +160,7 @@ function openMenu() {
   wrap.innerHTML = `<aside class="drawer" role="dialog" aria-modal="true" aria-label="Menu">
     <a class="dprofile" href="#/perfil">${avatar({ ...state.profile, display_name: myName() }, 52, false)}<span class="grow"><b class="ellipsis">${esc(myName())}</b><small class="ellipsis">${esc(state.user?.email || "")}</small></span>${icon("chevronRight", "chev")}</a>
     <nav class="dmenu">${items.map(entry).join("")}</nav>
-    <div class="dfoot"><a href="${cfg}">${icon("settings")}<span>Configurações</span></a><button data-menuact="logout">${icon("logout")}<span>Sair da conta</span></button></div></aside>`;
+    <div class="dfoot"><a href="${cfg}">${icon("settings")}<span>Configurações</span></a><button data-menuact="theme">${icon(getTheme() === "light" ? "moon" : "sun")}<span>${getTheme() === "light" ? "Tema escuro" : "Tema claro"}</span></button><button data-menuact="logout">${icon("logout")}<span>Sair da conta</span></button></div></aside>`;
   document.body.appendChild(wrap);
   document.body.classList.add("noscroll");
   const close = () => { wrap.classList.add("out"); document.body.classList.remove("noscroll"); setTimeout(() => wrap.remove(), 200); window.removeEventListener("hashchange", close); document.removeEventListener("keydown", esc2); };
@@ -167,6 +168,7 @@ function openMenu() {
   wrap.addEventListener("click", async (e) => {
     const act = e.target.closest("[data-menuact]")?.dataset.menuact;
     if (act === "switch") { close(); return spaceSwitcher(); }
+    if (act === "theme") { const nt = getTheme() === "light" ? "dark" : "light"; setTheme(nt); const b = e.target.closest("[data-menuact]"); b.innerHTML = `${icon(nt === "light" ? "moon" : "sun")}<span>${nt === "light" ? "Tema escuro" : "Tema claro"}</span>`; return; }
     if (act === "logout") {
       close();
       if (await confirmDialog("Sair da conta neste aparelho?", "Sair")) { await sb.auth.signOut(); location.hash = "/"; }
