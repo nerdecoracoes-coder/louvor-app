@@ -513,3 +513,9 @@ export async function loadRoleIcons() {
   roleIcons.clear();
   if (!r.error) for (const x of r.data || []) if (x.icon) roleIcons.set(x.name, x.icon);
 }
+
+// atalhos redondos (como na referência visual): ícone em círculo + rótulo
+export function quickRow(items) {
+  const on = items.filter(Boolean);
+  return on.length ? `<nav class="quick" aria-label="Atalhos">${on.map(([ic, label, href]) => `<a href="${href}"><i>${icon(ic)}</i><span>${esc(label)}</span></a>`).join("")}</nav>` : "";
+}

@@ -9,18 +9,18 @@
 :root {
   --brand-1: #FA6141; --brand-2: #E25961; --brand-3: #B1468A; --brand-4: #6B42BC; --brand-5: #3753D1;
   --grad: linear-gradient(135deg, #FA6141 0%, #C24B7E 36%, #7A45C6 68%, #3753D1 100%);
-  --grad-btn: linear-gradient(135deg, #E8585B 0%, #B1468A 46%, #6B42BC 100%);
+  --grad-btn: linear-gradient(135deg, #4A6BF0 0%, #3753D1 100%);
   /* escuro */
   --ink: #121318; --ink-2: #171920; --surface: #1b1d25; --raised: #21232c; --raised-2: #2a2d38;
   --w: 255, 255, 255;                       /* cor das camadas translúcidas (vidro, linhas): branco no escuro, grafite no claro */
   --glass: rgba(var(--w), .055); --glass-2: rgba(var(--w), .09);
   --line: rgba(var(--w), .08); --line-2: rgba(var(--w), .14);
   --text: #f6f6f9; --muted: #a9acba; --dim: #838799;
-  --accent: rgb(123, 85, 224); --accent-rgb: 123, 85, 224; --accent-ink: #b9a3ff;
-  --info: #8ab8ff; --tag-ink: #c9b9ff;
+  --accent: rgb(55, 83, 209); --accent-rgb: 55, 83, 209; --accent-ink: #8EA6FF;
+  --info: #8ab8ff; --tag-ink: #9fb3ff;
   --champ: var(--accent); --champ-rgb: var(--accent-rgb);
   --ok: #5fcf9f; --warn: #e5b45a; --danger: #ef7b7b;
-  --glow-1: rgba(107, 66, 188, .34); --glow-2: rgba(250, 97, 65, .14);
+  --glow-1: rgba(55, 83, 209, .26); --glow-2: rgba(250, 97, 65, .05);
   --nav-glass: rgba(28, 29, 36, .62); --shadow: rgba(0, 0, 0, .55); --input-focus: #181a22;
   --r-lg: 22px; --r: 14px; --r-sm: 10px; --nav-h: 72px;
   --serif: "Sora", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -30,15 +30,15 @@
 }
 /* claro */
 :root[data-theme="light"] {
-  --ink: #f4f5f9; --ink-2: #ebedf3; --surface: #ffffff; --raised: #ffffff; --raised-2: #eceef4;
+  --ink: #f6f7fa; --ink-2: #eceef3; --surface: #ffffff; --raised: #ffffff; --raised-2: #eceef4;
   --w: 22, 24, 36;
   --glass: rgba(var(--w), .045); --glass-2: rgba(var(--w), .07);
   --line: rgba(var(--w), .10); --line-2: rgba(var(--w), .16);
   --text: #171923; --muted: #565b6e; --dim: #7a7f93;
-  --accent: rgb(107, 66, 188); --accent-rgb: 107, 66, 188; --accent-ink: #5b35a8;
-  --info: #2557c8; --tag-ink: #5b35a8;
+  --accent: rgb(55, 83, 209); --accent-rgb: 55, 83, 209; --accent-ink: #2B44B8;
+  --info: #2557c8; --tag-ink: #2B44B8;
   --ok: #17895c; --warn: #9a6512; --danger: #c93f3f;
-  --glow-1: rgba(107, 66, 188, .10); --glow-2: rgba(250, 97, 65, .08);
+  --glow-1: rgba(55, 83, 209, .06); --glow-2: rgba(250, 97, 65, .03);
   --nav-glass: rgba(var(--w), .78); --shadow: rgba(30, 33, 55, .16); --input-focus: #ffffff;
   color-scheme: light;
 }
@@ -1449,3 +1449,17 @@ a.li:active, button.li:active { background-color: var(--glass-2); }
 .themepick button { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border-radius: 12px; background: var(--raised-2); color: var(--text); font-weight: 600; box-shadow: inset 0 0 0 1.5px transparent; }
 .themepick button.on { box-shadow: inset 0 0 0 1.5px var(--accent); background: rgba(var(--accent-rgb), .12); }
 .themepick .ic { width: 18px; height: 18px; }
+
+/* ---- Visual de referência: atalhos redondos, cartões limpos, azul da marca nos textos de ação ---- */
+.quick { display: flex; gap: 8px; overflow-x: auto; margin: 18px 0 4px; padding: 4px 0 8px; scrollbar-width: none; }
+.quick::-webkit-scrollbar { display: none; }
+.quick a { flex: 1 0 60px; max-width: 92px; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; font-weight: 500; }
+.quick a i { width: 54px; height: 54px; border-radius: 50%; display: grid; place-items: center; color: var(--text); background: var(--surface);
+  box-shadow: inset 0 0 0 1px var(--line-2); transition: transform .2s var(--ease), box-shadow .2s, color .2s; }
+.quick a i .ic { width: 24px; height: 24px; stroke-width: 1.5; }
+.quick a:active i { transform: scale(.94); box-shadow: inset 0 0 0 1.5px var(--accent), 0 0 0 4px rgba(var(--accent-rgb), .14); color: var(--accent-ink); }
+.quick a span { white-space: nowrap; }
+.sec a, .sec .more { color: var(--accent-ink); font-weight: 600; font-size: 13px; }
+:root[data-theme="light"] .card, :root[data-theme="light"] .list, :root[data-theme="light"] .scards > * { box-shadow: 0 1px 2px rgba(30, 33, 55, .05), 0 6px 18px rgba(30, 33, 55, .05); }
+:root[data-theme="light"] .card { background: #fff; border-color: var(--line); }
+:root[data-theme="light"] .quick a i { box-shadow: inset 0 0 0 1px var(--line-2), 0 1px 2px rgba(30, 33, 55, .05); }

@@ -1,6 +1,6 @@
 // Página da igreja: avisos gerais, agenda da igreja, liderança, ministérios e aniversariantes.
 // Nada aqui vem das escalas dos times; cada time tem o seu próprio início.
-import { sb, state, must, esc, attr, icon, avatar, fDateLong, fMonthYear, cap, fDay, fMon, fTime, fDate, people, personName, myName, isStaff, isAdmin, canEditAgenda, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
+import { quickRow, hasRepertoire, sb, state, must, esc, attr, icon, avatar, fDateLong, fMonthYear, cap, fDay, fMon, fTime, fDate, people, personName, myName, isStaff, isAdmin, canEditAgenda, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
   confirmDialog, fromLocal, ymd, teamBadge, teamTypeLabel, invalidatePeople } from "../core.js";
 import { noticeCard, openNotice, birthdaySection } from "./home.js";
 
@@ -142,6 +142,7 @@ export async function churchHome(el, alive) {
   const mine = new Set(state.myTeams.map((t) => t.id));
   el.innerHTML = `
   <section class="hero"><div class="grow"><p class="hello">Igreja</p><h1>${esc(o.name)}</h1>${o.subtitle ? `<p class="roles">${esc(o.subtitle)}</p>` : ""}</div></section>
+  ${quickRow([["calendar","Agenda","#/agenda"],["users","Times","#/times"],["chat","Chat","#/chat"],["megaphone","Avisos","#/avisos"],hasRepertoire() ? ["music","Músicas","#/musicas"] : null])}
 
   <div class="sec"><h2>Liderança</h2>${isAdmin() ? `<span class="row gap-s"><button class="more" id="edcoord">${icon("calendar")} Agenda</button><button class="more" id="edlead">${icon("edit")} Cargos</button></span>` : ""}</div>
   ${leaders.length ? `<div class="leaders">${leaders.map((p) => `<div class="leader">${avatar(p, 92, false)}<b class="ellipsis">${esc(p.display_name)}</b><span class="ellipsis">${esc(p.church_title)}</span></div>`).join("")}</div>`

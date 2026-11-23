@@ -1,11 +1,12 @@
 // Início: perfil, atalhos, avisos, próximas escalas, aniversariantes e bloqueio de datas.
 import { sb, state, must, esc, attr, icon, avatar, fDow, fDay, fMon, fTime, fDate, fDateLong, ymd, people, personName, myName, isStaff, isAdmin, canEditAgenda,
   canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner, linkify, safeUrl, roleIcon, uploadPublic, pickFile, TZ, confirmDialog, fMonthYear, cap, hasRepertoire, invalidatePeople,
-  teamBadge, teamHasRepertoire, teamTypeLabel, teamHas, findTeam } from "../core.js";
+  teamBadge, quickRow, teamHasRepertoire, teamTypeLabel, teamHas, findTeam } from "../core.js";
 import { openRequestsCard, receivedRepertoiresCard } from "./multimidia.js";
 import { churchHome, pendingScalesCard } from "./igreja.js";
 import { teamExtras } from "./eventos.js";
 import { maybeService, previewOn } from "./servico.js";
+
 
 export function register(route) {
   const start = async (p, el, a) => { if (await maybeService()) return; return state.space ? teamHome(state.space, el, a) : churchHome(el, a); };
@@ -150,6 +151,7 @@ async function homeView(_, el, alive) {
       <p class="roles">${[roles.length > 3 ? `${roles.slice(0, 3).join(", ")} +${roles.length - 3}` : roles.join(", "), teamsLine].filter(Boolean).map(esc).join(" — ") || esc(state.org.name)}</p></div>
     <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 56)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
   </section>
+  ${quickRow([["calendar","Agenda","#/calendario/meu"],hasRepertoire()?["music","Músicas","#/musicas"]:null,["chat","Chat","#/chat"],["users","Times","#/times"],["megaphone","Avisos","#/avisos"]])}
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div id="pend"></div>
@@ -243,6 +245,7 @@ async function teamHome(team, el, alive) {
       <p class="roles">${esc([roleNames.length > 3 ? `${roleNames.slice(0, 3).join(", ")} +${roleNames.length - 3}` : roleNames.join(", "), team.is_leader ? "Líder" : ""].filter(Boolean).join(" · ") || teamTypeLabel(team))}</p></div>
     <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 56)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
   </section>
+  ${quickRow([["calendar","Escalas",`#/times/${team.id}/escalas`],teamHasRepertoire(team)?["music","Músicas","#/musicas"]:null,["chat","Chat",`#/chat/${team.id}`],["users","Time",`#/times/${team.id}`],["megaphone","Avisos",`#/times/${team.id}/avisos`]])}
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div id="pend"></div>
