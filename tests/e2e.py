@@ -1082,6 +1082,12 @@ with sync_playwright() as pw:
     ana.goto(BASE + "/#/chamados"); expect(ana.locator("#view")).to_contain_text("Secretaria", timeout=10000); shot(ana, "45-chamados")
     ana.goto(BASE + "/#/pessoas"); ana.fill("#q", "Planilha"); expect(ana.locator("#rows .li")).to_have_count(2, timeout=10000)
     ana.fill("#q", "529.982"); expect(ana.locator("#rows .li")).to_have_count(1, timeout=10000)
+    # excluir cadastro (teste) e inativar
+    ana.goto(BASE + "/#/pessoas"); ana.fill("#q", "Planilha Dois"); expect(ana.locator("#rows .li", has_text="Planilha Dois")).to_have_count(1, timeout=10000); ana.locator("#rows .li", has_text="Planilha Dois").click()
+    ana.locator("#tog").click(); ana.locator(".sheet [data-ok]").click(); expect(ana.locator("#view")).to_contain_text("Inativo", timeout=10000)
+    ana.locator("#del").click(); ana.locator(".sheet [data-ok]").click()
+    expect(ana.locator(".pagehead h1")).to_have_text("Pessoas", timeout=10000)
+    ana.fill("#q", "Planilha Dois"); expect(ana.locator("#rows")).to_contain_text("Ninguém encontrado", timeout=10000)
     # servo não entra no módulo e vê só os próprios dados
     carla.goto(BASE + "/#/pessoas"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
     assert carla.locator('a[href="#/pessoas"]').count() == 0

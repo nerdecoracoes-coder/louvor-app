@@ -171,7 +171,8 @@ async function detailView(el, alive, id) {
     <section class="card perscard"><div class="row gap">${avatar({ display_name: p.full_name, avatar_url: p.photo_url }, 72, false)}<div class="grow"><b class="ptitle">${esc(p.full_name)}</b>${p.social_name ? `<div class="small muted">Nome social: ${esc(p.social_name)}</div>` : ""}
       <div class="row gap-s wrap" style="margin-top:8px">${clsTag(p.classification)}<span class="ptag st-${p.status}">${STATUS_LABEL[p.status]}</span>${p.user_id ? `<span class="ptag acct">Tem conta no app</span>` : `<span class="ptag">Sem conta</span>`}${p.flagged_duplicate ? `<span class="ptag warn">Possível duplicidade</span>` : ""}</div></div></div>
       ${p.status === "pending" && canApprove ? `<div class="row gap mt"><button class="btn primary grow" id="appr">Aprovar</button><button class="btn ghost" id="fix">Corrigir e aprovar</button><button class="btn danger" id="rej">Rejeitar</button></div>` : ""}
-      ${canEdit ? `<div class="row gap mt"><a class="btn ghost grow" href="#/pessoas/${p.id}/editar">${icon("edit")} Editar</a>${p.status === "pending" ? "" : `<button class="btn ghost" id="cls">Mudar classificação</button>`}</div>` : ""}</section>
+      ${canEdit ? `<div class="row gap mt"><a class="btn ghost grow" href="#/pessoas/${p.id}/editar">${icon("edit")} Editar</a>${p.status === "pending" ? "" : `<button class="btn ghost" id="cls">Mudar classificação</button>`}</div>
+        <div class="row gap mt">${["active", "inactive"].includes(p.status) ? `<button class="btn ghost grow" id="tog">${p.status === "active" ? "Marcar como inativo" : "Reativar"}</button>` : ""}<button class="btn danger grow" id="del">${icon("trash")} Excluir cadastro</button></div>` : ""}</section>
     <h3 class="mt">Contato</h3><div class="card">${row("Telefone", p.phone)}${row("WhatsApp", p.whatsapp)}${row("E-mail", p.email)}${row("Endereço", [p.address, p.city && `${p.city}${p.state ? "/" + p.state : ""}`, zipMask(p.zip)].filter(Boolean).join(" · "))}${!p.phone && !p.whatsapp && !p.email && !p.address && !p.city && !p.zip ? `<span class="muted small">Sem contato registrado.</span>` : ""}</div>
     <h3 class="mt">Dados pessoais</h3><div class="card">${row("Nascimento", ymdToBr(p.birth_date))}${row("Sexo", p.sex === "F" ? "Feminino" : p.sex === "M" ? "Masculino" : "")}${row("CPF", cpfMask(p.cpf))}${row("Estado civil", MARITAL_LABEL[p.marital_status])}${!p.birth_date && !p.sex && !p.cpf && !p.marital_status ? `<span class="muted small">Nada informado.</span>` : ""}</div>
     <h3 class="mt">Na igreja</h3><div class="card">${row("Classificação", CLASS_LABEL[p.classification])}${row("Cadastrado em", ymdToBr(p.registered_at))}${row("Ingresso na membresia", ymdToBr(p.joined_at))}${row("Origem", { manual: "Cadastro manual", form: "Formulário", user: "Conta do app", import: "Planilha", self: "Própria pessoa" }[p.source])}${p.admin_notes ? `<div class="drow col"><span>Observações</span><b style="font-weight:400;white-space:pre-wrap">${esc(p.admin_notes)}</b></div>` : ""}</div>
@@ -187,6 +188,18 @@ async function detailView(el, alive, id) {
     const s = sheet(`<h3>Corrigir e aprovar</h3><form id="f" novalidate>${fld("full_name", "Nome completo", p.full_name, 'maxlength="160"')}${fld("phone", "Telefone", p.phone, 'type="tel"')}${fld("email", "E-mail", p.email, 'type="email"')}${fld("cpf", "CPF", cpfMask(p.cpf), 'inputmode="numeric"')}
       <label class="field"><span>Classificação</span><select name="classification">${opt(CLASSES, p.classification, "").replace('<option value="">', '<option value="" hidden>')}</select></label><button class="btn primary block" id="ok">Aprovar com correções</button></form>`);
     s.el.querySelector("#ok").onclick = async (e) => { e.preventDefault(); const b = e.currentTarget; busy(b); try { const d = readFields(s.el.querySelector("#f")); await review("approve", d); s.close(); } finally { busy(b, false); } };
+  });
+  el.querySelector("#tog")?.addEventListener("click", async () => {
+    const to = p.status === "active" ? "inactive" : "active";
+    if (to === "inactive" && !(await confirmDialog("Marcar como inativo? A pessoa deixa de contar nos totais, mas o cadastro e o histórico ficam guardados.", "Marcar como inativo"))) return;
+    const r2 = await sb.rpc("person_save", { p_org: state.org.id, p_id: id, p: { status: to } });
+    if (r2.error) return toast(errText(r2.error)); toast(to === "inactive" ? "Marcado como inativo" : "Cadastro reativado"); detailView(el, alive, id);
+  });
+  el.querySelector("#del")?.addEventListener("click", async () => {
+    if (!(await confirmDialog(`Excluir o cadastro de ${p.full_name}? Os dados e o histórico dele são apagados e isso não pode ser desfeito.${p.user_id ? " A conta no app continua existindo." : ""} Se a pessoa só saiu da igreja, prefira marcar como inativo.`, "Excluir", true))) return;
+    const r2 = await sb.rpc("person_delete", { p_id: id });
+    if (r2.error) return toast(/person_delete/.test(r2.error.message || "") ? "Falta rodar a atualização do banco (atualizacao-2026-11-24-pessoas-excluir.sql)." : errText(r2.error));
+    toast("Cadastro excluído"); go("/pessoas");
   });
   el.querySelector("#cls")?.addEventListener("click", () => {
     const s = sheet(`<h3>Mudar classificação</h3><p class="small muted">O histórico guarda quem mudou e quando.</p><div class="seg2" style="grid-template-columns:1fr">${CLASSES.map(([k, l]) => `<label><input type="radio" name="c" value="${k}" ${k === p.classification ? "checked" : ""}><span><b>${l}</b></span></label>`).join("")}</div><button class="btn primary block mt" id="ok">Salvar</button>`);

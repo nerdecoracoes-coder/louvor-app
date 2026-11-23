@@ -281,3 +281,31 @@ describe("consulta", () => {
     expect((await lider.api.get(`/person_history?org_id=eq.${org}`)).data).toEqual([]);
   });
 });
+
+describe("excluir cadastro", () => {
+  test("só quem edita pessoas exclui; histórico some e fica só o registro da exclusão; a conta é mantida", async () => {
+    const id = (await admin.api.rpc("person_save", { p_org: org, p_id: null, p: { full_name: "Para Excluir", phone: "21955554444", classification: "member" } })).data.id;
+    await admin.api.rpc("person_save", { p_org: org, p_id: id, p: { city: "Rio" } });
+    expect((await lider.api.rpc("person_delete", { p_id: id })).ok).toBe(false);
+    expect((await dev.api.rpc("person_delete", { p_id: id })).ok).toBe(false);
+    expect((await admin.api.get(`/people?id=eq.${id}`)).data.length).toBe(1);
+    expect((await secretaria.api.rpc("person_delete", { p_id: id })).ok).toBe(true);
+    expect((await admin.api.get(`/people?id=eq.${id}`)).data).toEqual([]);
+    expect((await admin.api.get(`/person_history?person_id=eq.${id}`)).data).toEqual([]);
+    const log = (await admin.api.get(`/person_history?kind=eq.delete&order=id.desc&limit=1`)).data[0];
+    expect(log).toMatchObject({ kind: "delete", old_value: "member" }); expect(JSON.stringify(log)).not.toContain("Para Excluir");
+    expect((await admin.api.rpc("person_delete", { p_id: id })).ok).toBe(false);
+  });
+  test("excluir quem tem conta não remove a conta nem o vínculo com a igreja", async () => {
+    const p = (await secretaria.api.get(`/people?user_id=eq.${lider.id}`)).data[0];
+    expect((await secretaria.api.rpc("person_delete", { p_id: p.id })).ok).toBe(true);
+    expect((await lider.api.rpc("my_access", { p_org: org })).data.member).toBe(true);
+    expect((await lider.api.rpc("my_person", { p_org: org })).data).toBeNull();
+  });
+  test("inativar mantém o cadastro e o histórico", async () => {
+    const id = (await admin.api.rpc("person_save", { p_org: org, p_id: null, p: { full_name: "Saiu da Igreja", classification: "member" } })).data.id;
+    await admin.api.rpc("person_save", { p_org: org, p_id: id, p: { status: "inactive" } });
+    expect((await admin.api.get(`/people?id=eq.${id}`)).data[0].status).toBe("inactive");
+    expect((await admin.api.get(`/person_history?person_id=eq.${id}&field=eq.status`)).data.length).toBe(1);
+  });
+});
