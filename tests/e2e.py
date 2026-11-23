@@ -633,6 +633,12 @@ with sync_playwright() as pw:
     dani.reload(); dani.goto(BASE + "/#/igreja"); dani.wait_for_timeout(1000); expect(dani.locator(".toast").filter(has_text="não está liberada")).to_have_count(0)
     expect(dani.locator("body")).to_contain_text("Avisos da igreja", timeout=10000)
     ok("modo desenvolvedor enxerga o app completo")
+    # SOMOS Chamados: o desenvolvedor vê o ambiente, cria uma rede de supervisão e a remove
+    dani.goto(BASE + "/#/chamados"); expect(dani.locator("#view")).to_contain_text("Redes de supervisão", timeout=10000)
+    dani.locator("[data-net='']").click(); dani.locator("#nn").fill("Rede Norte")
+    dani.locator(".sheet .list input").first.check(); dani.locator("#ok").click()
+    expect(dani.locator("body")).to_contain_text("Rede Norte", timeout=10000)
+    ok("SOMOS Chamados: desenvolvedor cria rede de supervisão")
     cx.close()
 
     # ------------------------------------------------------------------ várias organizações

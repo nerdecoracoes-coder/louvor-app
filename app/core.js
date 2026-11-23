@@ -18,6 +18,7 @@ export const state = {
   leaderOf: new Set(),
   space: null,         // onde o usuário está: um time (objeto de myTeams) ou null = área da igreja
   unread: 0,
+  access: null,        // my_access(): papéis na igreja selecionada (desenvolvedor, administrador, liderança geral, redes, times)
 };
 // O app abre no último time usado; a igreja é um lugar para onde a pessoa vai quando quiser.
 const spaceKey = () => `somos.space:${state.org?.id || ""}`;
@@ -63,6 +64,18 @@ export function blockedInTeamOnly(path) {
   if (path === "/calendario/igreja") return true;
   return false;
 }
+// ---- ambientes: SOMOS Um (comunidade) · SOMOS Servos (times) · SOMOS Chamados (liderança). Tudo na mesma conta; o servidor decide (my_access).
+export const myNetworks = () => state.access?.networks || [];
+export const isGeneralLeader = () => !!state.access?.general_leader;
+// pode configurar redes e liderança: administrador, desenvolvedor ou liderança geral com a ação "administrar"
+export const canAdminOrg = () => isDeveloper() || isAdmin() || (state.access?.general_leader?.actions || []).includes("administer");
+// SOMOS Chamados: desenvolvedor, administrador, liderança geral, supervisor de rede ou líder de algum ministério
+export const canChamados = () => !!state.access && (state.access.developer || state.access.admin || !!state.access.general_leader || myNetworks().length > 0 || (state.access.leader_of || []).length > 0);
+export const environments = () => [
+  ...(!teamOnly() && (state.access?.member || isDeveloper()) ? [{ key: "um", label: "SOMOS Um" }] : []),
+  ...(state.myTeams.length || (isDeveloper() && (state.orgTeams || []).length) ? [{ key: "servos", label: "SOMOS Servos" }] : []),
+  ...(canChamados() ? [{ key: "chamados", label: "SOMOS Chamados" }] : []),
+];
 export const canManageTeam = (teamId) => isAdmin() || state.leaderOf.has(teamId);
 export const isStaff = () => isAdmin() || state.leaderOf.size > 0;
 // Coordenador de agenda: escolhido pelo administrador; monta a agenda da igreja e os avisos gerais
@@ -353,7 +366,11 @@ export async function loadSession() {
     sb.from("org_members").select("org_id,role,display_name,birth_date,organizations(*)").eq("user_id", state.user.id),
   ]);
   state.profile = p.data;
-  state.orgs = (orgs.data || []).filter((o) => o.organizations).sort((a, b) => a.organizations.name.localeCompare(b.organizations.name));
+  let orgRows = orgs.data || [];
+  if (p.data?.is_developer) {   // desenvolvedor: todas as igrejas, para testar os ambientes (o servidor confere a marca)
+    try { const all = await sb.rpc("dev_orgs"); if (!all.error) for (const o of all.data || []) if (!orgRows.some((r) => r.org_id === o.id)) orgRows = [...orgRows, { org_id: o.id, role: "admin", display_name: null, organizations: o, via_dev: true }]; } catch {}
+  }
+  state.orgs = orgRows.filter((o) => o.organizations).sort((a, b) => a.organizations.name.localeCompare(b.organizations.name));
   let sel = null;
   try { sel = localStorage.getItem("louvor.org"); } catch {}
   await selectOrg(state.orgs.find((o) => o.org_id === sel)?.org_id || state.orgs[0]?.org_id || null, false);
@@ -362,7 +379,7 @@ export async function selectOrg(orgId, persist = true) {
   const m = state.orgs.find((o) => o.org_id === orgId);
   state.org = m?.organizations || null;
   state.role = m?.role || null;
-  state.myTeams = []; state.leaderOf = new Set(); state.agendaCoord = false;
+  state.myTeams = []; state.leaderOf = new Set(); state.agendaCoord = false; state.access = null;
   if (persist) try { localStorage.setItem("louvor.org", orgId || ""); } catch {}
   if (state.org) {
     // coluna nova: se a atualização do banco ainda não foi aplicada, segue sem ela
@@ -372,6 +389,8 @@ export async function selectOrg(orgId, persist = true) {
     state.myTeams = (t.data || []).filter((x) => x.teams).map((x) => ({ ...x.teams, is_leader: x.is_leader })).sort((a, b) => a.name.localeCompare(b.name));
     state.leaderOf = new Set(state.myTeams.filter((x) => x.is_leader).map((x) => x.id));
     state.orgTeams = (await sb.from("teams").select("*").eq("org_id", state.org.id).order("name")).data || [];
+    // ambientes e funções (se a atualização do banco ainda não foi aplicada, segue sem eles)
+    try { const a = await sb.rpc("my_access", { p_org: state.org.id }); state.access = a.error ? null : a.data; } catch { state.access = null; }
     await loadRoleIcons();
   }
   if (state.space) state.space = findTeam(state.space.id); // dados atualizados do time
