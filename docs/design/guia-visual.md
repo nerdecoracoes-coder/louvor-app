@@ -30,3 +30,4 @@ Referência: `referencia-visual.jpg` (3 celulares: Testemunhos, Início, Edifica
 ## Decisões do dono (23/11/2026)
 - **Cantos**: cartões levemente arredondados (≈12px; tokens `--r-lg` 12, `--r` 10, `--r-sm` 8). Nada de cantos muito redondos em cartões; só bolhas de chat, chips e botões-pílula ficam redondos.
 - **Atalhos redondos** (`quickRow`) não podem repetir a barra de navegação (Início, Times/Escalas, Agenda, Músicas, Chat). Usam as funções do menu lateral: Avisos, Minhas escalas, Bloqueios, Aniversários, Tutoriais, Panorama, Estúdio, Metrônomo.
+- **Navegação do servo (time)**: barra = Início, Chat, Time, Igreja (ícone de igreja), Ajustes (+ Pedidos/Crianças/Visitantes quando o time tem). Escalas e Músicas ficam nos atalhos redondos do Início. Panorama de escalas só aparece para líder (menu lateral e página de Escalas).

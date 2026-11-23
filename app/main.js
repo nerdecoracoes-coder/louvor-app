@@ -37,13 +37,13 @@ function navItems() {
   const t = state.space;
   if (t) return [
     ["inicio", "home", "Início", "#/"],
-    ["escalas", "calendar", "Escalas", `#/times/${t.id}/escalas`],
-    ...(teamHasRepertoire(t) ? [["musicas", "music", "Músicas", "#/musicas"]] : []),
     ...(teamHas(t, "pedidos") ? [["pedidos", "inbox", "Pedidos", `#/times/${t.id}/pedidos`]] : []),
     ...(teamHas(t, "criancas") ? [["criancas", "users", "Crianças", `#/times/${t.id}/criancas`]] : []),
     ...(teamHas(t, "visitantes") ? [["visitantes", "users", "Visitantes", `#/times/${t.id}/visitantes`]] : []),
     ["chat", "chat", "Chat", `#/chat/${t.id}`],
     ["time", "users", "Time", `#/times/${t.id}`],
+    ...(teamOnly() ? [] : [["igreja", "church", "Igreja", "#/igreja"]]),
+    ["config", "settings", "Ajustes", settingsHref()],
   ];
   return [
     ["inicio", "home", "Início", "#/"],
@@ -51,13 +51,20 @@ function navItems() {
     ["calendario", "calendar", "Agenda", "#/agenda"],
     ...(hasRepertoire() && !state.myTeams.length ? [["musicas", "music", "Músicas", "#/musicas"]] : []),
     ["chat", "chat", "Chat", "#/chat"],
+    ["config", "settings", "Ajustes", settingsHref()],
   ];
+}
+function settingsHref() {
+  const t = state.space;
+  return t ? (canManageTeam(t.id) ? `#/times/${t.id}/config` : "#/perfil") : (isAdmin() ? "#/org" : "#/perfil");
 }
 function navActive(path) {
   const t = state.space;
   if (path === "/" || path === "/inicio" || path === "") return "inicio";
   if (path.startsWith("/musica")) return "musicas";
   if (path.startsWith("/chat")) return "chat";
+  if (path.startsWith("/perfil") || path === "/org" || path.startsWith("/org/") || (t && path.startsWith(`/times/${t.id}/config`))) return "config";
+  if (t && path.startsWith("/igreja")) return "igreja";
   if (t && path.startsWith(`/times/${t.id}/criancas`)) return "criancas";
   if (t && path.startsWith(`/times/${t.id}/visitantes`)) return "visitantes";
   if (t && (path.startsWith(`/times/${t.id}/pedidos`) || path.startsWith("/pedido"))) return "pedidos";
@@ -127,15 +134,14 @@ function spaceSwitcher() {
 // Menu lateral: perfil, o que é da igreja, da pessoa e do time, e ferramentas.
 function openMenu() {
   const t = state.space;
-  const cfg = t ? (canManageTeam(t.id) ? `#/times/${t.id}/config` : "#/perfil") : (isAdmin() ? "#/org" : "#/perfil");
   const rep = t ? teamHasRepertoire(t) : hasRepertoire();
   const estudio_ = t && teamHas(t, "estudio");
   const asks = !isGuest() && state.orgTeams.some((x) => teamHas(x, "pedidos") && x.id !== t?.id);
   // [ícone, texto, link ou ação]
   const items = t ? [
-    ...(teamOnly() ? (state.myTeams.length > 1 ? [["swap", "Trocar de time", "act:switch"]] : []) : [["org", "Visão geral da igreja", "#/igreja"], ["swap", "Trocar de time", "act:switch"]]),
+    ...(state.myTeams.length > 1 || !teamOnly() ? [["swap", "Trocar de time", "act:switch"]] : []),
     ["userOff", "Indisponibilidades", "#/bloqueios"],
-    ["bars", "Panorama de escalas", "#/panorama"],
+    ...(canManageTeam(t.id) ? [["bars", "Panorama de escalas", "#/panorama"]] : []),
     ...(estudio_ ? [["layers", "Estúdio de mídia", `#/times/${t.id}/estudio`], ["lyrics", "Letras", `#/times/${t.id}/letras`]] : []),
     ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"], ["clock", "Metrônomo", "#/metronomo"]] : []),
     ...(teamOnly() ? [] : [["gift", "Aniversariantes", "#/aniversariantes"]]),
@@ -160,7 +166,7 @@ function openMenu() {
   wrap.innerHTML = `<aside class="drawer" role="dialog" aria-modal="true" aria-label="Menu">
     <a class="dprofile" href="#/perfil">${avatar({ ...state.profile, display_name: myName() }, 52, false)}<span class="grow"><b class="ellipsis">${esc(myName())}</b><small class="ellipsis">${esc(state.user?.email || "")}</small></span>${icon("chevronRight", "chev")}</a>
     <nav class="dmenu">${items.map(entry).join("")}</nav>
-    <div class="dfoot"><a href="${cfg}">${icon("settings")}<span>Configurações</span></a><button data-menuact="theme">${icon(getTheme() === "light" ? "moon" : "sun")}<span>${getTheme() === "light" ? "Tema escuro" : "Tema claro"}</span></button><button data-menuact="logout">${icon("logout")}<span>Sair da conta</span></button></div></aside>`;
+    <div class="dfoot"><button data-menuact="theme">${icon(getTheme() === "light" ? "moon" : "sun")}<span>${getTheme() === "light" ? "Tema escuro" : "Tema claro"}</span></button><button data-menuact="logout">${icon("logout")}<span>Sair da conta</span></button></div></aside>`;
   document.body.appendChild(wrap);
   document.body.classList.add("noscroll");
   const close = () => { wrap.classList.add("out"); document.body.classList.remove("noscroll"); setTimeout(() => wrap.remove(), 200); window.removeEventListener("hashchange", close); document.removeEventListener("keydown", esc2); };

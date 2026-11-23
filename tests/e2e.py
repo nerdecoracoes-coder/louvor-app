@@ -713,8 +713,14 @@ with sync_playwright() as pw:
     assert carla.locator(".sec h2", has_text="Disponibilidade").count() == 0  # disponibilidade saiu do início
     carla.locator(".menubtn").click(); 
     expect(carla.locator(".drawer .dprofile")).to_contain_text("Carla Dias")
-    for t in ["Visão geral da igreja", "Indisponibilidades", "Panorama de escalas", "Configurações"]:
-        expect(carla.locator(".drawer").get_by_text(t, exact=True)).to_be_visible()
+    expect(carla.locator(".drawer").get_by_text("Indisponibilidades", exact=True)).to_be_visible()
+    assert carla.locator(".drawer").get_by_text("Panorama de escalas", exact=True).count() == 0   # panorama é só do líder
+    for t in ["Visão geral da igreja", "Configurações"]:   # foram para a barra de navegação
+        assert carla.locator(".drawer").get_by_text(t, exact=True).count() == 0
+    for k in ["igreja", "config", "chat", "time"]:
+        expect(carla.locator(f'.bottomnav [data-nav="{k}"]')).to_be_visible()
+    assert carla.locator('.bottomnav [data-nav="escalas"], .bottomnav [data-nav="musicas"]').count() == 0
+    expect(carla.locator(".quick")).to_contain_text("Escalas"); expect(carla.locator(".quick")).to_contain_text("Músicas")
     assert carla.locator(".drawer").get_by_text("Avisos", exact=True).count() == 0
     shot(carla, "21-menu-lateral")
     for t in ["Trocar de time", "Músicas tocadas", "Aniversariantes", "Metrônomo", "Sair da conta"]:
@@ -728,28 +734,30 @@ with sync_playwright() as pw:
     carla.goto(BASE + "/#/musicas/tocadas"); carla.locator("[data-tab=nunca]").click(); expect(carla.locator(".song", has_text="Emaús")).to_be_visible(timeout=10000)
     carla.goto(BASE + "/#/metronomo"); carla.locator("[data-d='5']").click(); expect(carla.locator("#bpm")).to_have_text("95")
     carla.locator("#go").click(); expect(carla.locator("#go")).to_contain_text("Parar"); carla.locator("#go").click()
-    carla.goto(BASE + "/#/"); carla.locator(".menubtn").click()
-    carla.locator(".drawer a", has_text="Panorama de escalas").click()
+    carla.goto(BASE + "/#/panorama"); expect(carla.get_by_text("O panorama é para quem lidera o time")).to_be_visible(timeout=10000)
+    ana.goto(BASE + "/#/"); ana.locator("[data-act=space]").click(); ana.locator(f".sheet [data-space='{louvor_id}']").click()
+    expect(ana.locator(".brand.team")).to_be_visible(timeout=10000); ana.locator(".menubtn").click()
+    ana.locator(".drawer a", has_text="Panorama de escalas").click()
     subprocess.run(["psql", "-q", "-c", "insert into music_roles (org_id, name, sort, team_type) select id, 'Operador de projeção', 500, 'multimidia' from organizations limit 1 on conflict do nothing"], env=dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres"), check=True)
-    carla.reload(); carla.wait_for_timeout(500)
-    expect(carla.locator(".pagehead h1")).to_have_text("Panorama de escalas", timeout=10000)
-    expect(carla.locator(".pgrid")).to_be_visible(timeout=10000)
-    expect(carla.locator(".pgrid .ph.role", has_text="Vocal feminino")).to_be_visible()
-    assert carla.locator(".pgrid .ph.role", has_text="Operador de projeção").count() == 0   # função do Multimídia não aparece no panorama do Louvor
-    expect(carla.locator(".pgrid .pcell .pav").first).to_be_visible()
+    ana.reload(); ana.wait_for_timeout(500)
+    expect(ana.locator(".pagehead h1")).to_have_text("Panorama de escalas", timeout=10000)
+    expect(ana.locator(".pgrid")).to_be_visible(timeout=10000)
+    expect(ana.locator(".pgrid .ph.role", has_text="Vocal feminino")).to_be_visible()
+    assert ana.locator(".pgrid .ph.role", has_text="Operador de projeção").count() == 0   # função do Multimídia não aparece no panorama do Louvor
+    expect(ana.locator(".pgrid .pcell .pav").first).to_be_visible()
     shot(carla, "22-panorama")
-    carla.locator("#ppeople").click(); expect(carla.locator(".sheet .pano")).to_contain_text("Carla Dias"); carla.locator(".sheet-wrap").click(position={"x":5,"y":5})
-    carla.locator("#pfilter").click(); expect(carla.get_by_text("Dias da semana")).to_be_visible()
+    ana.locator("#ppeople").click(); expect(ana.locator(".sheet .pano")).to_contain_text("Carla Dias"); ana.locator(".sheet-wrap").click(position={"x":5,"y":5})
+    ana.locator("#pfilter").click(); expect(ana.get_by_text("Dias da semana")).to_be_visible()
     shot(carla, "22b-panorama-filtros")
-    carla.locator("#fuser").select_option(index=0); carla.locator("#fapply").click()
-    expect(carla.locator(".pgrid")).to_be_visible()
-    carla.locator("#pfilter").click()
-    for i in range(7): carla.locator(f"[data-dow='{i}']").evaluate("e => e.click()")
-    carla.locator("#fapply").click()
-    expect(carla.get_by_text("Nenhuma escala neste período")).to_be_visible()
+    ana.locator("#fuser").select_option(index=0); ana.locator("#fapply").click()
+    expect(ana.locator(".pgrid")).to_be_visible()
+    ana.locator("#pfilter").click()
+    for i in range(7): ana.locator(f"[data-dow='{i}']").evaluate("e => e.click()")
+    ana.locator("#fapply").click()
+    expect(ana.get_by_text("Nenhuma escala neste período")).to_be_visible()
     carla.goto(f"{BASE}/#/times/{louvor_id}/escalas")
     expect(carla.locator(".pagehead h1")).to_have_text("Escalas", timeout=10000)
-    expect(carla.locator(".cal")).to_be_visible(); expect(carla.locator(".menulist", has_text="Panorama de escalas")).to_be_visible()
+    expect(carla.locator(".cal")).to_be_visible(); assert carla.locator(".menulist", has_text="Panorama de escalas").count() == 0
     shot(carla, "23-escalas")
     carla.goto(f"{BASE}/#/chat/{louvor_id}")
     expect(carla.locator(".pagehead h1")).to_have_text("Chat", timeout=10000)

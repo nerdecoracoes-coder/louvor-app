@@ -877,7 +877,7 @@ async function calendar(el, scope) {
         ${teamChips.map((t) => `<a class="chip ${scope === "time:" + t.id ? "on" : ""}" href="#/calendario/time:${t.id}"><i style="width:8px;height:8px;border-radius:8px;background:${attr(t.accent_color || "var(--accent)")}"></i>${esc(t.name)}</a>`).join("")}</div>`}
       ${mode === "timeline" ? timeline(evs, extra) : `<div class="card"><div class="calhead"><button class="iconbtn" data-m="-1">${icon("chevronLeft")}</button><b>${fMonthYear(month)}</b><button class="iconbtn" data-m="1">${icon("chevronRight")}</button></div>
         <div class="cal">${["D", "S", "T", "Q", "Q", "S", "S"].map((x) => `<div class="dow">${x}</div>`).join("")}${cells.join("")}</div></div>`}
-      ${inTeam ? `<div class="menulist"><a href="#/panorama">${icon("bars")}<span class="grow">Panorama de escalas<small>Quantas vezes cada pessoa serve no mês</small></span>${icon("chevronRight", "chev")}</a></div>` : ""}
+      ${inTeam && canManageTeam(state.space.id) ? `<div class="menulist"><a href="#/panorama">${icon("bars")}<span class="grow">Panorama de escalas<small>Quantas vezes cada pessoa serve no mês</small></span>${icon("chevronRight", "chev")}</a></div>` : ""}
       ${mode === "timeline" ? "" : `${dayEvs.length || pendDay.length ? `<div class="sec"><h2>${esc(cap(fDateLong(selDay + "T15:00:00Z")))}</h2></div>` : ""}
       ${pendDay.map((c) => `<div class="pending"><div class="pt">${icon("bell")}<b>Falta criar a escala</b></div><div class="prow" style="cursor:default"><span class="grow"><b>${esc(c.title)}</b><small>${fTime(c.starts_at)} · evento da igreja</small></span>${canManageTeam(tid) ? `<a class="btn primary sm" href="#/escala/nova/${tid}?evento=${c.id}">Criar escala</a>` : ""}</div></div>`).join("")}
       ${dayEvs.map((s) => schedRow(s)).join("")}`}`;
@@ -934,6 +934,7 @@ const tzParts = (iso) => {
 const TZ_SP = "America/Sao_Paulo";
 
 async function panorama(_, el, alive) {
+  if (state.space && !canManageTeam(state.space.id) && !isAdmin()) { el.innerHTML = `<div class="pagehead"><h1>Panorama de escalas</h1></div>${empty("lock", "O panorama é para quem lidera o time.")}`; return; }
   const teamIds = state.space ? [state.space.id] : (isAdmin() ? null : state.myTeams.map((t) => t.id));
   const ppl = await people();
   const flt = { month: new Date(ymd(new Date()) + "T12:00:00"), h0: 0, h1: 24, user: "all", dows: [true, true, true, true, true, true, true] };

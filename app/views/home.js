@@ -245,7 +245,7 @@ async function teamHome(team, el, alive) {
       <p class="roles">${esc([roleNames.length > 3 ? `${roleNames.slice(0, 3).join(", ")} +${roleNames.length - 3}` : roleNames.join(", "), team.is_leader ? "Líder" : ""].filter(Boolean).join(" · ") || teamTypeLabel(team))}</p></div>
     <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 56)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
   </section>
-  ${quickRow([["userOff","Bloqueios","#/bloqueios"],["bars","Panorama","#/panorama"],teamHas(team,"estudio")?["layers","Estúdio",`#/times/${team.id}/estudio`]:null,teamHasRepertoire(team)?["clock","Metrônomo","#/metronomo"]:null,teamOnly()?null:["gift","Aniversários","#/aniversariantes"],["play","Tutoriais","#/ajuda"]])}
+  ${quickRow([["calendar","Escalas",`#/times/${team.id}/escalas`],teamHasRepertoire(team)?["music","Músicas","#/musicas"]:null,["userOff","Bloqueios","#/bloqueios"],teamHas(team,"estudio")?["layers","Estúdio",`#/times/${team.id}/estudio`]:null,teamOnly()?null:["gift","Aniversários","#/aniversariantes"],["play","Tutoriais","#/ajuda"]])}
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div id="pend"></div>
