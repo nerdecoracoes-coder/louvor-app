@@ -27,6 +27,7 @@ beforeAll(async () => {
   await admin.api.rpc("grant_set", { p_org: org, p_user: supervisor.id, p_role: "network_supervisor", p_network: redeA, p_title: "Pastor da Rede A" });
   await admin.api.rpc("grant_set", { p_org: org, p_user: geral.id, p_role: "general_leader", p_network: null, p_title: "Pastor presidente" });
   orgOutro = (await outro.api.rpc("create_organization", { p_name: "Outra Igreja" })).data;
+  await outro.api.post("teams", { org_id: orgOutro, name: "Time da outra igreja", team_type: "louvor" });
   // o desenvolvedor só pode ser marcado por quem tem a chave de serviço (SQL Editor), nunca pelo próprio usuário
   await fetch(`${REST}/profiles?id=eq.${dev.id}`, { method: "PATCH", headers: { Authorization: `Bearer ${await serviceKey()}`, apikey: await serviceKey(), "Content-Type": "application/json" }, body: JSON.stringify({ is_developer: true }) });
 });
@@ -112,10 +113,24 @@ describe("cenário 7 — desenvolvedor", () => {
     expect(orgs).toContain(org); expect(orgs).toContain(orgOutro);
     expect((await dev.api.get(`/teams?org_id=eq.${orgOutro}`)).data).toBeDefined();
   });
+  test("modo auditoria: circula e edita as áreas, mas não lê dado pessoal de ninguém", async () => {
+    // estrutura continua aberta (e editável) em qualquer igreja
+    expect((await dev.api.get(`/teams?org_id=eq.${orgOutro}`)).data.length).toBeGreaterThan(0);
+    const tOutro = (await dev.api.get(`/teams?org_id=eq.${orgOutro}`)).data[0].id;
+    expect((await dev.api.patch(`teams?id=eq.${tOutro}`, { description: "auditado" })).ok).toBe(true);
+    // conversas de times em que não está de verdade: fechadas
+    expect((await dev.api.get(`/messages?team_id=eq.${louvor}`)).data.length).toBe(0);
+    expect((await dev.api.get(`/messages?team_id=eq.${infantil}`)).data.length).toBe(0);
+    // pessoas de outra igreja: nem o vínculo nem o perfil
+    expect((await dev.api.get(`/org_members?org_id=eq.${orgOutro}`)).data.length).toBe(0);
+    expect((await dev.api.get(`/profiles?id=eq.${outro.id}`)).data.length).toBe(0);
+    // o que é dele continua dele
+    expect((await dev.api.get(`/profiles?id=eq.${dev.id}`)).data.length).toBe(1);
+  });
   test("o servidor nega a quem não é desenvolvedor", async () => {
     expect((await membro.api.rpc("dev_orgs")).ok).toBe(false);
     expect((await admin.api.rpc("dev_orgs")).ok).toBe(false);
-    expect(await perm(admin, (await outro.api.get(`/teams?org_id=eq.${orgOutro}`)).data[0]?.id ?? louvor, "view")).toBe(true);   // admin da própria igreja continua com acesso
+    expect(await perm(admin, louvor, "view")).toBe(true);   // admin da própria igreja continua com acesso
   });
 });
 
