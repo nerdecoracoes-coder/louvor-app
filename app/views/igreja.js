@@ -142,7 +142,7 @@ export async function churchHome(el, alive) {
   const mine = new Set(state.myTeams.map((t) => t.id));
   el.innerHTML = `
   <section class="hero"><div class="grow"><p class="hello">Igreja</p><h1>${esc(o.name)}</h1>${o.subtitle ? `<p class="roles">${esc(o.subtitle)}</p>` : ""}</div></section>
-  ${quickRow([["calendar","Agenda","#/agenda"],["users","Times","#/times"],["chat","Chat","#/chat"],["megaphone","Avisos","#/avisos"],hasRepertoire() ? ["music","Músicas","#/musicas"] : null])}
+  ${quickRow([["megaphone","Avisos","#/avisos"],["calendar","Minhas escalas","#/calendario/meu"],["userOff","Bloqueios","#/bloqueios"],["gift","Aniversários","#/aniversariantes"],["play","Tutoriais","#/ajuda"]])}
 
   <div class="sec"><h2>Liderança</h2>${isAdmin() ? `<span class="row gap-s"><button class="more" id="edcoord">${icon("calendar")} Agenda</button><button class="more" id="edlead">${icon("edit")} Cargos</button></span>` : ""}</div>
   ${leaders.length ? `<div class="leaders">${leaders.map((p) => `<div class="leader">${avatar(p, 92, false)}<b class="ellipsis">${esc(p.display_name)}</b><span class="ellipsis">${esc(p.church_title)}</span></div>`).join("")}</div>`

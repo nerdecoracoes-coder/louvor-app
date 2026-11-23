@@ -26,3 +26,7 @@ Referência: `referencia-visual.jpg` (3 celulares: Testemunhos, Início, Edifica
 - Sempre testar nos dois temas (`E2E_THEME=light` no e2e).
 - Reaproveitar componentes existentes antes de criar novos; se criar, deixe genérico para outras telas.
 - Não mudar o comportamento do Ministério de Louvor.
+
+## Decisões do dono (23/11/2026)
+- **Cantos**: cartões levemente arredondados (≈12px; tokens `--r-lg` 12, `--r` 10, `--r-sm` 8). Nada de cantos muito redondos em cartões; só bolhas de chat, chips e botões-pílula ficam redondos.
+- **Atalhos redondos** (`quickRow`) não podem repetir a barra de navegação (Início, Times/Escalas, Agenda, Músicas, Chat). Usam as funções do menu lateral: Avisos, Minhas escalas, Bloqueios, Aniversários, Tutoriais, Panorama, Estúdio, Metrônomo.
