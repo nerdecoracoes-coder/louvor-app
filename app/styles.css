@@ -1542,3 +1542,16 @@ label.li input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--a
 .mc-fs { border: 0; padding: 0; margin: 0 0 8px; display: flex; flex-direction: column; gap: 6px; }
 .mc-radio { display: flex; align-items: center; gap: 8px; padding: 6px 0; font-size: 14px; cursor: pointer; }
 .mc-radio input { flex: none; }
+
+/* Jornadas */
+.jr-card { gap: 8px; }
+.jr-list { overflow: hidden; }
+.jr-act { padding: 12px 14px; border-top: 1px solid rgba(var(--w), .06); }
+.jr-act:first-child { border-top: 0; }
+.jr-act.locked { opacity: .55; }
+.jr-ic { display: inline-flex; width: 26px; height: 26px; align-items: center; justify-content: center; border-radius: 50%; background: rgba(var(--w), .08); color: var(--muted); flex: none; }
+.jr-act.done .jr-ic { background: rgba(var(--accent-rgb), .18); color: var(--accent-ink); }
+.jr-act.pending .jr-ic { color: var(--warn); }
+.jr-ic .ic { width: 16px; height: 16px; }
+.jr-body { margin: 8px 0 0 36px; min-width: 0; overflow-wrap: anywhere; }
+.jr-step .list .li { align-items: center; }

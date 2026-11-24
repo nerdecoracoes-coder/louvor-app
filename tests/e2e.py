@@ -1231,6 +1231,26 @@ with sync_playwright() as pw:
     ana.reload(); expect(ana.locator("#list")).to_contain_text("Visitante Link E2E", timeout=10000)
     ok("novos convertidos: painel, registro, associação/nova ficha, acompanhamento sem contato não autorizado, histórico restrito, formulário no app e por link")
 
+    # ------------------------------------------------------------------ Recurso 08: jornadas (construtor, ativação, participação, Minhas jornadas)
+    ana.goto(BASE + "/#/chamados"); expect(ana.locator("#view")).to_contain_text("Jornadas", timeout=10000)
+    ana.goto(BASE + "/#/gestao-jornadas"); expect(ana.locator("#view")).to_contain_text("Nenhuma jornada criada ainda", timeout=10000)
+    ana.get_by_text("Nova jornada").first.click(); ana.locator(".sheet #nm").fill("Discipulado E2E"); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#view")).to_contain_text("Discipulado E2E", timeout=10000); expect(ana.locator("#pane")).to_contain_text("Adicione a primeira etapa")
+    ana.locator("#addstep").click(); ana.locator(".sheet #f [name=name]").fill("Primeiros passos"); ana.locator(".sheet #ok").click(); expect(ana.locator("#pane")).to_contain_text("Primeiros passos", timeout=10000)
+    expect(ana.locator(".sheet #f")).to_have_count(0, timeout=10000); ana.locator("[data-aa]").first.click(); ana.locator(".sheet #f [name=title]").fill("Ler o texto da semana"); ana.locator(".sheet #ok").click(); expect(ana.locator("#pane")).to_contain_text("Ler o texto da semana", timeout=10000)
+    ana.locator('#tabs [data-tab="ajustes"]').click(); ana.locator("#f [name=visibility]").select_option("public"); ana.locator("#f [name=enroll_voluntary]").check(); ana.locator("#f #ok").click()
+    toast_has(ana, "Ajustes salvos")
+    ana.locator("[data-js=active]").first.click(); expect(ana.locator("#view")).to_contain_text("Ativa", timeout=10000)
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("construtor overflow", ow); shot(ana, "54-jornada-construtor")
+    carla.goto(BASE + "/#/jornadas"); expect(carla.locator("#view")).to_contain_text("Discipulado E2E", timeout=10000)
+    carla.locator("[data-av]").first.click(); carla.locator(".sheet #go").click(); expect(carla.locator("#view")).to_contain_text("Ler o texto da semana", timeout=10000)
+    expect(carla.locator("#view")).to_contain_text("0%")
+    carla.locator("[data-do]").first.click(); expect(carla.locator("#view")).to_contain_text("100%", timeout=10000)
+    ow = carla.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("minha jornada overflow", ow); shot(carla, "55-minha-jornada")
+    carla.goto(BASE + "/#/jornadas"); expect(carla.locator("#view")).to_contain_text("Em andamento", timeout=10000); expect(carla.locator("#view")).to_contain_text("100%")
+    ana.reload(); ana.locator('#tabs [data-tab="participantes"]').click(); expect(ana.locator("#pane .li")).to_have_count(1, timeout=10000); expect(ana.locator("#pane")).to_contain_text("100%")
+    ok("jornadas: construtor, ativação, participação voluntária, Minhas jornadas e acompanhamento")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
         for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}", "/#/acolher"]:
