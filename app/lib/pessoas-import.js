@@ -26,6 +26,14 @@ export const ERRORS = {
   field_locked: "Esse dado só a secretaria altera", already_pending: "Esse dado já tem uma solicitação em análise", cannot_cancel: "Essa solicitação já não pode ser cancelada", already_decided: "Essa solicitação já foi concluída",
   self_approval: "Quem fez o pedido não pode aprová-lo. Peça a outro responsável", invalid_decision: "Decisão inválida", invalid_field: "Campo inválido", invalid_mode: "Regra inválida", not_authenticated: "Entre na sua conta para continuar",
   invalid_label: "O nome da categoria deve ter de 2 a 40 letras", already_exists: "Já existe uma categoria com esse nome", invalid_filter: "Filtro inválido", note_too_long: "A observação é longa demais (máximo 500 letras)", too_many_rows: "A planilha tem linhas demais (máximo 5.000)" };
+Object.assign(ERRORS, {
+  duplicate_decision: "Já existe uma decisão dessa pessoa nesta data", person_not_found: "Não encontramos essa ficha", invalid_origin: "Escolha a origem da decisão", invalid_consent: "Autorização de contato inválida",
+  invalid_time: "Horário inválido", place_too_long: "O local passou de 120 letras", note_too_long: "A observação passou do tamanho permitido", reason_required: "Informe o motivo da alteração",
+  reason_too_long: "O motivo passou de 500 letras", already_linked: "Esta decisão já está associada a uma ficha", invalid_responsible: "Essa pessoa não pode ser responsável pelo acompanhamento",
+  invalid_mode: "Modo de registro inválido", invalid_action: "Ação inválida", contact_not_authorized: "A pessoa não autorizou contato: não é possível registrar contato",
+  followup_declined: "A pessoa não deseja acompanhamento", body_required: "Escreva o registro", body_too_long: "O texto passou de 1000 letras", invalid_channel: "Canal inválido",
+  confirm_identity: "Confirme que este é o seu cadastro", invalid_highlight: "O destaque deve ser de 1 a 365 dias", title_too_long: "O título passou de 120 letras",
+});
 export const errText = (e) => { const m = String(e?.message || e || ""); const k = Object.keys(ERRORS).find((x) => m.includes(x)); return k ? ERRORS[k] : m; };
 
 export const TEMPLATE_HEADERS = ["Nome completo", "Data de nascimento", "E-mail", "Telefone", "CPF", "Estado civil", "Endereço", "Cidade", "Estado", "CEP", "Classificação", "Data de ingresso na membresia"];
