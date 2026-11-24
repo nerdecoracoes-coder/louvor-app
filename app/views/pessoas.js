@@ -1,6 +1,6 @@
 // Cadastro de pessoas e membresia (SOMOS Chamados): base central separada das contas de acesso.
 // Quem pode ver/editar/aprovar/importar é decidido no servidor (people_* e RLS); aqui só se mostra o que ele libera.
-import { sb, state, esc, attr, icon, avatar, sheet, toast, busy, on, empty, spinner, confirmDialog, isDeveloper, peopleCan, canPeople, uploadPublic, pickFile, fDate, go } from "../core.js";
+import { sb, state, esc, attr, icon, avatar, sheet, toast, busy, on, empty, spinner, confirmDialog, isDeveloper, isAdmin, peopleCan, canPeople, uploadPublic, pickFile, fDate, go } from "../core.js";
 import { CLASSES, CLASS_LABEL, STATUS_LABEL, MARITAL, MARITAL_LABEL, FORM_FIELDS, errText, templateXlsx, mapRows } from "../lib/pessoas-import.js";
 import { readSpreadsheet } from "../lib/xlsx.js";
 import { qrSvg } from "../lib/qr.js";
@@ -154,10 +154,11 @@ async function formView(el, alive, id) {
 }
 
 // ------------------------------------------------------------------ ficha
-const FIELD_LABEL = { full_name: "Nome", social_name: "Nome social", birth_date: "Nascimento", sex: "Sexo", cpf: "CPF", marital_status: "Estado civil", phone: "Telefone", whatsapp: "WhatsApp", email: "E-mail", address: "Endereço", city: "Cidade", state: "UF", zip: "CEP", photo_url: "Foto", joined_at: "Ingresso", admin_notes: "Observações", status: "Situação", classification: "Classificação", user_id: "Conta" };
-const KIND_LABEL = { create: "Cadastro criado", field: "Alteração", classification: "Classificação", approve: "Cadastro aprovado", reject: "Cadastro rejeitado", link: "Conta vinculada", self_update: "Alterado pela própria pessoa" };
-const showVal = (f, v) => (v == null || v === "" ? "vazio" : f === "classification" ? CLASS_LABEL[v] || v : f === "status" ? STATUS_LABEL[v] || v : f === "marital_status" ? MARITAL_LABEL[v] || v : f === "cpf" ? cpfMask(v) : f === "zip" ? zipMask(v) : f === "sex" ? (v === "F" ? "Feminino" : "Masculino") : /date|joined/.test(f) ? ymdToBr(v) : f === "photo_url" ? "foto" : f === "admin_notes" ? "texto" : v);
+const FIELD_LABEL = { full_name: "Nome", social_name: "Nome social", birth_date: "Nascimento", sex: "Sexo", cpf: "CPF", marital_status: "Estado civil", phone: "Telefone", whatsapp: "WhatsApp", email: "E-mail", address: "Endereço", city: "Cidade", state: "UF", zip: "CEP", photo_url: "Foto", joined_at: "Ingresso", admin_notes: "Observações", status: "Situação", classification: "Classificação", user_id: "Conta", baptized: "Batizado", baptism_date: "Data do batismo", relation: "Vínculo" };
+const KIND_LABEL = { family: "Família", team_join: "Entrou em um time", team_leave: "Saiu de um time", team_role: "Função em time", visit: "Visita", consent: "Contato", journey: "Acolhimento", create: "Cadastro criado", field: "Alteração", classification: "Classificação", approve: "Cadastro aprovado", reject: "Cadastro rejeitado", link: "Conta vinculada", self_update: "Alterado pela própria pessoa" };
+const showVal = (f, v) => (v == null || v === "" ? "vazio" : f === "classification" ? CLASS_LABEL[v] || v : f === "status" ? STATUS_LABEL[v] || v : f === "marital_status" ? MARITAL_LABEL[v] || v : f === "cpf" ? cpfMask(v) : f === "zip" ? zipMask(v) : f === "sex" ? (v === "F" ? "Feminino" : "Masculino") : /date|joined/.test(f) ? ymdToBr(v) : f === "baptized" ? (v === "true" ? "sim" : "não") : f === "photo_url" ? "foto" : f === "admin_notes" ? "texto" : v);
 
+let lastTab = { id: null, k: "resumo" };
 async function detailView(el, alive, id) {
   if (!guard(el)) return;
   el.innerHTML = spinner();
@@ -166,6 +167,8 @@ async function detailView(el, alive, id) {
   const p = r.data;
   if (!p) { el.innerHTML = head("Pessoa") + (isDeveloper() ? auditNote() : empty("userOff", "Cadastro não encontrado ou fora do seu alcance.")); return; }
   const canEdit = peopleCan("people_edit"), canApprove = peopleCan("people_approve");
+  const tabsList = () => [["resumo", "Resumo"], ["familia", "Família"], ["igreja", "Igreja"], ["hist", "Histórico"], ...(peopleCan("people_care") ? [["pastoral", "Pastoral"]] : [])];
+  if (lastTab.id !== id || !tabsList().some(([k]) => k === lastTab.k)) lastTab = { id, k: "resumo" };
   const row = (k, v) => (v ? `<div class="drow"><span>${k}</span><b>${esc(v)}</b></div>` : "");
   el.innerHTML = `${head(p.social_name || p.full_name)}
     <section class="card perscard"><div class="row gap">${avatar({ display_name: p.full_name, avatar_url: p.photo_url }, 72, false)}<div class="grow"><b class="ptitle">${esc(p.full_name)}</b>${p.social_name ? `<div class="small muted">Nome social: ${esc(p.social_name)}</div>` : ""}
@@ -173,10 +176,105 @@ async function detailView(el, alive, id) {
       ${p.status === "pending" && canApprove ? `<div class="row gap mt"><button class="btn primary grow" id="appr">Aprovar</button><button class="btn ghost" id="fix">Corrigir e aprovar</button><button class="btn danger" id="rej">Rejeitar</button></div>` : ""}
       ${canEdit ? `<div class="row gap mt"><a class="btn ghost grow" href="#/pessoas/${p.id}/editar">${icon("edit")} Editar</a>${p.status === "pending" ? "" : `<button class="btn ghost" id="cls">Mudar classificação</button>`}</div>
         <div class="row gap mt">${["active", "inactive"].includes(p.status) ? `<button class="btn ghost grow" id="tog">${p.status === "active" ? "Marcar como inativo" : "Reativar"}</button>` : ""}<button class="btn danger grow" id="del">${icon("trash")} Excluir cadastro</button></div>` : ""}</section>
-    <h3 class="mt">Contato</h3><div class="card">${row("Telefone", p.phone)}${row("WhatsApp", p.whatsapp)}${row("E-mail", p.email)}${row("Endereço", [p.address, p.city && `${p.city}${p.state ? "/" + p.state : ""}`, zipMask(p.zip)].filter(Boolean).join(" · "))}${!p.phone && !p.whatsapp && !p.email && !p.address && !p.city && !p.zip ? `<span class="muted small">Sem contato registrado.</span>` : ""}</div>
-    <h3 class="mt">Dados pessoais</h3><div class="card">${row("Nascimento", ymdToBr(p.birth_date))}${row("Sexo", p.sex === "F" ? "Feminino" : p.sex === "M" ? "Masculino" : "")}${row("CPF", cpfMask(p.cpf))}${row("Estado civil", MARITAL_LABEL[p.marital_status])}${!p.birth_date && !p.sex && !p.cpf && !p.marital_status ? `<span class="muted small">Nada informado.</span>` : ""}</div>
-    <h3 class="mt">Na igreja</h3><div class="card">${row("Classificação", CLASS_LABEL[p.classification])}${row("Cadastrado em", ymdToBr(p.registered_at))}${row("Ingresso na membresia", ymdToBr(p.joined_at))}${row("Origem", { manual: "Cadastro manual", form: "Formulário", user: "Conta do app", import: "Planilha", self: "Própria pessoa" }[p.source])}${p.admin_notes ? `<div class="drow col"><span>Observações</span><b style="font-weight:400;white-space:pre-wrap">${esc(p.admin_notes)}</b></div>` : ""}</div>
-    <h3 class="mt">Histórico</h3><div class="list">${(h.data || []).map((x) => `<div class="li col" style="align-items:flex-start"><span class="small"><b>${KIND_LABEL[x.kind] || x.kind}</b>${x.field && x.kind !== "link" ? ` · ${FIELD_LABEL[x.field] || x.field}: <span class="muted">${esc(showVal(x.field, x.old_value))}</span> → ${esc(showVal(x.field, x.new_value))}` : ""}${x.note ? ` <span class="muted">· ${esc(x.note)}</span>` : ""}</span><span class="tiny muted">${esc(new Date(x.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }))}</span></div>`).join("") || `<div class="li muted small">Sem registros.</div>`}</div>`;
+    <div class="tabs" id="tabs" role="tablist">${tabsList().map(([k, l]) => `<button role="tab" data-tab="${k}" class="${k === lastTab.k ? "on" : ""}">${l}</button>`).join("")}</div><div id="pane"></div>`;
+  const pane = el.querySelector("#pane"), refresh = () => detailView(el, alive, id);
+  const paintTabs = () => el.querySelectorAll("#tabs [data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === lastTab.k));
+  const histLine = (x) => {
+    const when = esc(new Date(x.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }));
+    let txt = `<b>${KIND_LABEL[x.kind] || x.kind}</b>`;
+    if (x.kind === "family") txt += ` · ${x.new_value ? `${esc(x.new_value)}: ${esc(x.note || "")}` : `vínculo desfeito: ${esc(x.note || "")}`}`;
+    else if (x.kind.startsWith("team_")) txt += ` · ${esc(x.note || "")}`;
+    else { if (x.field && x.kind !== "link") txt += ` · ${FIELD_LABEL[x.field] || x.field}: <span class="muted">${esc(showVal(x.field, x.old_value))}</span> → ${esc(showVal(x.field, x.new_value))}`; if (x.note) txt += ` <span class="muted">· ${esc(x.note)}</span>`; }
+    return `<div class="li col" style="align-items:flex-start"><span class="small">${txt}</span><span class="tiny muted">${when}</span></div>`;
+  };
+  const RESETUP = `<div class="card small">Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-26-ficha-pessoa.sql</b> no SQL Editor do Supabase.</div>`;
+  const missing = (e) => /not exist|schema cache|Could not find/i.test(e?.message || "");
+  const REL = [["spouse", "Cônjuge"], ["child", "Filho(a)"], ["parent", "Pai/Mãe"], ["sibling", "Irmão(ã)"], ["other", "Outro vínculo"]], REL_LABEL = Object.fromEntries(REL);
+  const panes = {
+    resumo: async () => `<h3>Contato</h3><div class="card">${row("Telefone", p.phone)}${row("WhatsApp", p.whatsapp)}${row("E-mail", p.email)}${row("Endereço", [p.address, p.city && `${p.city}${p.state ? "/" + p.state : ""}`, zipMask(p.zip)].filter(Boolean).join(" · "))}${!p.phone && !p.whatsapp && !p.email && !p.address && !p.city && !p.zip ? `<span class="muted small">Sem contato registrado.</span>` : ""}</div>
+      <h3 class="mt">Dados pessoais</h3><div class="card">${row("Nome de preferência (nome social)", p.social_name)}${row("Nascimento", ymdToBr(p.birth_date))}${row("Sexo", p.sex === "F" ? "Feminino" : p.sex === "M" ? "Masculino" : "")}${row("CPF", cpfMask(p.cpf))}${row("Estado civil", MARITAL_LABEL[p.marital_status])}${!p.social_name && !p.birth_date && !p.sex && !p.cpf && !p.marital_status ? `<span class="muted small">Nada informado.</span>` : ""}</div>
+      <p class="tiny muted mt">Cadastro criado em ${ymdToBr(p.registered_at)}.</p>`,
+    familia: async () => {
+      const r = await sb.rpc("person_family", { p_person: id });
+      if (r.error) return missing(r.error) ? RESETUP : empty("alert", "Não foi possível carregar.", esc(errText(r.error)));
+      const fam = r.data || [];
+      return `<div class="row between mb"><h3>Família</h3>${canEdit ? `<button class="btn ghost sm" id="famadd">${icon("plus")} Relacionar</button>` : ""}</div>
+        <div class="list">${fam.map((f) => `<div class="li"><a class="row gap grow" href="#/pessoas/${f.relative_id}" style="min-width:0">${avatar({ display_name: f.name, avatar_url: f.photo_url }, 40, false)}<span class="grow"><span class="t">${esc(f.name)}</span><span class="s">${REL_LABEL[f.relation] || ""} · ${esc(CLASS_LABEL[f.classification] || "")}</span></span></a>${canEdit ? `<button class="btn ghost sm" data-famdel="${f.id}" aria-label="Desfazer vínculo">${icon("trash")}</button>` : ""}</div>`).join("") || `<div class="li muted small">Nenhum familiar relacionado. Relacione quem já está cadastrado: nenhum cadastro novo é criado.</div>`}</div>`;
+    },
+    igreja: async () => {
+      const [lr, tr] = await Promise.all([sb.rpc("person_church_life", { p_person: id }), sb.rpc("person_teams", { p_person: id })]);
+      if (lr.error) return missing(lr.error) ? RESETUP : empty("alert", "Não foi possível carregar.", esc(errText(lr.error)));
+      const l = lr.data, teams = tr.data || [];
+      const STAGE = { first_visit: "Primeira visita", returning: "Retorno", approach: "Aproximação", integration: "Integração" };
+      return `<div class="row between mb"><h3>Vida na igreja</h3>${canEdit ? `<button class="btn ghost sm" id="bapt">${icon("edit")} Batismo</button>` : ""}</div>
+        <div class="card">${row("Classificação", CLASS_LABEL[p.classification])}${row("Ingresso na membresia", ymdToBr(p.joined_at))}${row("Primeira visita", ymdToBr(l.first_visit_on))}${row("Batismo", l.baptized ? (l.baptism_date ? ymdToBr(l.baptism_date) : "Batizado(a), data não informada") : "Não informado")}${l.visits.length ? row("Visitas registradas", String(l.visits.length)) : ""}${l.visits.length ? row("Etapa do acolhimento", STAGE[l.stage]) : ""}${row("Origem do cadastro", { manual: "Cadastro manual", form: "Formulário", user: "Conta do app", import: "Planilha", self: "Própria pessoa" }[p.source])}
+        ${p.admin_notes ? `<div class="drow col"><span>Observações</span><b style="font-weight:400;white-space:pre-wrap">${esc(p.admin_notes)}</b></div>` : ""}</div>
+        ${l.classification_changes.length ? `<h3 class="mt">Mudanças de classificação</h3><div class="list">${l.classification_changes.map((c) => `<div class="li col" style="align-items:flex-start"><span class="small">${esc(CLASS_LABEL[c.from] || "—")} → <b>${esc(CLASS_LABEL[c.to] || "—")}</b></span><span class="tiny muted">${esc(new Date(c.at).toLocaleDateString("pt-BR"))}</span></div>`).join("")}</div>` : ""}
+        ${l.visits.length ? `<h3 class="mt">Visitas</h3><div class="list">${l.visits.map((v) => `<div class="li col" style="align-items:flex-start"><span class="small"><b>${v.kind === "first" ? "Primeira visita" : "Retorno"}</b>${v.welcomed_by_name ? ` · acolhido por ${esc(v.welcomed_by_name)}` : ""}</span><span class="tiny muted">${ymdToBr(v.visited_on)}</span></div>`).join("")}</div>` : ""}
+        <h3 class="mt">Times e ministérios</h3>
+        <div class="list">${teams.map((t) => `<div class="li col" style="align-items:flex-start"><span class="small"><b>${esc(t.name)}</b> · ${t.role === "leader" ? "Líder" : "Integrante"}</span><span class="tiny muted">Ativo · desde ${esc(new Date(t.joined_at).toLocaleDateString("pt-BR"))}</span></div>`).join("") || `<div class="li muted small">${p.user_id ? "Não participa de nenhum time no momento." : "Sem conta no app, sem vínculos de time. Eles aparecem quando a pessoa tiver conta."}</div>`}</div>
+        <p class="tiny muted mt">Participar de um time não dá permissão administrativa. As saídas ficam no Histórico.</p>`;
+    },
+    hist: async () => `<h3>Histórico</h3><div class="list">${(h.data || []).map(histLine).join("") || `<div class="li muted small">Sem registros.</div>`}</div>`,
+    pastoral: async () => {
+      const r = await sb.rpc("care_list", { p_person: id });
+      if (r.error) return missing(r.error) ? RESETUP : empty("lock", "Sem acesso aos registros pastorais.", esc(errText(r.error)));
+      const K = { visit: "Visita", prayer: "Oração", counsel: "Aconselhamento", other: "Outro" };
+      return `<div class="card small" style="margin-bottom:12px">${icon("lock")} Acesso restrito. Cada leitura e cada registro desta aba ficam anotados. Não aparece para líderes de times nem no histórico geral.</div>
+        <div class="row between mb"><h3>Acompanhamento</h3><div class="row gap-s"><button class="btn primary sm" id="careadd">${icon("plus")} Registrar</button>${isAdmin() ? `<button class="btn ghost sm" id="carelog">Quem acessou</button>` : ""}</div></div>
+        <div class="list">${r.data.map((c) => `<div class="li col" style="align-items:flex-start"><span class="small"><b>${K[c.kind]}</b> · <span class="muted">${esc(c.by || "")}</span></span><span class="small" style="white-space:pre-wrap">${esc(c.note)}</span><span class="tiny muted">${esc(new Date(c.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }))}</span></div>`).join("") || `<div class="li muted small">Nenhum registro.</div>`}</div>`;
+    },
+  };
+  const paint = async () => { pane.innerHTML = spinner(); const k = lastTab.k; const html = await panes[k](); if (!alive() || lastTab.k !== k) return; pane.innerHTML = html; wirePane(); };
+  const wirePane = () => {
+    pane.querySelector("#famadd")?.addEventListener("click", () => {
+      const s = sheet(`<h3>Relacionar pessoa</h3><p class="small muted">Escolha alguém que já está cadastrado. Nenhum cadastro novo é criado.</p>
+        <label class="field"><span>A pessoa escolhida é ... de ${esc((p.social_name || p.full_name).split(" ")[0])}</span><select id="rel">${REL.map(([k, l]) => `<option value="${k}">${l}</option>`).join("")}</select></label>
+        <label class="psearch">${icon("search")}<input id="fq" type="search" placeholder="Buscar pelo nome" autocomplete="off"></label><div id="fr" class="list mt"></div>`);
+      const fr = s.el.querySelector("#fr"); let t;
+      s.el.querySelector("#fq").addEventListener("input", (e) => { clearTimeout(t); t = setTimeout(async () => {
+        const q = e.target.value.trim(); if (q.length < 2) { fr.innerHTML = ""; return; }
+        const r = await sb.from("people").select("id,full_name,classification").eq("org_id", state.org.id).neq("id", id).in("status", ["active", "inactive"]).ilike("full_name", `%${q.replace(/[%_]/g, "")}%`).order("full_name").limit(8);
+        fr.innerHTML = (r.data || []).map((x) => `<button class="li" data-pick="${x.id}"><span class="grow"><span class="t">${esc(x.full_name)}</span><span class="s">${esc(CLASS_LABEL[x.classification] || "")}</span></span></button>`).join("") || `<div class="li muted small">Ninguém encontrado. Cadastre a pessoa primeiro.</div>`;
+      }, 250); });
+      s.el.addEventListener("click", async (e) => {
+        const b = e.target.closest("[data-pick]"); if (!b) return;
+        const r = await sb.rpc("person_relation_add", { p_person: id, p_relative: b.dataset.pick, p_relation: s.el.querySelector("#rel").value });
+        if (r.error) return toast(/already_related/.test(r.error.message) ? "Essas pessoas já estão relacionadas." : errText(r.error));
+        toast("Familiar relacionado"); s.close(); paint();
+      });
+    });
+    pane.querySelectorAll("[data-famdel]").forEach((b) => b.addEventListener("click", async () => {
+      if (!(await confirmDialog("Desfazer este vínculo familiar? As duas pessoas continuam cadastradas e a mudança fica no histórico.", "Desfazer", true))) return;
+      const r = await sb.rpc("person_relation_remove", { p_id: Number(b.dataset.famdel) }); if (r.error) return toast(errText(r.error)); toast("Vínculo desfeito"); paint();
+    }));
+    pane.querySelector("#bapt")?.addEventListener("click", async () => {
+      const cur = (await sb.rpc("person_church_life", { p_person: id })).data || {};
+      const s = sheet(`<h3>Batismo</h3><label class="li" style="border:0;min-height:0;padding:0 0 14px"><input type="checkbox" id="bz" ${cur.baptized ? "checked" : ""}><span class="grow s">Batizado(a)</span></label>
+        <label class="field"><span>Data do batismo (se souber)</span><input type="date" id="bd" value="${attr(cur.baptism_date || "")}" max="${new Date().toISOString().slice(0, 10)}"></label><button class="btn primary block" id="ok">Salvar</button>`);
+      s.el.querySelector("#ok").onclick = async (e) => {
+        const b = e.currentTarget; busy(b);
+        try { const r = await sb.rpc("person_church_life_save", { p_person: id, p: { baptized: s.el.querySelector("#bz").checked, baptism_date: s.el.querySelector("#bd").value || null } });
+          if (r.error) return toast(/invalid_date/.test(r.error.message) ? "Data inválida." : errText(r.error)); toast("Batismo atualizado"); s.close(); refresh(); } finally { busy(b, false); }
+      };
+    });
+    pane.querySelector("#careadd")?.addEventListener("click", () => {
+      const s = sheet(`<h3>Registrar acompanhamento</h3><p class="small muted">Acesso restrito e registrado.</p>
+        <label class="field"><span>Tipo</span><select id="k"><option value="visit">Visita</option><option value="prayer">Oração</option><option value="counsel">Aconselhamento</option><option value="other">Outro</option></select></label>
+        <label class="field"><span>Registro</span><textarea id="n" rows="4" maxlength="4000"></textarea></label><button class="btn primary block" id="ok">Salvar</button>`);
+      s.el.querySelector("#ok").onclick = async (e) => {
+        const b = e.currentTarget; busy(b);
+        try { const r = await sb.rpc("care_add", { p_person: id, p_kind: s.el.querySelector("#k").value, p_note: s.el.querySelector("#n").value });
+          if (r.error) return toast(/note_required/.test(r.error.message) ? "Escreva o registro." : errText(r.error)); toast("Registrado"); s.close(); paint(); } finally { busy(b, false); }
+      };
+    });
+    pane.querySelector("#carelog")?.addEventListener("click", async () => {
+      const r = await sb.rpc("care_access_log", { p_person: id });
+      sheet(`<h3>Quem acessou</h3><div class="list">${(r.data || []).map((x) => `<div class="li col" style="align-items:flex-start"><span class="small"><b>${esc(x.by || "—")}</b> · ${x.action === "read" ? "leu" : "registrou"}</span><span class="tiny muted">${esc(new Date(x.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }))}</span></div>`).join("") || `<div class="li muted small">Nenhum acesso.</div>`}</div>`);
+    });
+  };
+  el.querySelector("#tabs").addEventListener("click", (e) => { const b = e.target.closest("[data-tab]"); if (!b || b.dataset.tab === lastTab.k) return; lastTab = { id, k: b.dataset.tab }; paintTabs(); paint(); });
+  paint();
   const review = async (decision, extra = {}) => {
     const r2 = await sb.rpc("person_review", { p_id: id, p_decision: decision, p: extra });
     if (r2.error) return toast(errText(r2.error));

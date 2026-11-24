@@ -1,0 +1,26 @@
+# Checklist — Gestão de Pessoas e Membresia
+
+Acompanhamento recurso por recurso (levantamento funcional da inChurch). Estados: **Implantado** (concluído e validado), **Parcial** (existe, com pendências) e **Pendente**.
+Este arquivo só recebe acréscimos: as decisões antigas ficam no registro abaixo da tabela.
+
+| # | Recurso | Estado | Dependências / observações |
+|---|---------|--------|----------------------------|
+| 1 | Cadastro de membros | Implantado | Cadastro manual, formulário público com QR + aprovação, importação por planilha, vínculo de contas existentes, inativar e excluir. Testes: `pessoas.test.ts`, `pessoas-lib.test.ts`, e2e. |
+| 2 | Cadastro de visitantes | Implantado | Mesma base (`people`, classificação visitante). Registro simples depois da conversa, telefone só com autorização, retorno sem duplicar. Testes: `acolhimento.test.ts`, e2e. Depende do SQL `atualizacao-2026-11-25-acolhimento.sql` no banco real. |
+| 3 | Ficha individual de pessoas | Parcial | Abas Resumo, Família, Igreja, Histórico e Pastoral. **Pendente:** documentos por pessoa (não há armazenamento por pessoa hoje) e entrada do cartão do integrante na tela de integrantes do time (função no servidor pronta; a tela é compartilhada com o Louvor e não foi alterada). Depende do SQL `atualizacao-2026-11-26-ficha-pessoa.sql`. |
+| 4 | Dados pessoais e familiares | Implantado | Dados pessoais completos; família relaciona pessoas **já cadastradas** (cônjuge, filho(a), pai/mãe, irmão(ã), outro), visível dos dois lados. Familiar ainda não cadastrado precisa ser cadastrado antes. |
+| 5 | Histórico do membro | Implantado | `person_history`: cadastro, alterações, classificação, família, entrada/saída/função em times, visitas e contato autorizado, com data e responsável. Registros pastorais ficam fora dele de propósito. |
+| 6 | Atualização cadastral pelo aplicativo | Implantado | "Meus dados cadastrais" no perfil (`my_person_update`): a pessoa altera só os próprios dados, sem mudar classificação. |
+| 7 | Gestão de novos convertidos | Pendente | Ainda sem fluxo próprio. Pode reaproveitar jornada e acompanhamento. |
+| 8 | Acompanhamento da jornada do membro | Parcial | Jornada do visitante (primeira visita, retorno, aproximação, integração) pronta. Para membros, só o histórico e o acompanhamento pastoral. |
+| 9 | Solicitações de contato | Pendente | Existe o consentimento de contato do visitante; falta o fluxo de pedido de contato feito pela pessoa. |
+| 10 | Relatórios de membresia | Parcial | Totais e filtros na lista de Pessoas. Sem relatórios nem exportação. |
+| 11 | Segmentação por perfil | Parcial | Filtros por classificação e situação. Sem segmentos salvos. |
+| 12 | Carteira digital do membro | Pendente | Não iniciada. |
+
+## Registro de decisões
+- **24/11/2026** — Base central `people` separada de contas de acesso; escrita só por funções no servidor; supervisor de rede só vê pessoas (com conta) da própria rede.
+- **25/11/2026** — Visitante = pessoa com classificação "visitante" (sem segunda base). Etapa da jornada calculada por registros reais; sem alertas nem metas. Permissão nova `people_welcome`.
+- **26/11/2026** — Ficha em abas. Família por relação entre cadastros existentes. Permissão nova `people_care` (acompanhamento pastoral): só administrador e quem recebeu a ação; trilha de acesso visível só ao administrador; nada de pastoral no histórico geral. Gatilho de times registra entrada/saída/função sem nunca bloquear a operação. "Nome de preferência" usa o campo "nome social" já existente.
+- **26/11/2026** — Desenvolvedor mantém acesso técnico à estrutura, mas **não** lê dados pessoais (regra definida pelo dono em 23/11, mantida mesmo com o pedido de "acesso técnico global" do texto do recurso 03). Se a regra mudar, é um ajuste pequeno no banco.
+- **26/11/2026** — Permissões granulares do texto mapeadas assim: ver ficha = `people_view`; criar/editar dados, família, classificação e vínculos = `people_edit`; aprovar = `people_approve`; importar/vincular = `people_import`; registrar acolhimento = `people_welcome`; pastoral = `people_care`. Não foi criada uma ação separada para cada item.

@@ -1056,7 +1056,7 @@ with sync_playwright() as pw:
     ana.goto(BASE + "/#/pessoas"); ana.fill("#q", "Helena"); ana.locator(".li", has_text="Helena Matos").first.click()
     ana.locator("#cls").click(); ana.locator(".sheet label", has_text="Frequentador").click(); ana.locator(".sheet #ok").click()
     expect(ana.locator("#view")).to_contain_text("Membro → Frequentador", timeout=10000) if False else expect(ana.locator("#view")).to_contain_text("Frequentador", timeout=10000)
-    expect(ana.locator("#view")).to_contain_text("Classificação")
+    ana.locator('#tabs [data-tab="hist"]').click(); expect(ana.locator("#pane")).to_contain_text("Classificação", timeout=10000)
     # formulário público
     ana.goto(BASE + "/#/pessoas/formulario"); ana.locator("#new").click(); ana.locator(".sheet #ok").click()
     expect(ana.locator(".sheet .qrbox svg")).to_be_visible(timeout=10000); shot(ana, "41-qrcode")
@@ -1130,6 +1130,24 @@ with sync_playwright() as pw:
     shot(ana, "46-acolhimento-ficha")
     ana.goto(BASE + "/#/acolhimento"); ana.fill("#q", "Visitante Dois"); expect(ana.locator("#rows .li")).to_have_count(1, timeout=10000); ana.fill("#q", "Visitante Teste"); expect(ana.locator("#rows .li")).to_have_count(1, timeout=10000); shot(ana, "47-acolhimento-lista")
     ok("acolhimento: Como acolher para o servo (4 etapas, sem formulário), cadastro só com nome, telefone com autorização, retorno sem duplicar, jornada por registro")
+
+    # ------------------------------------------------------------------ Ficha individual em abas: família, igreja/times, histórico, pastoral
+    ana.goto(BASE + "/#/pessoas"); ana.fill("#q", "Visitante Dois"); expect(ana.locator("#rows .li", has_text="Visitante Dois")).to_have_count(1, timeout=10000); ana.locator("#rows .li", has_text="Visitante Dois").click()
+    expect(ana.locator("#tabs [data-tab]")).to_have_count(5, timeout=10000)
+    expect(ana.locator("#pane")).to_contain_text("Contato")
+    ana.locator('#tabs [data-tab="familia"]').click(); expect(ana.locator("#pane")).to_contain_text("Nenhum familiar relacionado", timeout=10000)
+    ana.locator("#famadd").click(); ana.locator(".sheet #fq").fill("Visitante Teste"); ana.locator(".sheet [data-pick]").first.click()
+    expect(ana.locator("#pane")).to_contain_text("Visitante Teste", timeout=10000); expect(ana.locator("#pane")).to_contain_text("Cônjuge")
+    ana.locator('#tabs [data-tab="igreja"]').click(); expect(ana.locator("#pane")).to_contain_text("Vida na igreja", timeout=10000); expect(ana.locator("#pane")).to_contain_text("Times e ministérios")
+    ana.locator("#bapt").click(); ana.locator(".sheet #bz").check(); ana.locator(".sheet #bd").fill("2015-06-14"); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#pane")).to_contain_text("14/06/2015", timeout=10000)
+    ana.locator('#tabs [data-tab="pastoral"]').click(); expect(ana.locator("#pane")).to_contain_text("Acesso restrito", timeout=10000)
+    ana.locator("#careadd").click(); ana.locator(".sheet #n").fill("Conversa pastoral de teste"); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#pane")).to_contain_text("Conversa pastoral de teste", timeout=10000)
+    ana.locator('#tabs [data-tab="hist"]').click(); expect(ana.locator("#pane")).to_contain_text("Família", timeout=10000); expect(ana.locator("#pane")).to_contain_text("Batizado")
+    assert "Conversa pastoral de teste" not in ana.locator("#pane").inner_text()   # pastoral não vaza para o histórico geral
+    shot(ana, "48-ficha-abas")
+    ok("ficha individual: abas Resumo/Família/Igreja/Histórico/Pastoral, família sem duplicar cadastro, batismo, pastoral restrita fora do histórico")
 
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
