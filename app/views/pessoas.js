@@ -166,7 +166,7 @@ let lastTab = { id: null, k: "resumo" };
 async function detailView(el, alive, id) {
   if (!guard(el)) return;
   el.innerHTML = spinner();
-  const [r, h] = await Promise.all([sb.from("people").select("*").eq("id", id).maybeSingle(), sb.from("person_history").select("*").eq("person_id", id).order("id", { ascending: false }).limit(60)]);
+  const [r] = await Promise.all([sb.from("people").select("*").eq("id", id).maybeSingle()]);
   if (!alive()) return;
   const p = r.data;
   if (!p) { el.innerHTML = head("Pessoa") + (isDeveloper() ? auditNote() : empty("userOff", "Cadastro não encontrado ou fora do seu alcance.")); return; }
@@ -183,13 +183,17 @@ async function detailView(el, alive, id) {
     <div class="tabs" id="tabs" role="tablist">${tabsList().map(([k, l]) => `<button role="tab" data-tab="${k}" class="${k === lastTab.k ? "on" : ""}">${l}</button>`).join("")}</div><div id="pane"></div>`;
   const pane = el.querySelector("#pane"), refresh = () => detailView(el, alive, id);
   const paintTabs = () => el.querySelectorAll("#tabs [data-tab]").forEach((b) => b.classList.toggle("on", b.dataset.tab === lastTab.k));
-  const histLine = (x) => {
-    const when = esc(new Date(x.at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" }));
-    let txt = `<b>${KIND_LABEL[x.kind] || x.kind}</b>`;
-    if (x.kind === "family") txt += ` · ${x.new_value ? `${esc(x.new_value)}: ${esc(x.note || "")}` : `vínculo desfeito: ${esc(x.note || "")}`}`;
-    else if (x.kind.startsWith("team_")) txt += ` · ${esc(x.note || "")}`;
-    else { if (x.field && x.kind !== "link") txt += ` · ${FIELD_LABEL[x.field] || x.field}: <span class="muted">${esc(showVal(x.field, x.old_value))}</span> → ${esc(showVal(x.field, x.new_value))}`; if (x.note) txt += ` <span class="muted">· ${esc(x.note)}</span>`; }
-    return `<div class="li col" style="align-items:flex-start"><span class="small">${txt}</span><span class="tiny muted">${when}</span></div>`;
+  const TLICON = { cadastro: "file", pessoais: "edit", familia: "users", acolhimento: "heart", participacao: "star", batismo: "shield", membresia: "users", integracao: "link", ministerio: "users", formacao: "book", outros: "clock" };
+  const tlState = lastTab.tl || (lastTab.tl = { cat: "", origin: "", from: "", to: "" });
+  let tlCats = [], tlMore = false, tlOffset = 0, tlCanAdd = false;
+  const fmtD = (d) => (d ? d.split("-").reverse().join("/") : "");
+  const fmtDT = (t) => new Date(t).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  const tlItem = (x) => {
+    const ch = x.changes && x.changes.length > 1 ? `<div class="tiny" style="margin-top:6px">${x.changes.map((c) => `<div><b>${esc(c.field)}</b>${c.old || c.new ? `: <span class="muted">${esc(c.old || "—")}</span> → ${esc(c.new || "—")}` : " alterado"}</div>`).join("")}</div>` : "";
+    const det = [x.description && x.changes?.length < 2 ? `<div class="small" style="white-space:pre-wrap">${esc(x.description)}</div>` : "", x.notes ? `<div class="small muted" style="white-space:pre-wrap">${esc(x.notes)}</div>` : "", ch,
+      `<div class="tiny muted" style="margin-top:6px">Aconteceu em ${fmtD(x.occurred_on)} · registrado em ${fmtDT(x.at)} por ${esc(x.by)} · ${x.origin === "auto" ? "automático" : "manual"}${x.edited ? ` · corrigido em ${fmtDT(x.edited_at)}` : ""}</div>`,
+      x.can_edit ? `<div class="row gap-s mt"><button class="btn ghost sm" data-tledit="${x.id}">${icon("edit")} Corrigir</button><button class="btn ghost sm" data-tlvoid="${x.id}">${icon("trash")} Anular</button></div>` : ""].join("");
+    return `<details class="tl-item" data-id="${x.id}" data-json="${attr(JSON.stringify({ id: x.id, title: x.title, description: x.description, occurred_on: x.occurred_on, notes: x.notes, category: x.category }))}"><summary><span class="tl-dot">${icon(TLICON[x.category] || "clock")}</span><span class="grow"><span class="t">${esc(x.title)}</span><span class="s">${esc(x.category_label)} · ${fmtD(x.occurred_on)}${x.origin === "manual" ? " · manual" : ""}${x.edited ? " · corrigido" : ""}</span></span></summary><div class="tl-body">${det}</div></details>`;
   };
   const RESETUP = `<div class="card small">Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-26-ficha-pessoa.sql</b> no SQL Editor do Supabase.</div>`;
   const missing = (e) => /not exist|schema cache|Could not find/i.test(e?.message || "");
@@ -233,7 +237,19 @@ async function detailView(el, alive, id) {
         <div class="list">${teams.map((t) => `<div class="li col" style="align-items:flex-start"><span class="small"><b>${esc(t.name)}</b> · ${t.role === "leader" ? "Líder" : "Integrante"}</span><span class="tiny muted">Ativo · desde ${esc(new Date(t.joined_at).toLocaleDateString("pt-BR"))}</span></div>`).join("") || `<div class="li muted small">${p.user_id ? "Não participa de nenhum time no momento." : "Sem conta no app, sem vínculos de time. Eles aparecem quando a pessoa tiver conta."}</div>`}</div>
         <p class="tiny muted mt">Participar de um time não dá permissão administrativa. As saídas ficam no Histórico.</p>`;
     },
-    hist: async () => `<h3>Histórico</h3><div class="list">${(h.data || []).map(histLine).join("") || `<div class="li muted small">Sem registros.</div>`}</div>`,
+    hist: async () => {
+      const f = tlState;
+      const [r, cr] = await Promise.all([sb.rpc("person_timeline", { p_person: id, p_categories: f.cat ? [f.cat] : null, p_origin: f.origin || null, p_from: f.from || null, p_to: f.to || null, p_by: null, p_limit: 20, p_offset: 0 }), sb.rpc("history_categories_list", { p_org: p.org_id })]);
+      if (r.error) return missing(r.error) ? RESETUP.replace("atualizacao-2026-11-26-ficha-pessoa.sql", "atualizacao-2026-11-28-linha-do-tempo.sql") : empty("lock", /forbidden/.test(r.error.message) ? "Você não tem acesso ao histórico desta pessoa." : "Não foi possível carregar o histórico.", /forbidden/.test(r.error.message) ? "" : `<button class="btn ghost sm" id="tlretry">Tentar de novo</button>`);
+      tlCats = cr.data || [];
+      tlMore = r.data.has_more; tlOffset = r.data.items.length; tlCanAdd = r.data.can_add;
+      const filtered = !!(f.cat || f.origin || f.from || f.to);
+      return `<div class="row between mb"><h3>Linha do tempo</h3><div class="row gap-s">${tlCanAdd ? `<button class="btn primary sm" id="tladd">${icon("plus")} Adicionar acontecimento</button>` : ""}</div></div>
+        <div class="row gap-s mb" style="flex-wrap:wrap"><button class="btn ghost sm" id="tlfilter">Filtrar${filtered ? " (ativo)" : ""}</button>${filtered ? `<button class="btn ghost sm" id="tlclear">Limpar filtros</button>` : ""}${isAdmin() ? `<button class="btn ghost sm" id="tlaudit">Auditoria</button><button class="btn ghost sm" id="tlcats">Categorias</button>` : ""}</div>
+        <div class="tline" id="tlist">${r.data.items.map(tlItem).join("") || `<div class="li muted small">${filtered ? "Nenhum acontecimento com esses filtros." : "Ainda não há acontecimentos nesta linha do tempo."}</div>`}</div>
+        ${tlMore ? `<button class="btn ghost block mt" id="tlmore">Carregar mais</button>` : ""}
+        <p class="tiny muted mt">Registros automáticos não podem ser alterados. Anotações pastorais ficam na aba Pastoral, nunca aqui.</p>`;
+    },
     pastoral: async () => {
       const r = await sb.rpc("care_list", { p_person: id });
       if (r.error) return missing(r.error) ? RESETUP : empty("lock", "Sem acesso aos registros pastorais.", esc(errText(r.error)));
@@ -245,6 +261,68 @@ async function detailView(el, alive, id) {
   };
   const paint = async () => { pane.innerHTML = spinner(); const k = lastTab.k; const html = await panes[k](); if (!alive() || lastTab.k !== k) return; pane.innerHTML = html; wirePane(); };
   const wirePane = () => {
+    pane.querySelector("#tlretry")?.addEventListener("click", paint);
+    const bindItems = (root) => {
+      root.querySelectorAll("[data-tledit]").forEach((b) => b.addEventListener("click", () => tlForm(JSON.parse(b.closest("details").dataset.json))));
+      root.querySelectorAll("[data-tlvoid]").forEach((b) => b.addEventListener("click", () => {
+        const s = sheet(`<h3>Anular acontecimento</h3><p class="small muted">O registro sai da linha do tempo, mas fica guardado na auditoria com o motivo.</p><label class="field"><span>Motivo *</span><input id="rs" maxlength="500"></label><button class="btn danger block" id="ok">Anular</button>`);
+        s.el.querySelector("#ok").onclick = async (e) => { const rs = s.el.querySelector("#rs").value.trim(); if (rs.length < 3) return toast("Explique o motivo."); const bb = e.currentTarget; busy(bb); try { const r = await sb.rpc("timeline_void", { p_id: Number(b.dataset.tlvoid), p_reason: rs }); if (r.error) return toast(errText(r.error)); toast("Acontecimento anulado"); s.close(); paint(); } finally { busy(bb, false); } };
+      }));
+    };
+    bindItems(pane);
+    const tlForm = (cur) => {
+      const cats = tlCats.filter((c) => c.manual && (c.active || c.key === cur?.category));
+      const today = new Date().toLocaleDateString("sv-SE");
+      const key = crypto.randomUUID?.() || String(Date.now()) + Math.random();
+      const s = sheet(`<h3>${cur ? "Corrigir acontecimento" : "Adicionar acontecimento"}</h3>
+        <label class="field"><span>Categoria</span><select id="c">${cats.map((c) => `<option value="${c.key}" ${c.key === (cur?.category || "participacao") ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></label>
+        ${fld("t", "Título *", cur?.title || "", 'maxlength="120" required')}
+        <label class="field"><span>Descrição</span><textarea id="d" rows="3" maxlength="1000">${esc(cur?.description || "")}</textarea></label>
+        <label class="field"><span>Data em que aconteceu</span><input id="o" type="date" max="${today}" value="${cur?.occurred_on || today}"></label>
+        <label class="field"><span>Observações adicionais</span><textarea id="n" rows="2" maxlength="1000">${esc(cur?.notes || "")}</textarea></label>
+        ${cur ? `<label class="field"><span>Motivo da correção</span><input id="rs" maxlength="500"></label>` : ""}
+        <p class="tiny muted">O responsável e o horário do registro são anotados automaticamente.${cur ? " O valor anterior fica guardado na auditoria." : ""}</p>
+        <button class="btn primary block" id="ok">${cur ? "Salvar correção" : "Adicionar"}</button>`, { wide: true });
+      s.el.querySelector("#ok").onclick = async (e) => {
+        const v = (q) => s.el.querySelector(q).value, title = v("[name=t], #t").trim();
+        if (title.length < 2) return toast("Informe o título.");
+        const bb = e.currentTarget; busy(bb);
+        try {
+          const r = cur
+            ? await sb.rpc("timeline_correct", { p_id: cur.id, p_title: title, p_description: v("#d"), p_occurred_on: v("#o") || null, p_notes: v("#n"), p_category: v("#c"), p_reason: v("#rs") })
+            : await sb.rpc("timeline_add", { p_person: id, p_category: v("#c"), p_title: title, p_description: v("#d"), p_occurred_on: v("#o") || null, p_notes: v("#n"), p_key: key });
+          if (r.error) return toast(errText(r.error));
+          toast(cur ? "Acontecimento corrigido" : "Acontecimento adicionado"); s.close(); paint();
+        } finally { busy(bb, false); }
+      };
+    };
+    pane.querySelector("#tladd")?.addEventListener("click", () => tlForm(null));
+    pane.querySelector("#tlclear")?.addEventListener("click", () => { Object.assign(tlState, { cat: "", origin: "", from: "", to: "" }); paint(); });
+    pane.querySelector("#tlfilter")?.addEventListener("click", () => {
+      const s = sheet(`<h3>Filtrar linha do tempo</h3>
+        <label class="field"><span>Categoria</span><select id="c"><option value="">Todas</option>${tlCats.map((c) => `<option value="${c.key}" ${c.key === tlState.cat ? "selected" : ""}>${esc(c.label)}</option>`).join("")}</select></label>
+        <label class="field"><span>Registro</span><select id="o"><option value="">Automático e manual</option><option value="auto" ${tlState.origin === "auto" ? "selected" : ""}>Só automáticos</option><option value="manual" ${tlState.origin === "manual" ? "selected" : ""}>Só manuais</option></select></label>
+        <div class="grid2"><label class="field"><span>De</span><input id="f" type="date" value="${tlState.from}"></label><label class="field"><span>Até</span><input id="t" type="date" value="${tlState.to}"></label></div>
+        <button class="btn primary block" id="ok">Aplicar</button>`);
+      s.el.querySelector("#ok").onclick = () => { Object.assign(tlState, { cat: s.el.querySelector("#c").value, origin: s.el.querySelector("#o").value, from: s.el.querySelector("#f").value, to: s.el.querySelector("#t").value }); s.close(); paint(); };
+    });
+    pane.querySelector("#tlmore")?.addEventListener("click", async (e) => {
+      const b = e.currentTarget; busy(b);
+      const r = await sb.rpc("person_timeline", { p_person: id, p_categories: tlState.cat ? [tlState.cat] : null, p_origin: tlState.origin || null, p_from: tlState.from || null, p_to: tlState.to || null, p_by: null, p_limit: 20, p_offset: tlOffset });
+      busy(b, false); if (r.error) return toast(errText(r.error));
+      const box = pane.querySelector("#tlist"); const tmp = document.createElement("div"); tmp.innerHTML = r.data.items.map(tlItem).join(""); bindItems(tmp); [...tmp.children].forEach((c) => box.appendChild(c));
+      tlOffset += r.data.items.length; if (!r.data.has_more) b.remove();
+    });
+    pane.querySelector("#tlaudit")?.addEventListener("click", async () => {
+      const r = await sb.rpc("timeline_audit", { p_person: id });
+      sheet(`<h3>Auditoria da linha do tempo</h3><div class="list">${(r.data || []).map((x) => `<div class="li col" style="align-items:flex-start"><span class="small"><b>${x.action === "void" ? "Anulado" : "Corrigido"}</b> · ${esc(x.before.title)}${x.action === "edit" ? ` → ${esc(x.now_title)}` : ""}</span><span class="tiny muted">${fmtDT(x.at)} por ${esc(x.by)}${x.reason ? " · " + esc(x.reason) : ""}</span></div>`).join("") || `<div class="li muted small">Nenhuma correção ou anulação.</div>`}</div>`);
+    });
+    pane.querySelector("#tlcats")?.addEventListener("click", () => {
+      const s = sheet(`<h3>Categorias</h3><p class="small muted">As categorias do sistema não mudam. Crie outras para a sua igreja ou desative as que não usa.</p><div class="list">${tlCats.filter((c) => !c.system).map((c) => `<div class="li"><span class="grow">${esc(c.label)}${c.active ? "" : " (desativada)"}</span><button class="btn ghost sm" data-ct="${c.key}" data-a="${c.active ? 1 : 0}" data-l="${attr(c.label)}">${c.active ? "Desativar" : "Reativar"}</button></div>`).join("") || `<div class="li muted small">Nenhuma categoria própria ainda.</div>`}</div>
+        <label class="field mt"><span>Nova categoria</span><input id="nc" maxlength="40" placeholder="Ex.: Viagem missionária"></label><button class="btn primary block" id="ok">Criar categoria</button>`);
+      s.el.querySelector("#ok").onclick = async () => { const l = s.el.querySelector("#nc").value.trim(); if (l.length < 2) return toast("Dê um nome à categoria."); const r = await sb.rpc("history_category_save", { p_org: p.org_id, p_key: null, p_label: l, p_active: true }); if (r.error) return toast(errText(r.error)); toast("Categoria criada"); s.close(); paint(); };
+      s.el.querySelectorAll("[data-ct]").forEach((b) => b.addEventListener("click", async () => { const r = await sb.rpc("history_category_save", { p_org: p.org_id, p_key: b.dataset.ct, p_label: b.dataset.l, p_active: b.dataset.a !== "1" }); if (r.error) return toast(errText(r.error)); s.close(); paint(); }));
+    });
     pane.querySelector("#famretry")?.addEventListener("click", paint);
     const relSel = (cur) => `<select id="rel">${relTypes.map(([k, l]) => `<option value="${k}" ${k === cur ? "selected" : ""}>${esc(l)}</option>`).join("")}</select>`;
     const first = esc((p.social_name || p.full_name).split(" ")[0]);

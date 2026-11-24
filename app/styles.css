@@ -1508,3 +1508,14 @@ label.li input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--a
 .col-end { display: flex; flex-direction: column; align-items: flex-end; flex: none; }
 .jchips .chip { height: auto; min-height: 34px; padding: 6px 13px; text-align: left; }
 .ptag.none { background: rgba(var(--w), .08); color: var(--muted); }
+
+.tline { display: flex; flex-direction: column; border-left: 2px solid rgba(var(--w), .12); margin-left: 14px; }
+.tl-item { position: relative; padding: 0 0 14px 18px; }
+.tl-item > summary { list-style: none; cursor: pointer; display: flex; gap: 10px; align-items: flex-start; }
+.tl-item > summary::-webkit-details-marker { display: none; }
+.tl-dot { position: absolute; left: -15px; top: 0; width: 28px; height: 28px; border-radius: 50%; background: var(--surface); border: 1px solid rgba(var(--w), .16); display: grid; place-items: center; color: var(--accent); }
+.tl-dot svg { width: 15px; height: 15px; }
+.tl-item > summary > .grow { margin-left: 18px; min-width: 0; }
+.tl-item .t { display: block; font-weight: 600; overflow-wrap: anywhere; }
+.tl-item .s { display: block; font-size: 12px; color: var(--muted); }
+.tl-body { margin: 8px 0 0 18px; padding: 10px 12px; border-radius: 12px; background: rgba(var(--w), .05); }

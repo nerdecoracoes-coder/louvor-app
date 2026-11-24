@@ -6,7 +6,7 @@ export function register(route) { route("/chamados", (p, el, a) => view(el, a));
 
 const SETUP = `<div class="card small">Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-23-ambientes.sql</b> no SQL Editor do Supabase.</div>`;
 const ACTIONS = [["view", "Ver"], ["create", "Criar"], ["edit", "Editar"], ["delete", "Excluir"], ["approve", "Aprovar"], ["manage", "Gerenciar"], ["administer", "Administrar"]];
-const PEOPLE_ACTIONS = [["people_view", "Ver a base de pessoas"], ["people_edit", "Cadastrar e editar pessoas"], ["people_approve", "Aprovar cadastros"], ["people_import", "Importar e vincular pessoas"], ["people_welcome", "Registrar acolhimento de visitantes"]];
+const PEOPLE_ACTIONS = [["people_view", "Ver a base de pessoas"], ["people_edit", "Cadastrar e editar pessoas"], ["people_approve", "Aprovar cadastros"], ["people_import", "Importar e vincular pessoas"], ["people_welcome", "Registrar acolhimento de visitantes"], ["people_timeline_add", "Adicionar acontecimentos no histórico"], ["people_timeline_edit", "Corrigir acontecimentos manuais do histórico"]];
 const actLabel = (a) => ([...ACTIONS, ...PEOPLE_ACTIONS].find((x) => x[0] === a) || [a, a])[1];
 const chipsOf = (list, on) => list.map(([k, l]) => `<label class="chip"><input type="checkbox" value="${k}" ${on.includes(k) ? "checked" : ""}> ${l}</label>`).join("");
 
