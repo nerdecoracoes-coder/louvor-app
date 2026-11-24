@@ -1507,3 +1507,4 @@ label.li input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--a
 .jev b { display: block; font-weight: 600; } .jev span { color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
 .col-end { display: flex; flex-direction: column; align-items: flex-end; flex: none; }
 .jchips .chip { height: auto; min-height: 34px; padding: 6px 13px; text-align: left; }
+.ptag.none { background: rgba(var(--w), .08); color: var(--muted); }

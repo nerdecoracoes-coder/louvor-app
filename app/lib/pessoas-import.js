@@ -2,7 +2,8 @@
 import { buildXlsx } from "./xlsx.js";
 
 export const CLASSES = [["member", "Membro"], ["attender", "Frequentador"], ["visitor", "Visitante"]];
-export const CLASS_LABEL = Object.fromEntries(CLASSES);
+export const CLASSES_FORM = [...CLASSES, ["none", "Sem classificação"]];
+export const CLASS_LABEL = Object.fromEntries(CLASSES_FORM);
 export const STATUS_LABEL = { active: "Ativo", inactive: "Inativo", pending: "Pendente", rejected: "Rejeitado" };
 export const MARITAL = [["solteiro", "Solteiro(a)"], ["casado", "Casado(a)"], ["divorciado", "Divorciado(a)"], ["viuvo", "Viúvo(a)"], ["uniao_estavel", "União estável"], ["outro", "Outro"]];
 export const MARITAL_LABEL = Object.fromEntries(MARITAL);
@@ -16,7 +17,11 @@ export const ERRORS = {
   invalid_sex: "Sexo inválido", invalid_marital: "Estado civil inválido", invalid_birth: "Data de nascimento inválida", invalid_date: "Data inválida", invalid_classification: "Classificação inválida (use Membro, Frequentador ou Visitante)",
   duplicate_in_file: "CPF repetido na própria planilha", duplicate_cpf: "Já existe alguém com esse CPF", forbidden: "Você não tem permissão para isso", not_found: "Cadastro não encontrado",
   not_pending: "Este cadastro não está pendente", form_closed: "Este formulário não está recebendo cadastros", too_many_requests: "Muitos envios em pouco tempo. Tente de novo em alguns minutos.",
-  not_a_member: "A pessoa não faz parte da igreja", too_many_rows: "A planilha tem linhas demais (máximo 5.000)" };
+  not_a_member: "A pessoa não faz parte da igreja", field_too_long: "Algum campo passou do tamanho permitido",
+  already_related: "Essas pessoas já estão relacionadas", same_person: "Escolha outra pessoa: não dá para relacionar alguém com ela mesma", invalid_relation: "Tipo de parentesco inválido",
+  already_has_spouse: "Uma dessas pessoas já tem cônjuge cadastrado", invalid_age: "As datas de nascimento não combinam com esse parentesco", invalid_cycle: "Esse vínculo criaria uma contradição na árvore da família",
+  already_guardian: "Essa pessoa já é responsável legal", guardian_minor: "Um menor de idade não pode ser responsável legal", ward_not_minor: "Só dá para definir responsável legal de menor de idade (ou curatela)",
+  invalid_kind: "Tipo de responsabilidade inválido", note_too_long: "A observação é longa demais (máximo 500 letras)", too_many_rows: "A planilha tem linhas demais (máximo 5.000)" };
 export const errText = (e) => { const m = String(e?.message || e || ""); const k = Object.keys(ERRORS).find((x) => m.includes(x)); return k ? ERRORS[k] : m; };
 
 export const TEMPLATE_HEADERS = ["Nome completo", "Data de nascimento", "E-mail", "Telefone", "CPF", "Estado civil", "Endereço", "Cidade", "Estado", "CEP", "Classificação", "Data de ingresso na membresia"];
