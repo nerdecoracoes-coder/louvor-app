@@ -61,7 +61,7 @@ describe("permissões do módulo", () => {
   });
   test("my_access informa as ações de pessoas", async () => {
     expect((await admin.api.rpc("my_access", { p_org: org })).data.people).toContain("people_import");
-    expect((await secretaria.api.rpc("my_access", { p_org: org })).data.people.sort()).toEqual(["people_approve", "people_edit", "people_import", "people_view"]);
+    expect((await secretaria.api.rpc("my_access", { p_org: org })).data.people.sort()).toEqual(["people_approve", "people_edit", "people_import", "people_view", "people_welcome"]);
     expect((await lider.api.rpc("my_access", { p_org: org })).data.people).toEqual([]);
     expect((await dev.api.rpc("my_access", { p_org: org })).data.people).toEqual([]);
   });

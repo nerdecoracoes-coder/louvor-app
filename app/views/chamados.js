@@ -1,12 +1,12 @@
 // SOMOS Chamados: ambiente de quem lidera (líderes de ministério, pastores supervisores de rede, liderança geral).
 // Pessoa ≠ conta ≠ vínculo ≠ função ≠ permissão: aqui só se enxerga e configura o que o servidor libera (my_access / RPCs).
-import { sb, state, esc, attr, icon, people, personName, teamBadge, teamTypeLabel, sheet, toast, errMsg, busy, on, empty, spinner, confirmDialog, canAdminOrg, canChamados, canPeople, myNetworks, isGeneralLeader, isDeveloper } from "../core.js";
+import { sb, state, esc, attr, icon, people, personName, teamBadge, teamTypeLabel, sheet, toast, errMsg, busy, on, empty, spinner, confirmDialog, canAdminOrg, canChamados, canPeople, canWelcome, myNetworks, isGeneralLeader, isDeveloper } from "../core.js";
 
 export function register(route) { route("/chamados", (p, el, a) => view(el, a)); }
 
 const SETUP = `<div class="card small">Esta parte precisa da atualização do banco de dados. Rode o arquivo <b>atualizacao-2026-11-23-ambientes.sql</b> no SQL Editor do Supabase.</div>`;
 const ACTIONS = [["view", "Ver"], ["create", "Criar"], ["edit", "Editar"], ["delete", "Excluir"], ["approve", "Aprovar"], ["manage", "Gerenciar"], ["administer", "Administrar"]];
-const PEOPLE_ACTIONS = [["people_view", "Ver a base de pessoas"], ["people_edit", "Cadastrar e editar pessoas"], ["people_approve", "Aprovar cadastros"], ["people_import", "Importar e vincular pessoas"]];
+const PEOPLE_ACTIONS = [["people_view", "Ver a base de pessoas"], ["people_edit", "Cadastrar e editar pessoas"], ["people_approve", "Aprovar cadastros"], ["people_import", "Importar e vincular pessoas"], ["people_welcome", "Registrar acolhimento de visitantes"]];
 const actLabel = (a) => ([...ACTIONS, ...PEOPLE_ACTIONS].find((x) => x[0] === a) || [a, a])[1];
 const chipsOf = (list, on) => list.map(([k, l]) => `<label class="chip"><input type="checkbox" value="${k}" ${on.includes(k) ? "checked" : ""}> ${l}</label>`).join("");
 
@@ -40,8 +40,8 @@ async function view(el, alive) {
     const supers = (id) => grants.filter((g) => g.role_key === "network_supervisor" && g.network_id === id);
     const leaders = grants.filter((g) => g.role_key === "general_leader");
     el.innerHTML = `<div class="pagehead"><h1>SOMOS Chamados</h1></div><p class="muted small" style="margin:-8px 0 14px">Ministérios e pessoas sob sua responsabilidade.${isDeveloper() ? " · Acesso de desenvolvedor" : ""}</p>
-    ${canPeople() || isDeveloper() ? `<h3>Pessoas</h3><div class="list menu"><a class="li" href="#/pessoas">${icon("users")}<span class="grow"><span class="t">Cadastro de pessoas</span><span class="s">Membros, frequentadores e visitantes</span></span>${icon("chevronRight", "chev")}</a></div>` : ""}
-    <h3${canPeople() || isDeveloper() ? ' class="mt"' : ""}>Ministérios</h3>
+    ${canPeople() || canWelcome() || isDeveloper() ? `<h3>Pessoas</h3><div class="list menu">${canPeople() || isDeveloper() ? `<a class="li" href="#/pessoas">${icon("users")}<span class="grow"><span class="t">Cadastro de pessoas</span><span class="s">Membros, frequentadores e visitantes</span></span>${icon("chevronRight", "chev")}</a>` : ""}${canWelcome() ? `<a class="li" href="#/acolhimento">${icon("heart")}<span class="grow"><span class="t">Acolhimento de visitantes</span><span class="s">Primeira visita, retorno e jornada</span></span>${icon("chevronRight", "chev")}</a>` : ""}</div>` : ""}
+    <h3${canPeople() || canWelcome() || isDeveloper() ? ' class="mt"' : ""}>Ministérios</h3>
     <div class="list menu">${teams.map(teamRow).join("") || `<div class="li muted small">Nenhum ministério sob sua responsabilidade ainda.</div>`}</div>
     ${(nets.data || []).length || admin ? `<div class="row between mt"><h3>Redes de supervisão</h3>${admin ? `<button class="btn ghost sm" data-net="">${icon("plus")} Nova rede</button>` : ""}</div>
     <div class="list">${(nets.data || []).map((n) => `<div class="li col"><div class="row between"><b>${esc(n.name)}</b>${admin ? `<span class="row gap-s"><button class="btn ghost sm" data-net="${n.id}">Editar</button><button class="btn ghost sm" data-sup="${n.id}">Supervisor</button></span>` : ""}</div>

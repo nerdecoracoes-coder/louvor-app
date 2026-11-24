@@ -1096,9 +1096,44 @@ with sync_playwright() as pw:
     carla.locator(".sheet #ok").click(); toast_has(carla, "Dados salvos")
     ok("pessoas: cadastro manual com aviso de duplicidade, histórico de classificação, formulário público com QR + aprovação, importação com prévia, servo sem acesso à base")
 
+    # ------------------------------------------------------------------ Acolhimento: Como acolher (todos do Servos) + cadastro simples e jornada
+    carla.goto(BASE + "/#/"); carla.locator(".menubtn").click()
+    expect(carla.locator('.drawer a[href="#/acolher"]')).to_contain_text("Como acolher", timeout=10000)
+    carla.locator('.drawer a[href="#/acolher"]').click()
+    expect(carla.locator(".pagehead h1")).to_have_text("Como acolher", timeout=10000)
+    expect(carla.locator(".acstep")).to_have_count(4)
+    for t in ["Receba com carinho.", "Ajude a pessoa a conhecer a igreja.", "Deixe a porta aberta.", "Relacionamento não tem pressa.", "Nosso objetivo não é simplesmente cadastrar visitantes."]:
+        expect(carla.locator("#view")).to_contain_text(t)
+    assert carla.locator("#view form, #view input, #view textarea").count() == 0           # página só de orientação
+    assert carla.locator('#view a[href="#/acolhimento"]').count() == 0                      # sem atalho de registro para quem não tem permissão
+    shot(carla, "45-como-acolher")
+    carla.goto(BASE + "/#/acolhimento"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
+    carla.goto(BASE + "/#/acolhimento/novo"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
+    ana.goto(BASE + "/#/"); ana.locator(".menubtn").click(); expect(ana.locator('.drawer a[href="#/acolher"]')).to_be_visible(timeout=10000); ana.keyboard.press("Escape")
+    # cadastro só com o nome
+    ana.goto(BASE + "/#/acolhimento/novo"); expect(ana.locator("input[name=full_name]")).to_be_visible(timeout=10000)
+    assert ana.locator("input[name=consent]").is_disabled()
+    ana.fill("input[name=full_name]", "Visitante Teste"); ana.fill("input[name=day]", __import__("datetime").date.today().replace(day=1).isoformat() if __import__("datetime").date.today().day > 1 else (__import__("datetime").date.today() - __import__("datetime").timedelta(days=3)).isoformat()); ana.locator("#ok").click()
+    expect(ana.locator(".perscard")).to_contain_text("Visitante Teste", timeout=10000)
+    expect(ana.locator(".jtrack li.now")).to_have_text("Primeira visita"); expect(ana.locator("#view")).to_contain_text("Sem telefone")
+    # com telefone e autorização
+    ana.goto(BASE + "/#/acolhimento/novo"); ana.fill("input[name=full_name]", "Visitante Dois"); ana.fill("input[name=phone]", "21 99888-7777")
+    assert not ana.locator("input[name=consent]").is_disabled(); ana.locator("input[name=consent]").check(); ana.locator("#ok").click()
+    expect(ana.locator("#view")).to_contain_text("21 99888-7777", timeout=10000); expect(ana.locator("#view")).to_contain_text("Autorizado")
+    # a mesma pessoa não vira cadastro novo: o aviso leva ao retorno
+    ana.goto(BASE + "/#/acolhimento/novo"); ana.fill("input[name=full_name]", "visitante teste"); ana.locator("#ok").click()
+    expect(ana.locator(".sheet")).to_contain_text("já está cadastrada", timeout=10000); ana.locator(".sheet [data-ret]").first.click()
+    expect(ana.locator(".jtrack li.now")).to_have_text("Retorno", timeout=10000); expect(ana.locator(".jlog")).to_contain_text("Primeira visita")
+    # aproximação só por registro
+    ana.locator("#reg").click(); ana.locator(".sheet #k").select_option("interest"); ana.locator('.sheet [data-t="Receber oração"]').click(); ana.locator(".sheet #ok").click()
+    expect(ana.locator(".jtrack li.now")).to_have_text("Aproximação", timeout=10000); expect(ana.locator(".jlog")).to_contain_text("Receber oração")
+    shot(ana, "46-acolhimento-ficha")
+    ana.goto(BASE + "/#/acolhimento"); ana.fill("#q", "Visitante Dois"); expect(ana.locator("#rows .li")).to_have_count(1, timeout=10000); ana.fill("#q", "Visitante Teste"); expect(ana.locator("#rows .li")).to_have_count(1, timeout=10000); shot(ana, "47-acolhimento-lista")
+    ok("acolhimento: Como acolher para o servo (4 etapas, sem formulário), cadastro só com nome, telefone com autorização, retorno sem duplicar, jornada por registro")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
-        for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}"]:
+        for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}", "/#/acolher"]:
             p_.goto(BASE + route); p_.wait_for_timeout(700)
             ow = p_.evaluate("document.documentElement.scrollWidth - window.innerWidth")
             if ow > 1:

@@ -72,8 +72,11 @@ export const canAdminOrg = () => isDeveloper() || isAdmin() || (state.access?.ge
 // SOMOS Chamados: desenvolvedor, administrador, liderança geral, supervisor de rede ou líder de algum ministério
 export const peopleCan = (a) => (state.access?.people || []).includes(a);
 // cadastro de pessoas: só quem recebeu alguma permissão do módulo (administrador ou concessão); ser líder não basta
+export const canWelcome = () => peopleCan("people_welcome") || peopleCan("people_edit");
+// SOMOS Servos: quem participa de algum time (administrador e desenvolvedor também enxergam o ambiente)
+export const hasServos = () => state.myTeams.length > 0 || isAdmin() || isDeveloper();
 export const canPeople = () => ["people_view", "people_edit", "people_approve", "people_import"].some(peopleCan);
-export const canChamados = () => !!state.access && (state.access.developer || state.access.admin || !!state.access.general_leader || !!state.access.secretary || canPeople() || myNetworks().length > 0 || (state.access.leader_of || []).length > 0);
+export const canChamados = () => !!state.access && (state.access.developer || state.access.admin || !!state.access.general_leader || !!state.access.secretary || canPeople() || canWelcome() || myNetworks().length > 0 || (state.access.leader_of || []).length > 0);
 export const environments = () => [
   ...(!teamOnly() && (state.access?.member || isDeveloper()) ? [{ key: "um", label: "SOMOS Um" }] : []),
   ...(state.myTeams.length || (isDeveloper() && (state.orgTeams || []).length) ? [{ key: "servos", label: "SOMOS Servos" }] : []),
