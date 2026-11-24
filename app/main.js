@@ -19,6 +19,7 @@ import * as pessoas from "./views/pessoas.js";
 import * as acolher from "./views/acolher.js";
 import { ACOLHER_NAME } from "./views/acolher.js";
 import * as acolhimento from "./views/acolhimento.js";
+import * as meuCadastro from "./views/meu-cadastro.js";
 import * as chamados from "./views/chamados.js";
 import * as extras from "./views/extras.js";
 import { openPlayer, closePlayer } from "./player/view.js";
@@ -31,7 +32,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); servico.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); chamados.register(route); pessoas.register(route); acolher.register(route); acolhimento.register(route); extras.register(route);
+home.register(route); servico.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); chamados.register(route); pessoas.register(route); acolher.register(route); acolhimento.register(route); meuCadastro.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { const q = new URLSearchParams(location.hash.split("?")[1] || ""); await openPlayer(id, q.get("tom"), { lista: q.get("lista"), auto: q.get("auto") === "1" }); }, { overlay: true });
 
@@ -151,6 +152,7 @@ function openMenu() {
     ...(teamOnly() ? [] : [["gift", "Aniversariantes", "#/aniversariantes"]]),
     ["play", "Tutoriais", "#/ajuda"],
     ["heart", ACOLHER_NAME, "#/acolher"],
+    ["user", "Meu cadastro", "#/meu-cadastro"],
     ...(asks && !teamOnly() ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
   ] : [
     ["org", "Início da igreja", "#/"],
@@ -163,6 +165,7 @@ function openMenu() {
     ["userOff", "Indisponibilidades", "#/bloqueios"],
     ["play", "Tutoriais", "#/ajuda"],
     ...(hasServos() ? [["heart", ACOLHER_NAME, "#/acolher"]] : []),
+    ["user", "Meu cadastro", "#/meu-cadastro"],
     ...(asks ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
   ];
   if (canChamados()) items.splice(1, 0, ["crown", "SOMOS Chamados", "#/chamados"]);

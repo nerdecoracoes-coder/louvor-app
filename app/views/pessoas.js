@@ -651,24 +651,13 @@ async function importView(el, alive) {
   };
 }
 
-// ------------------------------------------------------------------ meus dados cadastrais (usado no Perfil)
+// ------------------------------------------------------------------ meus dados cadastrais (cartão do Perfil; a edição fica em Meu cadastro)
 export async function myRegistrationCard(host) {
   const org = state.org?.id; if (!org) return;
-  const r = await sb.rpc("my_person", { p_org: org });
+  const r = await sb.rpc("my_registration", { p_org: org });
   if (r.error) return; // banco ainda sem a atualização: não mostra nada
-  const p = r.data;
-  host.innerHTML = `<section class="card"><div class="row between"><h3>Meus dados cadastrais</h3>${p ? `<span class="ptag ${p.classification}">${esc(CLASS_LABEL[p.classification])}</span>` : ""}</div>
-    <p class="small muted">${p ? "Estes dados ficam no cadastro da igreja. Só a secretaria altera sua classificação." : "A igreja ainda não tem seus dados cadastrais. Preencha se quiser."}</p>
-    <button class="btn ghost block mt" id="mydata">${p ? "Ver e editar meus dados" : "Preencher meus dados"}</button></section>`;
-  host.querySelector("#mydata").onclick = () => {
-    const s = sheet(`<h3>Meus dados</h3><form id="f" novalidate>${personFields(p || { full_name: state.profile?.full_name || "" }, { admin: false, photo: false })}<button class="btn primary block mt" id="ok">Salvar</button></form>`, { wide: true });
-    s.el.querySelector("#ok").onclick = async (e) => {
-      e.preventDefault(); const b = e.currentTarget; busy(b);
-      try {
-        const rr = await sb.rpc("my_person_update", { p_org: org, p: readFields(s.el.querySelector("#f"), { admin: false }) });
-        if (rr.error) return toast(errText(rr.error));
-        toast("Dados salvos"); s.close(); myRegistrationCard(host);
-      } finally { busy(b, false); }
-    };
-  };
+  const m = r.data, p = m.person, n = (m.pending_fields || []).length;
+  host.innerHTML = `<section class="card"><div class="row between"><h3>Meus dados cadastrais</h3>${n ? `<span class="ptag st-pending">${n} em análise</span>` : ""}</div>
+    <p class="small muted">${p ? "Consulte seus dados, atualize o que for permitido e acompanhe suas solicitações." : "A igreja ainda não tem seus dados cadastrais. Preencha se quiser."}</p>
+    <a class="btn ghost block mt" id="mydata" href="#/meu-cadastro">${p ? "Abrir Meu cadastro" : "Preencher meus dados"}</a></section>`;
 }

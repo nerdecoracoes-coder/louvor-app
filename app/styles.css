@@ -1519,3 +1519,17 @@ label.li input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--a
 .tl-item .t { display: block; font-weight: 600; overflow-wrap: anywhere; }
 .tl-item .s { display: block; font-size: 12px; color: var(--muted); }
 .tl-body { margin: 8px 0 0 18px; padding: 10px 12px; border-radius: 12px; background: rgba(var(--w), .05); }
+
+.mc-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.mc-kv { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid rgba(var(--w), .07); }
+.mc-kv:first-child { border-top: 0; }
+.mc-k { color: var(--muted); font-size: 13px; flex: none; }
+.mc-v { text-align: right; overflow-wrap: anywhere; font-size: 14px; }
+.mc-note { display: block; padding: 10px 12px; border-radius: 12px; background: rgba(var(--w), .06); font-size: 13px; }
+.mc-note svg { width: 15px; height: 15px; vertical-align: -2px; margin-right: 4px; color: var(--accent); }
+.rq > summary { cursor: pointer; list-style: none; }
+.rq > summary::-webkit-details-marker { display: none; }
+.ptag.st-pending, .ptag.st-in_review, .ptag.st-draft { background: rgba(var(--w), .1); color: var(--text); }
+.ptag.st-approved { background: var(--accent); color: var(--accent-ink); }
+.ptag.st-partial { background: rgba(var(--w), .16); color: var(--text); }
+.ptag.st-refused, .ptag.st-cancelled { background: rgba(var(--w), .06); color: var(--muted); }

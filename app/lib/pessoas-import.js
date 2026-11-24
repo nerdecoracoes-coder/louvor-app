@@ -23,6 +23,8 @@ export const ERRORS = {
   already_guardian: "Essa pessoa já é responsável legal", guardian_minor: "Um menor de idade não pode ser responsável legal", ward_not_minor: "Só dá para definir responsável legal de menor de idade (ou curatela)",
   invalid_kind: "Tipo de responsabilidade inválido", invalid_category: "Escolha uma categoria válida", invalid_title: "Informe um título com 2 a 120 letras", invalid_date: "A data não pode ser futura nem anterior a 1900",
   text_too_long: "Algum texto passou do tamanho permitido", auto_protected: "Registros automáticos não podem ser alterados", voided: "Esse registro já foi anulado", reason_required: "Explique o motivo",
+  field_locked: "Esse dado só a secretaria altera", already_pending: "Esse dado já tem uma solicitação em análise", cannot_cancel: "Essa solicitação já não pode ser cancelada", already_decided: "Essa solicitação já foi concluída",
+  self_approval: "Quem fez o pedido não pode aprová-lo. Peça a outro responsável", invalid_decision: "Decisão inválida", invalid_field: "Campo inválido", invalid_mode: "Regra inválida", not_authenticated: "Entre na sua conta para continuar",
   invalid_label: "O nome da categoria deve ter de 2 a 40 letras", already_exists: "Já existe uma categoria com esse nome", invalid_filter: "Filtro inválido", note_too_long: "A observação é longa demais (máximo 500 letras)", too_many_rows: "A planilha tem linhas demais (máximo 5.000)" };
 export const errText = (e) => { const m = String(e?.message || e || ""); const k = Object.keys(ERRORS).find((x) => m.includes(x)); return k ? ERRORS[k] : m; };
 

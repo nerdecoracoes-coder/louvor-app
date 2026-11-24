@@ -1092,8 +1092,23 @@ with sync_playwright() as pw:
     carla.goto(BASE + "/#/pessoas"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
     assert carla.locator('a[href="#/pessoas"]').count() == 0
     carla.goto(BASE + "/#/perfil"); expect(carla.locator("#mypersonhost")).to_contain_text("Meus dados cadastrais", timeout=10000)
-    carla.locator("#mydata").click(); carla.locator(".sheet input[name=city]").fill("Niterói"); assert carla.locator(".sheet select[name=classification]").count() == 0
-    carla.locator(".sheet #ok").click(); toast_has(carla, "Dados salvos")
+    # Recurso 06: Meu cadastro (campo direto salva na hora, campo com aprovação vira solicitação) e painel de aprovação por campo
+    carla.locator("#mydata").click(); expect(carla.locator("#view h1")).to_have_text("Meu cadastro", timeout=10000)
+    if carla.locator("#first").count():   # servo sem ficha: primeiro preenchimento cria a própria ficha, sem duplicar
+        carla.locator("#first").click(); carla.locator(".sheet input[name=phone]").fill("21977776666"); carla.locator(".sheet #ok").click(); toast_has(carla, "Cadastro criado")
+    expect(carla.locator("#view")).to_contain_text("Minhas solicitações", timeout=10000)
+    carla.locator("#edit").click(); carla.locator(".sheet input[name=city]").fill("Petrópolis"); carla.locator(".sheet input[name=phone2]").fill("21988887777"); assert carla.locator(".sheet select[name=classification]").count() == 0
+    carla.locator(".sheet #rev").click(); expect(carla.locator(".sheet").last).to_contain_text("Serão enviadas para análise"); expect(carla.locator(".sheet").last).to_contain_text("Serão salvas agora")
+    carla.locator(".sheet #send").click(); toast_has(carla, "Dados salvos e solicitação enviada")
+    expect(carla.locator("#view")).to_contain_text("aguarda", timeout=10000); expect(carla.locator("#view")).to_contain_text("Aguardando análise")
+    assert carla.evaluate("document.documentElement.scrollWidth - window.innerWidth") <= 1
+    shot(carla, "51-meu-cadastro")
+    ana.goto(BASE + "/#/atualizacoes-cadastrais"); expect(ana.locator("#view")).to_contain_text("Carla Dias", timeout=10000); expect(ana.locator("#view")).to_contain_text("Petrópolis")
+    ana.locator('details.rq:has-text("Carla Dias") [data-d=approve]').first.click(); ana.locator('details.rq:has-text("Carla Dias") [data-save]').click(); toast_has(ana, "Solicitação concluída")
+    ana.locator("[data-st=approved]").click(); expect(ana.locator("#view")).to_contain_text("Carla Dias", timeout=10000)
+    assert ana.evaluate("document.documentElement.scrollWidth - window.innerWidth") <= 1
+    shot(ana, "52-atualizacoes-cadastrais")
+    carla.goto(BASE + "/#/meu-cadastro"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Aprovada", timeout=15000); expect(carla.locator("#view")).to_contain_text("Petrópolis")
     ok("pessoas: cadastro manual com aviso de duplicidade, histórico de classificação, formulário público com QR + aprovação, importação com prévia, servo sem acesso à base")
 
     # ------------------------------------------------------------------ Acolhimento: Como acolher (todos do Servos) + cadastro simples e jornada
