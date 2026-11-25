@@ -1337,6 +1337,36 @@ with sync_playwright() as pw:
     pub3.goto(BASE + "/#/validar-carteira/" + "0" * 32 + "." + "0" * 32); expect(pub3.locator("#app")).to_contain_text("Carteira não encontrada", timeout=15000); cpub3.close()
     ok("segmentação (construtor com prévia, histórico, grupos manuais) e carteira digital (lote, carteira do membro, QR)")
 
+    # células, programações e escalas gerais
+    import datetime
+    dom = (datetime.date.today() + datetime.timedelta(days=(6 - datetime.date.today().weekday()) % 7 + 7)).isoformat()
+    ana.goto(BASE + "/#/chamados"); expect(ana.locator("#view")).to_contain_text("Organização da igreja", timeout=10000)
+    for t_ in ["Células", "Programações", "Escalas"]: expect(ana.locator("#view .menu").nth(1)).to_contain_text(t_)
+    ana.goto(BASE + "/#/celulas"); ana.locator("#new").click(); ana.fill(".sheet #n", "Célula Esperança"); ana.fill(".sheet #cat", "Jovens"); ana.locator(".sheet #wd").select_option("3"); ana.fill(".sheet #tm", "20:00"); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#view h1")).to_contain_text("Célula Esperança", timeout=10000); expect(ana.locator("#view")).to_contain_text("Quarta")
+    ana.locator("#add").click(); ana.fill(".sheet #q", "Carla"); ana.locator(".sheet [data-id]").first.click(); expect(ana.locator("#view")).to_contain_text("Carla Dias", timeout=10000)
+    ana.locator('[data-t="reunioes"]').click(); ana.locator("#meet").click(); ana.fill(".sheet #vn", "Visitante Teste"); ana.locator(".sheet #va").click(); expect(ana.locator(".sheet #vl")).to_contain_text("Visitante Teste")
+    ana.fill(".sheet #ob", "Boa reunião"); ana.locator(".sheet #ok").click(); expect(ana.locator("#view")).to_contain_text("1 presente", timeout=10000); expect(ana.locator("#view")).to_contain_text("1 visitante")
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("celula overflow", ow); ana.wait_for_timeout(900); shot(ana, "68-celula-detalhe")
+    ana.goto(BASE + "/#/celulas/relatorios"); expect(ana.locator(".mc-tiles")).to_contain_text("Reuniões realizadas", timeout=10000); expect(ana.locator("#view")).to_contain_text("Célula Esperança")
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("relatorio celulas overflow", ow); ana.wait_for_timeout(900); shot(ana, "69-celulas-relatorio")
+    ana.goto(BASE + "/#/programacoes/lista"); ana.locator("#new").click(); ana.fill(".sheet #n", "Culto de domingo"); ana.locator(".sheet #r").select_option("weekly"); ana.fill(".sheet #sd", dom); ana.fill(".sheet #st", "19:00"); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#view h1")).to_contain_text("Culto de domingo", timeout=10000); expect(ana.locator("#view")).to_contain_text("Toda semana"); ana.locator("#pub").click(); expect(ana.locator("#view")).to_contain_text("Publicada", timeout=10000)
+    expect(ana.locator("#view")).to_contain_text("Próximas datas"); ana.locator("#std").click(); ana.locator(".sheet #add").click(); ana.locator(".sheet [data-f='title']").first.fill("Louvor"); ana.locator(".sheet #add").click(); ana.locator(".sheet [data-f='title']").nth(1).fill("Palavra"); ana.locator(".sheet #ok").click(); toast_has(ana, "Ordem salva")
+    ana.locator("[data-cx]").first.click(); ana.fill(".sheet #rs", "Viagem do pastor"); ana.locator(".sheet #ok").click(); expect(ana.locator("#view")).to_contain_text("Cancelada", timeout=10000); expect(ana.locator("#view")).to_contain_text("Viagem do pastor")
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("programacao overflow", ow); ana.wait_for_timeout(900); shot(ana, "70-programacao-detalhe")
+    ana.goto(BASE + "/#/programacoes/lista"); expect(ana.locator("#view")).to_contain_text("Culto de domingo", timeout=10000); ana.locator("#view [data-m]").last.click() if ana.locator("#view [data-m]").count() else None
+    ana.goto(BASE + "/#/escalas"); ana.locator("#new").click(); ana.fill(".sheet #n", "Recepção do domingo"); ana.locator(".sheet #add").click(); ana.fill(".sheet #q", "Carla"); ana.locator(".sheet [data-id]").first.click()
+    ana.locator(".sheet [data-fn]").first.fill("Recepção"); ana.locator(".sheet #ok").click(); expect(ana.locator("#view h1")).to_contain_text("Recepção do domingo", timeout=10000); expect(ana.locator("#view")).to_contain_text("Rascunho")
+    ana.locator("#pub").click(); expect(ana.locator("#view")).to_contain_text("Aguardando confirmação", timeout=10000)
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("escala overflow", ow); ana.wait_for_timeout(900); shot(ana, "71-escala-detalhe")
+    carla.goto(BASE + "/#/perfil"); expect(carla.locator("#view")).to_contain_text("Minhas escalas", timeout=10000); carla.goto(BASE + "/#/minhas-escalas")
+    expect(carla.locator("#view")).to_contain_text("Recepção do domingo", timeout=10000); expect(carla.locator("#view")).to_contain_text("Recepção"); carla.wait_for_timeout(900); shot(carla, "72-minhas-escalas")
+    carla.locator("[data-c]").first.click(); expect(carla.locator("#view")).to_contain_text("Confirmou", timeout=10000)
+    ana.reload(); expect(ana.locator("#view")).to_contain_text("Confirmada", timeout=10000)
+    carla.goto(BASE + "/#/celulas"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
+    ok("células, programações e escalas (cadastro, reunião, relatório, recorrência, ordem do culto, escala, confirmação)")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
         for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}", "/#/acolher"]:

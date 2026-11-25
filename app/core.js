@@ -71,12 +71,16 @@ export const isGeneralLeader = () => !!state.access?.general_leader;
 export const canAdminOrg = () => isDeveloper() || isAdmin() || (state.access?.general_leader?.actions || []).includes("administer");
 // SOMOS Chamados: desenvolvedor, administrador, liderança geral, supervisor de rede ou líder de algum ministério
 export const peopleCan = (a) => (state.access?.people || []).includes(a);
+// permissões dos módulos novos (o servidor confere de novo em cada operação)
+export const modCan = (a) => (state.mods?.actions || []).includes(a);
+export const modAny = (...a) => a.some(modCan);
+export const cellScope = () => !!state.mods?.cell_scope;
 // cadastro de pessoas: só quem recebeu alguma permissão do módulo (administrador ou concessão); ser líder não basta
 export const canWelcome = () => peopleCan("people_welcome") || peopleCan("people_edit");
 // SOMOS Servos: quem participa de algum time (administrador e desenvolvedor também enxergam o ambiente)
 export const hasServos = () => state.myTeams.length > 0 || isAdmin() || isDeveloper();
 export const canPeople = () => ["people_view", "people_edit", "people_approve", "people_import"].some(peopleCan);
-export const canChamados = () => !!state.access && (state.access.developer || state.access.admin || !!state.access.general_leader || !!state.access.secretary || canPeople() || canWelcome() || myNetworks().length > 0 || (state.access.leader_of || []).length > 0);
+export const canChamados = () => !!state.access && (state.access.developer || state.access.admin || !!state.access.general_leader || !!state.access.secretary || canPeople() || canWelcome() || myNetworks().length > 0 || (state.access.leader_of || []).length > 0 || (state.mods?.actions || []).length > 0 || !!state.mods?.cell_scope);
 export const environments = () => [
   ...(!teamOnly() && (state.access?.member || isDeveloper()) ? [{ key: "um", label: "SOMOS Um" }] : []),
   ...(state.myTeams.length || (isDeveloper() && (state.orgTeams || []).length) ? [{ key: "servos", label: "SOMOS Servos" }] : []),
@@ -406,7 +410,7 @@ export async function selectOrg(orgId, persist = true) {
   const m = state.orgs.find((o) => o.org_id === orgId);
   state.org = m?.organizations || null;
   state.role = m?.role || null;
-  state.myTeams = []; state.leaderOf = new Set(); state.agendaCoord = false; state.access = null;
+  state.myTeams = []; state.leaderOf = new Set(); state.agendaCoord = false; state.access = null; state.mods = null;
   if (persist) try { localStorage.setItem("louvor.org", orgId || ""); } catch {}
   if (state.org) {
     // coluna nova: se a atualização do banco ainda não foi aplicada, segue sem ela
@@ -418,6 +422,8 @@ export async function selectOrg(orgId, persist = true) {
     state.orgTeams = (await sb.from("teams").select("*").eq("org_id", state.org.id).order("name")).data || [];
     // ambientes e funções (se a atualização do banco ainda não foi aplicada, segue sem eles)
     try { const a = await sb.rpc("my_access", { p_org: state.org.id }); state.access = a.error ? null : a.data; } catch { state.access = null; }
+    // módulos novos (células, programações, escalas...): se a atualização do banco ainda não foi aplicada, segue sem eles
+    try { const m = await sb.rpc("my_modules", { p_org: state.org.id }); state.mods = m.error ? null : m.data; } catch { state.mods = null; }
     await loadRoleIcons();
   }
   if (state.space) state.space = findTeam(state.space.id); // dados atualizados do time
