@@ -28,6 +28,7 @@ def ctx(browser, w=390, h=844):
     p = c.new_page()
     p.on("console", lambda m: m.type == "error" and not any(x in m.text for x in IGNORED) and errors.append(f"[{w}] {m.text}"))
     p.on("pageerror", lambda e: errors.append(f"pageerror [{w}]: {e}"))
+    p.on("response", lambda r: r.status >= 400 and print("HTTP", r.status, r.request.method, r.url[:160], (r.request.post_data or "")[:120]))
     return c, p
 
 def shot(p, name): p.screenshot(path=f"{SHOTS}/{name}.png", full_page=False)
@@ -1409,6 +1410,31 @@ with sync_playwright() as pw:
     ana.fill("#code", "EV-" + codigo); ana.locator("#go").click(); expect(ana.locator("#res")).to_contain_text("Entrada registrada", timeout=10000)
     ana.fill("#code", codigo); ana.locator("#go").click(); expect(ana.locator("#res")).to_contain_text("já entrou", timeout=10000); shot(ana, "78-checkin")
     ok("eventos: cadastro, publicação, inscrição pelo membro, ingresso com QR e check-in por código")
+
+    # financeiro: lançamento, receita anônima baixada, baixa, regra de aprovação, orçamento
+    def ovf(pg, nome):
+        o = pg.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert o <= 1, (nome, o)
+    ana.goto(BASE + "/#/financeiro"); expect(ana.locator("#view h1")).to_contain_text("Financeiro", timeout=10000); expect(ana.locator("#view")).to_contain_text("Pendências", timeout=10000)
+    ovf(ana, "financeiro resumo"); ana.wait_for_timeout(900); shot(ana, "79-financeiro-resumo")
+    ana.locator('[data-t="lanc"]').click(); ana.locator("#new").click(); ana.fill(".sheet #desc", "Conta de luz"); ana.fill(".sheet #amt", "180,50"); ana.locator(".sheet #cat").select_option(index=1); ana.locator(".sheet #ok").click(); toast_has(ana, "Lançamento salvo")
+    expect(ana.locator("#rows")).to_contain_text("Conta de luz", timeout=10000)
+    ana.locator("#new").click(); ana.locator('.sheet [data-k="income"]').click(); ana.fill(".sheet #desc", "Oferta do culto"); ana.fill(".sheet #amt", "1.250,00"); ana.locator(".sheet #cat").select_option(index=1)
+    ana.locator(".sheet #anon").check(); ana.locator(".sheet #paid").check(); ana.locator(".sheet #acc").select_option(index=1); ana.locator(".sheet #ok").click(); toast_has(ana, "Lançamento salvo")
+    expect(ana.locator("#rows")).to_contain_text("Oferta do culto", timeout=10000); expect(ana.locator("#rows [data-id]", has_text="Oferta do culto")).to_contain_text("Anônima")
+    ana.locator("#rows [data-id]", has_text="Conta de luz").click(); ana.locator(".sheet #pay").click(); ana.locator(".sheet #go").click(); toast_has(ana, "Baixa registrada")
+    expect(ana.locator("#rows [data-id]", has_text="Conta de luz")).to_contain_text("Pago em", timeout=10000)
+    ana.locator('[data-t="cad"]').click(); ana.fill("#thr", "100"); ana.locator("#thrs").click(); toast_has(ana, "Regra salva")
+    ana.locator('[data-t="lanc"]').click(); ana.locator("#new").click(); ana.fill(".sheet #desc", "Reforma do telhado"); ana.fill(".sheet #amt", "600"); ana.locator(".sheet #cat").select_option(index=1); ana.locator(".sheet #ok").click(); toast_has(ana, "Aguarda aprovação")
+    expect(ana.locator("#rows [data-id]", has_text="Reforma do telhado")).to_contain_text("Aguardando aprovação", timeout=10000)
+    ana.locator("#rows [data-id]", has_text="Reforma do telhado").click(); expect(ana.locator(".sheet")).to_contain_text("depois de aprovada", timeout=10000); assert ana.locator(".sheet #pay").count() == 0 and ana.locator(".sheet #ap").count() == 0
+    ovf(ana, "financeiro detalhe"); ana.wait_for_timeout(700); shot(ana, "80-financeiro-lancamento"); ana.keyboard.press("Escape"); ana.mouse.click(10, 10); ana.wait_for_timeout(300)
+    ana.goto(BASE + "/#/financeiro"); ana.locator('[data-t="orc"]').click(); ana.locator("#add").click(); ana.locator(".sheet #c").select_option(label="Despesa · Água, luz e internet"); ana.fill(".sheet #v", "500"); ana.locator(".sheet #ok").click(); toast_has(ana, "Orçamento salvo")
+    expect(ana.locator("#body")).to_contain_text("Orçado R$", timeout=10000); expect(ana.locator("#body")).to_contain_text("Realizado R$"); ovf(ana, "financeiro orcamento"); ana.wait_for_timeout(700); shot(ana, "81-financeiro-orcamento")
+    ana.locator('[data-t="cad"]').click(); expect(ana.locator("#body")).to_contain_text("Pagamento online", timeout=10000); ovf(ana, "financeiro cadastros")
+    ana.reload(); ana.wait_for_timeout(1500); expect(ana.locator("#view")).to_contain_text("aguardando aprovação", timeout=10000)
+    n_err = len(errors); carla.goto(BASE + "/#/financeiro"); expect(carla.locator("#view")).to_contain_text("Você não tem acesso", timeout=10000); carla.wait_for_timeout(500)
+    errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]   # recusa esperada: sem permissão financeira
+    ok("financeiro: lançamento, receita anônima baixada, baixa, regra de aprovação bloqueando pagamento, orçamento, cadastros e acesso negado a quem não tem permissão")
 
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:

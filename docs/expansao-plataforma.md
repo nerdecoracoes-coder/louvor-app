@@ -46,7 +46,7 @@ Limitações técnicas relevantes: hospedagem estática (Cloudflare Pages) + Sup
 | 1. Células | Implementado e testado (banco + telas) | Fase 1 |
 | 2. Cultos, Programações e Escalas | Implementado e testado (banco + telas) | Fase 1 |
 | 3. Eventos | Implementado e testado (inscrição, ingresso QR, espera, check-in; **sem pagamento**) | Fase 2 |
-| 4. Financeiro | Pendente | Fase 3 |
+| 4. Financeiro | Implementado e testado (contas, lançamentos, a pagar/receber, aprovação, orçamento, relatórios; **sem pagamento online**) | Fase 3 |
 | 5. Comunicação | Pendente | Fase 4 |
 | 6. Cuidado Pastoral e Intercessão | Pendente | Fase 4 |
 | 7. Experiência Digital | Pendente | Fase 5 |
@@ -108,6 +108,21 @@ Arquivos: `supabase/migrations/20261207000001_eventos.sql` (cópia em `supabase/
 
 **Limites reais:** (1) **pagamento/ingresso pago não existe** — depende de provedor e credenciais; (2) inscrição exige conta no app (não há inscrição pública sem login); (3) o QR é lido pela câmera apenas em navegadores com `BarcodeDetector` (Chrome no Android funciona); nos demais, digita-se o código; (4) lembretes automáticos antes do evento dependem de agendamento no servidor e não foram feitos; (5) a inscrição pela equipe é só por nome (não liga à ficha da pessoa); (6) eventos recorrentes não foram feitos (use Programações para recorrência).
 
+## 4.4 Fase 3 — Financeiro
+
+Arquivos: `supabase/migrations/20261208000001_financeiro.sql` (cópia em `supabase/setup/atualizacao-2026-12-08-financeiro.sql`), `app/views/financeiro.js`, `tests/financeiro.test.ts`. Entrada: SOMOS Chamados → Financeiro.
+
+**Permissões novas** (só administrador ou concessão; liderança/integrante de ministério e desenvolvedor não ganham acesso): `fin_view` (relatórios e lançamentos), `fin_entry` (lançar, baixar, cancelar o que está em aberto), `fin_approve` (aprovar/recusar despesas), `fin_manage` (contas, categorias, centros de custo, campanhas, orçamento, regra de aprovação, estorno), `fin_donors` (ver quem contribuiu).
+**Estrutura:** contas/caixas (saldo inicial, ativar/desativar), categorias de receita e despesa (padrão criado na primeira abertura, editável), centros de custo, campanhas/destinações com meta, lançamentos (receita, despesa, transferência), comprovante em bucket **privado** (`fin/<igreja>/...`), orçamento anual ou mensal por categoria e/ou centro de custo.
+**Contas a pagar e receber:** todo lançamento tem vencimento e fica "em aberto" até a baixa (data, conta, forma). Atrasados são calculados pela data. Parcelamento (valor total dividido, centavos na primeira parcela) e recorrência mensal (mesmo valor, até 60 vezes).
+**Nada se apaga:** cancelar exige motivo e guarda quem e quando; lançamento já baixado só é cancelado por quem tem `fin_manage` (estorno) e o saldo volta; lançamento baixado não é editado. Não existe função de exclusão.
+**Aprovação:** regra configurável (despesas a partir de X exigem aprovação; 0 = todas; vazio = nenhuma). Despesa pendente não pode ser baixada. **Ninguém aprova o que lançou ou alterou — nem o administrador.** Recusa exige motivo e cancela mantendo o registro; aprovação em série; aprovadores e quem lançou são avisados.
+**Contribuições:** anônimas permitidas (sem pessoa e sem nome). Identificar quem contribuiu exige `fin_donors`; quem só tem `fin_view` vê valores mas não o contribuinte (lista, detalhe e busca). Editar sem `fin_donors` não apaga a identificação.
+**Relatórios:** totais e fluxo de caixa por mês, receitas e despesas por categoria, despesas por centro de custo, receitas por campanha, saldo por conta, pendências (a pagar/receber, atrasadas, aguardando aprovação), orçado × realizado (realizado = só o baixado), histórico por lançamento e exportação CSV da lista filtrada. Auditoria na tabela única `mod_audit` (módulo `finance`).
+**Pagamento online (preparo):** colunas `source` e `external_ref` (única por igreja) permitem que um webhook futuro crie receitas de forma idempotente. **Nada de provedor, credencial ou transação real foi criado**; a tela diz "Não configurado".
+
+**Limites reais:** (1) sem Pix/cartão pelo app (depende de provedor e credenciais); (2) sem extrato do contribuinte para o próprio membro nem recibo/declaração anual; (3) sem conciliação com extrato bancário e sem importação; (4) comprovante só em imagem ou PDF até 10 MB, enviado pelo app; as políticas do bucket foram testadas pela regra (`fin_storage_ok`), pois a pilha local não tem o serviço de arquivos — confirmar um envio real após aplicar o SQL; (5) moeda única (R$); (6) o relatório é por data de baixa (regime de caixa), não por competência.
+
 ## 5. Como aplicar no Supabase
 
-Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.
+Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` e `atualizacao-2026-12-08-financeiro.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.

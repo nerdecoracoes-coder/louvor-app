@@ -124,3 +124,12 @@ export function mapRows(rows) {
   });
   return { records, missing: [], ignored };
 }
+Object.assign(ERRORS, {
+  invalid_amount: "Informe um valor maior que zero.", fin_description_required: "Descreva o lançamento.", category_required: "Escolha a categoria.", due_required: "Informe o vencimento.",
+  invalid_method: "Forma de pagamento inválida.", fin_future_date: "A data da baixa não pode ser futura.", account_required: "Escolha a conta usada.", invalid_installments: "Parcelas: use de 1 a 60 (e sem baixa imediata quando houver mais de uma).",
+  invalid_accounts: "Escolha duas contas diferentes.", invalid_reference: "Algum item escolhido (categoria, conta, centro de custo ou campanha) não está disponível. Atualize e tente de novo.",
+  entry_locked: "Este lançamento não pode mais ser alterado. Para corrigir, cancele-o (estorno) com um motivo e lance de novo.", approval_required: "Esta despesa precisa ser aprovada antes de ser paga.",
+  fin_self_approval: "Quem lançou ou alterou a despesa não pode aprová-la. Peça a outro responsável.", fin_not_pending: "Esta despesa não está aguardando aprovação.", name_taken: "Já existe um item com esse nome.",
+  invalid_type: "Tipo de cadastro inválido.", donor_forbidden: "Você não tem permissão para identificar quem contribuiu. Use contribuição anônima.", invalid_receipt: "Comprovante inválido. Envie o arquivo de novo.",
+  fin_invalid_data: "Confira os campos: algum valor está fora do permitido.",
+});
