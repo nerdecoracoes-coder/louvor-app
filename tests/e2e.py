@@ -1281,6 +1281,28 @@ with sync_playwright() as pw:
     ana.goto(BASE + "/#/contatos"); expect(ana.locator("#list")).to_contain_text("Visitante Link", timeout=10000)
     ok("solicitações de contato: formulário com consentimento, central, atendimento, conclusão, categorias e link público")
 
+    # relatórios de pessoas
+    ana.goto(BASE + "/#/chamados"); expect(ana.locator("#view")).to_contain_text("Relatórios de Pessoas", timeout=10000)
+    ana.goto(BASE + "/#/relatorios-pessoas"); expect(ana.locator("#view .mc-tiles").first).to_contain_text("Total de pessoas", timeout=15000)
+    expect(ana.locator("#view .tabs")).to_contain_text("Perfil da comunidade"); expect(ana.locator("#view svg[role=img]").first).to_be_visible()
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("relatorios overflow", ow); shot(ana, "61-relatorios-visao-geral")
+    ana.locator("#view [data-p=\"30d\"]").click(); expect(ana.locator("#view .chip.on")).to_contain_text("30 dias", timeout=8000)
+    ana.locator("#view #more").click(); expect(ana.locator(".sheet")).to_contain_text("Filtros", timeout=8000)
+    ana.locator(".sheet [data-g=classification] .chip").first.click(); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#view #clear")).to_be_visible(timeout=8000); ana.locator("#view #clear").click(); expect(ana.locator("#view #clear")).to_have_count(0, timeout=8000)
+    for k, t in [("profile", "Faixa etária"), ("evolution", "Novos cadastros"), ("family", "Grupos familiares"), ("ministry", "Pessoas únicas em times")]:
+        ana.goto(BASE + "/#/relatorios-pessoas/" + k); expect(ana.locator("#view #body")).to_contain_text(t, timeout=15000)
+        ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("relatorios overflow", k, ow)
+    shot(ana, "62-relatorios-ministerios")
+    ana.goto(BASE + "/#/relatorios-pessoas/exports"); expect(ana.locator("#view #body")).to_contain_text("Lista de pessoas", timeout=15000)
+    for fmt, ext in [("xlsx", ".xlsx"), ("csv", ".csv"), ("pdf", ".pdf")]:
+        with ana.expect_download(timeout=15000) as dl: ana.locator(f"#view [data-ex={fmt}]").click()
+        assert dl.value.suggested_filename.endswith(ext), dl.value.suggested_filename
+        with ana.expect_download(timeout=15000) as dl2: ana.locator(f"#view [data-ls={fmt}]").click()
+        assert dl2.value.suggested_filename.endswith(ext) and "lista" in dl2.value.suggested_filename
+    ana.locator("#view #aud").click(); expect(ana.locator(".sheet")).to_contain_text("Lista de pessoas", timeout=10000); ana.keyboard.press("Escape"); shot(ana, "63-relatorios-exportacoes")
+    ok("relatórios de pessoas: áreas, filtros, período, gráficos, exportação XLSX/CSV/PDF e registro")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
         for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}", "/#/acolher"]:

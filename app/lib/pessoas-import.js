@@ -33,6 +33,10 @@ Object.assign(ERRORS, {
   no_change: "Nada mudou.", description_required: "Descreva o contato realizado.", already_started: "O acompanhamento pastoral já foi iniciado.", note_required: "Escreva a observação.", name_too_long: "O nome é longo demais.", invalid_phone: "Telefone inválido.",
 });
 Object.assign(ERRORS, {
+  invalid_area: "Relatório inválido.", invalid_filter: "Algum filtro tem valor inválido. Limpe os filtros e tente de novo.", invalid_period: "Período inválido: confira as datas.", too_many_points: "Período grande demais para este agrupamento. Escolha por semana, mês ou ano.", invalid_granularity: "Agrupamento inválido.",
+  invalid_bands: "Faixas etárias inválidas: cada faixa começa onde a anterior termina e a última não tem limite.", invalid_format: "Formato de arquivo inválido.",
+});
+Object.assign(ERRORS, {
   version_conflict: "Outra pessoa alterou isto agora. Os dados foram atualizados, confira e tente de novo.", journey_empty: "A jornada precisa ter ao menos uma etapa com atividade antes de ser ativada.", step_not_empty: "Esta etapa tem atividades. Remova-as antes.",
   invalid_order: "A ordem enviada não confere com a lista atual.", invalid_requires: "Escolha apenas etapas anteriores.", auto_needs_event: "Atividade automática precisa de um evento da agenda.", already_participant: "Esta pessoa já participa desta jornada.",
   journey_not_active: "Esta jornada não está ativa.", journey_archived: "Jornada arquivada não pode ser alterada.", not_eligible: "Esta jornada não está disponível para o seu perfil.", no_person_record: "Você ainda não tem ficha na igreja.",
