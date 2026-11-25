@@ -27,6 +27,12 @@ export const ERRORS = {
   self_approval: "Quem fez o pedido não pode aprová-lo. Peça a outro responsável", invalid_decision: "Decisão inválida", invalid_field: "Campo inválido", invalid_mode: "Regra inválida", not_authenticated: "Entre na sua conta para continuar",
   invalid_label: "O nome da categoria deve ter de 2 a 40 letras", already_exists: "Já existe uma categoria com esse nome", invalid_filter: "Filtro inválido", note_too_long: "A observação é longa demais (máximo 500 letras)", too_many_rows: "A planilha tem linhas demais (máximo 5.000)" };
 Object.assign(ERRORS, {
+  consent_required: "Marque a autorização para podermos responder.", contact_required: "Informe um telefone ou e-mail para recebermos o retorno.", pref_needs_phone: "Para WhatsApp ou ligação, informe o telefone.", pref_needs_email: "Para retorno por e-mail, informe o e-mail.",
+  pref_other_required: "Descreva como prefere ser contatado.", message_required: "Escreva a sua mensagem.", message_too_long: "A mensagem passou de 2000 letras.", invalid_pref: "Preferência de contato inválida.",
+  request_closed: "A solicitação está encerrada. Reabra para alterar.", invalid_transition: "Essa mudança de situação não é permitida a partir da situação atual.", same_status: "A solicitação já está nessa situação.", reopen_first: "Reabra a solicitação primeiro (vai para Em análise).",
+  no_change: "Nada mudou.", description_required: "Descreva o contato realizado.", already_started: "O acompanhamento pastoral já foi iniciado.", note_required: "Escreva a observação.", name_too_long: "O nome é longo demais.", invalid_phone: "Telefone inválido.",
+});
+Object.assign(ERRORS, {
   version_conflict: "Outra pessoa alterou isto agora. Os dados foram atualizados, confira e tente de novo.", journey_empty: "A jornada precisa ter ao menos uma etapa com atividade antes de ser ativada.", step_not_empty: "Esta etapa tem atividades. Remova-as antes.",
   invalid_order: "A ordem enviada não confere com a lista atual.", invalid_requires: "Escolha apenas etapas anteriores.", auto_needs_event: "Atividade automática precisa de um evento da agenda.", already_participant: "Esta pessoa já participa desta jornada.",
   journey_not_active: "Esta jornada não está ativa.", journey_archived: "Jornada arquivada não pode ser alterada.", not_eligible: "Esta jornada não está disponível para o seu perfil.", no_person_record: "Você ainda não tem ficha na igreja.",

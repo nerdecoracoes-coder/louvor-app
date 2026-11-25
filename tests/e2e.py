@@ -1251,6 +1251,36 @@ with sync_playwright() as pw:
     ana.reload(); ana.locator('#tabs [data-tab="participantes"]').click(); expect(ana.locator("#pane .li")).to_have_count(1, timeout=10000); expect(ana.locator("#pane")).to_contain_text("100%")
     ok("jornadas: construtor, ativação, participação voluntária, Minhas jornadas e acompanhamento")
 
+    # ------------------------------------------------------------------ Recurso 09: solicitações de contato (formulário, central, atendimento, link público)
+    carla.goto(BASE + "/#/contato"); expect(carla.locator("#view")).to_contain_text("Como podemos ajudar você?", timeout=10000); expect(carla.locator("#view")).to_contain_text("Estamos aqui para caminhar com você")
+    carla.locator("#f #ok").click(); expect(carla.locator(".toast").first).to_be_visible(timeout=10000)   # incompleto: não envia
+    carla.locator("#f [name=category_id]").select_option(index=3); carla.locator("#f [name=message]").fill("Gostaria de conversar sobre a minha família.")
+    carla.locator("#f #ok").click(); expect(carla.locator(".toast").filter(has_text="autorização").first).to_be_visible(timeout=10000)
+    ow = carla.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("contato form overflow", ow); shot(carla, "56-solicitar-contato")
+    carla.locator("#f [name=consent]").check(); carla.locator("#f #ok").click(); expect(carla.locator("#box")).to_contain_text("Recebemos sua solicitação!", timeout=10000); expect(carla.locator("#box")).to_contain_text("CT-")
+    carla.reload(); expect(carla.locator("#view")).to_contain_text("Meus pedidos", timeout=10000); expect(carla.locator("#view")).to_contain_text("Recebida")
+    ana.goto(BASE + "/#/chamados"); expect(ana.locator("#view")).to_contain_text("Solicitações de contato", timeout=10000)
+    ana.goto(BASE + "/#/contatos"); expect(ana.locator("#ind")).to_contain_text("novas", timeout=10000); expect(ana.locator("#list")).to_contain_text("Aconselhamento familiar")
+    ana.fill("#q", "inexistente zzz"); expect(ana.locator("#list")).to_contain_text("Nenhuma solicitação com esses filtros", timeout=10000); ana.fill("#q", ""); expect(ana.locator("#list .li").first).to_be_visible(timeout=10000)
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("central overflow", ow); shot(ana, "57-central-contatos")
+    ana.locator("#list .li").first.click(); expect(ana.locator("#view")).to_contain_text("conversar sobre a minha família", timeout=10000)
+    ana.locator("[data-st=review]").click(); expect(ana.locator("#view")).to_contain_text("Em análise", timeout=10000)
+    ana.locator("#int").click(); ana.locator(".sheet #d").fill("Liguei e combinamos uma conversa."); ana.locator(".sheet #ok").click(); expect(ana.locator("#view")).to_contain_text("Liguei e combinamos", timeout=10000)
+    expect(ana.locator(".sheet-wrap")).to_have_count(0, timeout=10000)
+    ana.locator("[data-st=completed]").click(); ana.locator(".sheet #ok").click(); expect(ana.locator("#view")).to_contain_text("Concluída", timeout=10000); expect(ana.locator("#view")).to_contain_text("Reabrir")
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("contato detalhe overflow", ow); shot(ana, "58-contato-detalhe")
+    carla.reload(); expect(carla.locator("#view")).to_contain_text("Concluída", timeout=10000)
+    ana.goto(BASE + "/#/contatos-config"); expect(ana.locator("#view")).to_contain_text("Conversar com um pastor", timeout=10000)
+    ana.locator("#addc").click(); ana.locator(".sheet #cf [name=name]").fill("Pedido de oração"); ana.locator(".sheet #ok").click(); expect(ana.locator("#view")).to_contain_text("Pedido de oração", timeout=10000)
+    ana.locator("#act").check(); expect(ana.locator("#view .mc-note")).to_contain_text("fale-conosco", timeout=10000)
+    clink = ana.locator("#view .mc-note").first.inner_text().strip(); shot(ana, "59-contatos-config")
+    cpub2, pub2 = ctx(br); pub2.goto(clink); expect(pub2.locator("h1")).to_contain_text("Como podemos ajudar você?", timeout=10000)
+    pub2.locator("#f [name=name]").fill("Visitante Link"); pub2.locator("#f [name=phone]").fill("(21) 98888-7777"); pub2.locator("#f [name=category_id]").select_option(index=5); pub2.locator("#f [name=message]").fill("Quero conhecer a igreja.")
+    pub2.locator("#f [name=consent]").check(); pub2.locator("#f #ok").click(); expect(pub2.locator("#box")).to_contain_text("Recebemos sua solicitação!", timeout=10000)
+    ow = pub2.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("contato publico overflow", ow); shot(pub2, "60-contato-publico"); cpub2.close()
+    ana.goto(BASE + "/#/contatos"); expect(ana.locator("#list")).to_contain_text("Visitante Link", timeout=10000)
+    ok("solicitações de contato: formulário com consentimento, central, atendimento, conclusão, categorias e link público")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
         for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}", "/#/acolher"]:
