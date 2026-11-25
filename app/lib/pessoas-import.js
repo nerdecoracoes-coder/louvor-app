@@ -27,6 +27,10 @@ export const ERRORS = {
   self_approval: "Quem fez o pedido não pode aprová-lo. Peça a outro responsável", invalid_decision: "Decisão inválida", invalid_field: "Campo inválido", invalid_mode: "Regra inválida", not_authenticated: "Entre na sua conta para continuar",
   invalid_label: "O nome da categoria deve ter de 2 a 40 letras", already_exists: "Já existe uma categoria com esse nome", invalid_filter: "Filtro inválido", note_too_long: "A observação é longa demais (máximo 500 letras)", too_many_rows: "A planilha tem linhas demais (máximo 5.000)" };
 Object.assign(ERRORS, {
+  registration_closed: "As inscrições estão encerradas.", registration_not_yet: "As inscrições ainda não abriram.", registration_none: "Este evento não tem inscrição.", registration_ended: "Este evento já terminou.",
+  already_registered: "Você já está inscrito(a) neste evento.", invalid_guests: "Quantidade de acompanhantes inválida.", event_closed: "Este evento já foi cancelado ou encerrado.", event_not_open: "O evento precisa estar publicado.",
+  capacity_below_registered: "Já há mais vagas confirmadas do que essa capacidade.", already_cancelled: "Esta inscrição já foi cancelada.", already_checked_in: "Quem já entrou não pode cancelar a inscrição.", not_checked_in: "Esta pessoa ainda não fez check-in.",
+  invalid_registration: "Situação de inscrição inválida.",
   invalid_audience: "Escolha um público válido.", invalid_journey: "Escolha uma jornada desta igreja.", invalid_segment: "Escolha um segmento desta igreja.", invalid_max: "Escolha entre 3 e 12 cards.",
   invalid_data: "Confira os campos: o link precisa começar com https:// ou #/ e as datas precisam fazer sentido.",
   consent_required: "Marque a autorização para podermos responder.", contact_required: "Informe um telefone ou e-mail para recebermos o retorno.", pref_needs_phone: "Para WhatsApp ou ligação, informe o telefone.", pref_needs_email: "Para retorno por e-mail, informe o e-mail.",

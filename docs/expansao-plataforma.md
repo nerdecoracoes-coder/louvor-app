@@ -45,7 +45,7 @@ Limitações técnicas relevantes: hospedagem estática (Cloudflare Pages) + Sup
 |---|---|---|
 | 1. Células | Implementado e testado (banco + telas) | Fase 1 |
 | 2. Cultos, Programações e Escalas | Implementado e testado (banco + telas) | Fase 1 |
-| 3. Eventos | Pendente | Fase 2 |
+| 3. Eventos | Implementado e testado (inscrição, ingresso QR, espera, check-in; **sem pagamento**) | Fase 2 |
 | 4. Financeiro | Pendente | Fase 3 |
 | 5. Comunicação | Pendente | Fase 4 |
 | 6. Cuidado Pastoral e Intercessão | Pendente | Fase 4 |
@@ -95,6 +95,19 @@ O menu foi reorganizado em Igreja / Minha caminhada / Serviço, e se atualiza so
 
 **Limites reais:** (1) não foi possível baixar fotos de bancos de imagem (o ambiente bloqueia esses sites); os cards usam composição com ícone e as cores do SOMOS, com imagem opcional enviada pela administração, de jornada ou de comunicado; (2) estudos e pregações só aparecem quando cadastrados em Destaques — o catálogo completo de conteúdos (planos de leitura, transmissões) é da Fase 5; (3) "Eventos" usa a agenda da igreja; eventos com inscrição são da Fase 2; (4) a regra de privacidade de Aniversariantes não existe como configuração, então o item continua como estava; (5) a página inicial ainda mostra as "Ações da igreja" (atalhos de administração) para quem tem permissão — não foram movidas.
 
+## 4.3 Fase 2 — Eventos
+
+Arquivos: `supabase/migrations/20261207000001_eventos.sql` (cópia em `supabase/setup/atualizacao-2026-12-07-eventos.sql`), `app/views/inscricoes.js`, `tests/eventos.test.ts`. A agenda simples (`church_events`) não foi alterada.
+
+**Permissões novas** (só administrador ou concessão; liderança de time, integrante e desenvolvedor não ganham acesso): `ev_view` (ver tudo e as inscrições), `ev_manage` (criar/editar, inscrever e cancelar inscrição pela equipe), `ev_publish` (publicar, cancelar com motivo, encerrar, voltar a rascunho), `ev_checkin`.
+**Evento:** título, descrição, local, início/fim, imagem, público (todos/visitantes/frequentadores/membros), inscrição (sem inscrição, aberta, fechada), vagas, acompanhantes por inscrição, janela de inscrição. Rascunho → publicado → cancelado (motivo obrigatório; avisa inscritos) ou encerrado (só depois do início). Nada é apagado; tudo vai para a auditoria única.
+**Inscrição (conta obrigatória):** confirma na hora ou entra na **lista de espera** quando as vagas (contando acompanhantes) acabam; ao cancelar, o primeiro da fila que couber é promovido e avisado; aumentar a capacidade também promove. Uma inscrição ativa por pessoa; reduzir a capacidade abaixo do confirmado é recusado.
+**Ingresso:** código de 10 caracteres + QR (`EV-código`) em "Meus ingressos"; mostra posição na fila e evento cancelado.
+**Check-in:** por QR (câmera, quando o navegador suporta `BarcodeDetector`), por código digitado ou pela lista; guarda quem fez, quando e quantas pessoas entraram; recusa ingresso inexistente, de outro evento, em espera, cancelado ou de evento cancelado; já usado avisa; desfazer exige motivo. Relatório: vagas, espera, presentes, ausentes; exportação CSV.
+**Integração:** menu (Eventos, Meus ingressos), card "Tem algo especial chegando" (usa eventos publicados do público da pessoa; sem eles, cai na agenda simples) e Chamados → Eventos.
+
+**Limites reais:** (1) **pagamento/ingresso pago não existe** — depende de provedor e credenciais; (2) inscrição exige conta no app (não há inscrição pública sem login); (3) o QR é lido pela câmera apenas em navegadores com `BarcodeDetector` (Chrome no Android funciona); nos demais, digita-se o código; (4) lembretes automáticos antes do evento dependem de agendamento no servidor e não foram feitos; (5) a inscrição pela equipe é só por nome (não liga à ficha da pessoa); (6) eventos recorrentes não foram feitos (use Programações para recorrência).
+
 ## 5. Como aplicar no Supabase
 
-Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` e `atualizacao-2026-12-06-menu-inteligente.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.
+Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.

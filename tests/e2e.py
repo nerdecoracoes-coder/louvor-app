@@ -1392,6 +1392,23 @@ with sync_playwright() as pw:
     ana.goto(BASE + "/#/destaques"); ana.locator("[data-tg]").first.click(); toast_has(ana, "desativado")
     carla.reload(); carla.wait_for_timeout(1800); assert carla.locator(".disc", has_text="Conhecendo a Bíblia").count() == 0
     ok("menu inteligente e Para você: destaque cadastrado aparece para quem é do público, menu agrupado sem itens que não cabem, desativar remove o card")
+    # eventos com inscrição: cadastro, publicação, inscrição, ingresso com QR e check-in
+    import datetime as _dt
+    futuro = (_dt.datetime.now() + _dt.timedelta(days=9)).strftime("%Y-%m-%dT19:00")
+    ana.goto(BASE + "/#/gestao-eventos"); expect(ana.locator("#view h1")).to_contain_text("Eventos da igreja", timeout=10000)
+    ana.locator("#new").click(); ana.fill(".sheet #title", "Noite de Louvor"); ana.fill(".sheet #loc", "Templo principal"); ana.fill(".sheet #st", futuro); ana.fill(".sheet #cap", "5"); ana.locator(".sheet #ok").click(); toast_has(ana, "Evento salvo")
+    expect(ana.locator("#view")).to_contain_text("Noite de Louvor", timeout=10000); ana.locator("#view a.li", has_text="Noite de Louvor").click()
+    expect(ana.locator("#view")).to_contain_text("Rascunho", timeout=10000); ana.locator("#pub").click(); expect(ana.locator("#view")).to_contain_text("Publicado", timeout=10000)
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("evento gestao overflow", ow); ana.wait_for_timeout(900); shot(ana, "76-evento-gestao")
+    carla.goto(BASE + "/#/eventos"); expect(carla.locator("#view")).to_contain_text("Noite de Louvor", timeout=10000); carla.locator("#view [data-e]", has_text="Noite de Louvor").click()
+    carla.locator(".sheet #go").click(); toast_has(carla, "Inscrição confirmada")
+    carla.goto(BASE + "/#/meus-ingressos"); expect(carla.locator(".qr svg")).to_be_visible(timeout=10000)
+    codigo = carla.locator("p.mono b").first.inner_text(); assert len(codigo) == 10, codigo
+    ow = carla.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("ingresso overflow", ow); carla.wait_for_timeout(900); shot(carla, "77-ingresso")
+    ana.goto(BASE + "/#/gestao-eventos"); ana.locator("#view a.li", has_text="Noite de Louvor").click(); ana.locator('[data-t="checkin"]').click()
+    ana.fill("#code", "EV-" + codigo); ana.locator("#go").click(); expect(ana.locator("#res")).to_contain_text("Entrada registrada", timeout=10000)
+    ana.fill("#code", codigo); ana.locator("#go").click(); expect(ana.locator("#res")).to_contain_text("já entrou", timeout=10000); shot(ana, "78-checkin")
+    ok("eventos: cadastro, publicação, inscrição pelo membro, ingresso com QR e check-in por código")
 
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
