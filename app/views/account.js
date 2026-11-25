@@ -1,6 +1,6 @@
 // Conta, convites, primeira organização, perfil, notificações, configurações da igreja e o Google Drive do repertório.
 import { brandLogo, getTheme, setTheme, sb, state, must, esc, attr, icon, avatar, teamBadge, isAdmin, sheet, toast, errMsg, busy, on, go, empty, spinner, fDate, fRel,
-  uploadPublic, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, TEAM_TYPES, isRepertoireStaff, CHURCH_SIGNUP, isDeveloper } from "../core.js";
+  uploadPublic, menuShow, pickFile, confirmDialog, selectOrg, people, invalidatePeople, applyOrgTheme, roleIcon, roleIconPicker, bindRoleIconPicker, loadRoleIcons, TEAM_TYPES, isRepertoireStaff, CHURCH_SIGNUP, isDeveloper } from "../core.js";
 import { colorPicker, readColor, bindColor } from "./teams.js";
 
 export function register(route) {
@@ -223,7 +223,7 @@ async function profileView(_, el) {
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Meu perfil</h1></div>
     <div class="row gap-l mb"><button class="hero-av" id="av" aria-label="Trocar foto">${avatar({ ...p, avatar_url: photo }, 96)}<span class="cam">${icon("camera")}</span></button><div class="col gap-s"><button class="btn ghost sm" id="ph">${icon("camera")} ${photo ? "Trocar foto" : "Adicionar foto"}</button>
       <span class="small muted">${esc(state.user.email || "")}</span></div></div>
-    ${state.org ? `<div class="list mb"><a class="li" href="#/minhas-escalas">${icon("calendar")}<span class="grow"><span class="t">Minhas escalas</span><span class="s">Confirme presença ou peça substituição</span></span>${icon("chevronRight", "chev")}</a></div>
+    ${state.org ? `${menuShow("rosters") ? `<div class="list mb"><a class="li" href="#/minhas-escalas">${icon("calendar")}<span class="grow"><span class="t">Minhas escalas</span><span class="s">Confirme presença ou peça substituição</span></span>${icon("chevronRight", "chev")}</a></div>` : ""}
     <div class="list mb"><a class="li" href="#/carteira">${icon("badge")}<span class="grow"><span class="t">Carteira Digital</span><span class="s">Sua identificação de membro da igreja</span></span>${icon("chevronRight", "chev")}</a></div>` : ""}
     <form class="card" id="pf">
       <label class="field"><span>Nome completo</span><input name="full_name" required maxlength="100" value="${attr(p.full_name || "")}"></label>

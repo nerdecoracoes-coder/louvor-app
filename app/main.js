@@ -1,5 +1,5 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, route, matchRoute, go, isEditPath, canGoBack, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, canChamados, hasServos, getTheme, setTheme, applyTheme, myName, headerActions, confirmDialog } from "./core.js";
+import { sb, configured, state, menuShow, route, matchRoute, go, isEditPath, canGoBack, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, canChamados, hasServos, getTheme, setTheme, applyTheme, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as servico from "./views/servico.js";
 import * as multimidia from "./views/multimidia.js";
@@ -162,9 +162,9 @@ function openMenu() {
     ["play", "Tutoriais", "#/ajuda"],
     ["heart", ACOLHER_NAME, "#/acolher"],
     ["user", "Meu cadastro", "#/meu-cadastro"],
-    ["route", "Minhas jornadas", "#/jornadas"],
+    ...(menuShow("journeys") ? [["route", "Minhas jornadas", "#/jornadas"]] : []),
     ["chat", "Solicitar contato", "#/contato"],
-    ["heart", "Decidi seguir a Jesus", "#/decisao"],
+    ...(menuShow("decision") ? [["heart", "Decidi seguir a Jesus", "#/decisao"]] : []),
     ...(asks && !teamOnly() ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
   ] : [
     ["org", "Início da igreja", "#/"],
@@ -178,9 +178,9 @@ function openMenu() {
     ["play", "Tutoriais", "#/ajuda"],
     ...(hasServos() ? [["heart", ACOLHER_NAME, "#/acolher"]] : []),
     ["user", "Meu cadastro", "#/meu-cadastro"],
-    ["route", "Minhas jornadas", "#/jornadas"],
+    ...(menuShow("journeys") ? [["route", "Minhas jornadas", "#/jornadas"]] : []),
     ["chat", "Solicitar contato", "#/contato"],
-    ["heart", "Decidi seguir a Jesus", "#/decisao"],
+    ...(menuShow("decision") ? [["heart", "Decidi seguir a Jesus", "#/decisao"]] : []),
     ...(asks ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
   ];
   if (canChamados()) items.splice(1, 0, ["crown", "SOMOS Chamados", "#/chamados"]);

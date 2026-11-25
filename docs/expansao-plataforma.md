@@ -70,6 +70,10 @@ O Louvor não foi alterado: `schedules` e `schedule_assignments` só são lidas.
 
 **Não incluído na Fase 1 (honesto):** avisos por e-mail/push externo (só notificação interna); vínculo automático entre Programações e Escalas além da referência opcional; recorrência de escalas (cada escala é criada para uma data); aviso de lembrete antes do horário (depende de agendamento no servidor); células como critério de segmentação e como público de Comunicação (previsto na Fase 4).
 
+## 4.1 Menu por público
+
+O servidor (`my_menu`) decide quais atalhos pessoais aparecem: **Decidi seguir a Jesus** só para visitante, congregado e pessoa sem ficha (membro apenas se a liderança liberar na ficha, `person_menu_decision_set`, com `people_edit` e escopo total); **Minhas jornadas** só se a pessoa participa de uma jornada ou há jornada pública aberta para a sua classificação; **Minhas escalas** só para quem está em escala publicada (últimos 30 dias ou futura). Ocultar atalho não bloqueia o acesso direto pela URL. Arquivo: `supabase/setup/atualizacao-2026-12-05-menu-por-publico.sql`. Testes: `tests/menu-publico.test.ts`.
+
 ## 5. Como aplicar no Supabase
 
-Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.
+Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` e depois `atualizacao-2026-12-05-menu-por-publico.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.

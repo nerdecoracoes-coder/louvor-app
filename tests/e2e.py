@@ -1360,7 +1360,7 @@ with sync_playwright() as pw:
     ana.locator(".sheet [data-fn]").first.fill("Recepção"); ana.locator(".sheet #ok").click(); expect(ana.locator("#view h1")).to_contain_text("Recepção do domingo", timeout=10000); expect(ana.locator("#view")).to_contain_text("Rascunho")
     ana.locator("#pub").click(); expect(ana.locator("#view")).to_contain_text("Aguardando confirmação", timeout=10000)
     ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("escala overflow", ow); ana.wait_for_timeout(900); shot(ana, "71-escala-detalhe")
-    carla.goto(BASE + "/#/perfil"); expect(carla.locator("#view")).to_contain_text("Minhas escalas", timeout=10000); carla.goto(BASE + "/#/minhas-escalas")
+    carla.goto(BASE + "/#/perfil"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Minhas escalas", timeout=10000); carla.goto(BASE + "/#/minhas-escalas")
     expect(carla.locator("#view")).to_contain_text("Recepção do domingo", timeout=10000); expect(carla.locator("#view")).to_contain_text("Recepção"); carla.wait_for_timeout(900); shot(carla, "72-minhas-escalas")
     carla.locator("[data-c]").first.click(); expect(carla.locator("#view")).to_contain_text("Confirmou", timeout=10000)
     ana.reload(); expect(ana.locator("#view")).to_contain_text("Confirmada", timeout=10000)

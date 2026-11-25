@@ -72,6 +72,8 @@ export const canAdminOrg = () => isDeveloper() || isAdmin() || (state.access?.ge
 // SOMOS Chamados: desenvolvedor, administrador, liderança geral, supervisor de rede ou líder de algum ministério
 export const peopleCan = (a) => (state.access?.people || []).includes(a);
 // permissões dos módulos novos (o servidor confere de novo em cada operação)
+// atalho do menu visível? (sem a regra do servidor, mostra como antes)
+export const menuShow = (k) => state.menu?.[k] !== false;
 export const modCan = (a) => (state.mods?.actions || []).includes(a);
 export const modAny = (...a) => a.some(modCan);
 export const cellScope = () => !!state.mods?.cell_scope;
@@ -410,7 +412,7 @@ export async function selectOrg(orgId, persist = true) {
   const m = state.orgs.find((o) => o.org_id === orgId);
   state.org = m?.organizations || null;
   state.role = m?.role || null;
-  state.myTeams = []; state.leaderOf = new Set(); state.agendaCoord = false; state.access = null; state.mods = null;
+  state.myTeams = []; state.leaderOf = new Set(); state.agendaCoord = false; state.access = null; state.mods = null; state.menu = null;
   if (persist) try { localStorage.setItem("louvor.org", orgId || ""); } catch {}
   if (state.org) {
     // coluna nova: se a atualização do banco ainda não foi aplicada, segue sem ela
@@ -424,6 +426,8 @@ export async function selectOrg(orgId, persist = true) {
     try { const a = await sb.rpc("my_access", { p_org: state.org.id }); state.access = a.error ? null : a.data; } catch { state.access = null; }
     // módulos novos (células, programações, escalas...): se a atualização do banco ainda não foi aplicada, segue sem eles
     try { const m = await sb.rpc("my_modules", { p_org: state.org.id }); state.mods = m.error ? null : m.data; } catch { state.mods = null; }
+    // atalhos pessoais do menu por público (se a atualização do banco ainda não foi aplicada, o menu fica como antes)
+    try { const m = await sb.rpc("my_menu", { p_org: state.org.id }); state.menu = m.error ? null : m.data; } catch { state.menu = null; }
     await loadRoleIcons();
   }
   if (state.space) state.space = findTeam(state.space.id); // dados atualizados do time
