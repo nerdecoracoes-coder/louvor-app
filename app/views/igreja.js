@@ -3,6 +3,9 @@
 import { quickRow, hasRepertoire, sb, state, must, esc, attr, icon, avatar, fDateLong, fMonthYear, cap, fDay, fMon, fTime, fDate, people, personName, myName, isStaff, isAdmin, canEditAgenda, canManageTeam, sheet, toast, errMsg, busy, on, go, empty, spinner,
   confirmDialog, fromLocal, ymd, teamBadge, teamTypeLabel, invalidatePeople } from "../core.js";
 import { noticeCard, openNotice, birthdaySection } from "./home.js";
+import { menuShow } from "../core.js";
+import { hasTutorials } from "./ajuda.js";
+import { discoverSection, wireImages } from "../lib/cards.js";
 
 export function register(route) {
   route("/igreja", (p, el, a) => churchHome(el, a));
@@ -142,7 +145,8 @@ export async function churchHome(el, alive) {
   const mine = new Set(state.myTeams.map((t) => t.id));
   el.innerHTML = `
   <section class="hero"><div class="grow"><p class="hello">Igreja</p><h1>${esc(o.name)}</h1>${o.subtitle ? `<p class="roles">${esc(o.subtitle)}</p>` : ""}</div></section>
-  ${quickRow([["megaphone","Avisos","#/avisos"],["calendar","Minhas escalas","#/calendario/meu"],["userOff","Bloqueios","#/bloqueios"],["gift","Aniversários","#/aniversariantes"],["play","Tutoriais","#/ajuda"]])}
+  ${quickRow([["megaphone","Avisos","#/avisos"], menuShow("scales") && ["calendar","Minhas escalas","#/calendario/meu"], menuShow("scales") && ["userOff","Bloqueios","#/bloqueios"],["gift","Aniversários","#/aniversariantes"], hasTutorials() && ["play","Tutoriais","#/ajuda"]])}
+  <div id="disc"></div>
 
   <div class="sec"><h2>Liderança</h2>${isAdmin() ? `<span class="row gap-s"><button class="more" id="edcoord">${icon("calendar")} Agenda</button><button class="more" id="edlead">${icon("edit")} Cargos</button></span>` : ""}</div>
   ${leaders.length ? `<div class="leaders">${leaders.map((p) => `<div class="leader">${avatar(p, 92, false)}<b class="ellipsis">${esc(p.display_name)}</b><span class="ellipsis">${esc(p.church_title)}</span></div>`).join("")}</div>`
@@ -164,6 +168,11 @@ export async function churchHome(el, alive) {
     ${canEditAgenda() ? `<button class="chip" id="newev2">${icon("calendar")} Novo evento</button><a class="chip" href="#/avisos/novo">${icon("megaphone")} Novo aviso</a>` : ""}
     ${isAdmin() ? `<a class="chip" href="#/times/novo">${icon("users")} Novo time</a><a class="chip" href="#/convidar-membro">${icon("org")} Convidar membro da igreja</a>` : ""}</div>` : ""}`;
   const again = () => churchHome(el, alive);
+  // "Para você": cards escolhidos pelo servidor (só com conteúdo real, público e destino funcionais); se a atualização do banco faltar, a seção some
+  sb.rpc("home_discover", { p_org: state.org.id }).then((r) => {
+    const box = el.querySelector("#disc"); if (!box || !alive() || r.error || !r.data?.cards?.length) return;
+    box.innerHTML = discoverSection(r.data.cards); wireImages(box);
+  }).catch(() => {});
   pendingScalesCard().then((h) => { const b = el.querySelector("#pend"); if (b) b.innerHTML = h; }).catch(() => {});
   el.querySelector("#newev")?.addEventListener("click", () => eventForm(again));
   el.querySelector("#newev2")?.addEventListener("click", () => eventForm(again));

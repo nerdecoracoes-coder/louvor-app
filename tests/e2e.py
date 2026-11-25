@@ -450,6 +450,12 @@ with sync_playwright() as pw:
     ana.keyboard.press("Escape"); ana.locator(".sheet-wrap").click(position={"x": 5, "y": 5}) if ana.locator(".sheet-wrap").count() else None
     expect(ana.get_by_role("heading", name="Checklist pré-culto")).to_be_visible(); expect(ana.locator(".li.check")).to_have_count(7)
     shot(ana, "21-multimidia-escala")
+    # pedir arte ou vídeo exige liderança ou permissão: sem ela o item não aparece; a administração autoriza a Carla
+    carla.goto(BASE + "/#/"); carla.locator(".menubtn").click(); expect(carla.locator(".drawer")).to_be_visible(timeout=10000)
+    assert carla.locator('.drawer a[href="#/pedidos"]').count() == 0
+    carla.keyboard.press("Escape")
+    subprocess.run(["psql", "-q", "-c", "insert into access_grants (org_id, user_id, role_key, title, actions) select o.org_id, p.id, 'secretary', 'Pede mídia', array['media_request'] from profiles p join org_members o on o.user_id = p.id where p.full_name = 'Carla Dias' limit 1"], env=dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres"), check=True)
+    carla.reload(); carla.locator(".menubtn").click(); expect(carla.locator('.drawer a[href="#/pedidos"]')).to_be_visible(timeout=10000); carla.keyboard.press("Escape")
     carla.goto(f"{BASE}/#/pedidos/novo/{jovens_id}")
     carla.locator(".kinds label", has_text="Vídeo").click(); carla.fill("input[name=title]", "Vídeo de abertura do retiro")
     carla.fill("textarea[name=description]", "30 segundos, para o telão"); carla.locator("#save").click()
@@ -1112,16 +1118,17 @@ with sync_playwright() as pw:
     ok("pessoas: cadastro manual com aviso de duplicidade, histórico de classificação, formulário público com QR + aprovação, importação com prévia, servo sem acesso à base")
 
     # ------------------------------------------------------------------ Acolhimento: Como acolher (todos do Servos) + cadastro simples e jornada
-    carla.goto(BASE + "/#/"); carla.locator(".menubtn").click()
-    expect(carla.locator('.drawer a[href="#/acolher"]')).to_contain_text("Como acolher", timeout=10000)
-    carla.locator('.drawer a[href="#/acolher"]').click()
-    expect(carla.locator(".pagehead h1")).to_have_text("Como acolher", timeout=10000)
-    expect(carla.locator(".acstep")).to_have_count(4)
+    # integrante do Louvor NÃO vê "Como acolher" (só equipe com Visitantes, liderança autorizada ou permissão de acolhimento)
+    carla.goto(BASE + "/#/"); carla.locator(".menubtn").click(); expect(carla.locator(".drawer")).to_be_visible(timeout=10000)
+    assert carla.locator('.drawer a[href="#/acolher"]').count() == 0
+    carla.keyboard.press("Escape")
+    carla.goto(BASE + "/#/acolher"); expect(carla.locator("#view")).to_contain_text("equipe de acolhimento", timeout=10000)
+    ana.goto(BASE + "/#/acolher"); expect(ana.locator(".pagehead h1")).to_have_text("Como acolher", timeout=10000)
+    expect(ana.locator(".acstep")).to_have_count(4)
     for t in ["Receba com carinho.", "Ajude a pessoa a conhecer a igreja.", "Deixe a porta aberta.", "Relacionamento não tem pressa.", "Nosso objetivo não é simplesmente cadastrar visitantes."]:
-        expect(carla.locator("#view")).to_contain_text(t)
-    assert carla.locator("#view form, #view input, #view textarea").count() == 0           # página só de orientação
-    assert carla.locator('#view a[href="#/acolhimento"]').count() == 0                      # sem atalho de registro para quem não tem permissão
-    shot(carla, "45-como-acolher")
+        expect(ana.locator("#view")).to_contain_text(t)
+    assert ana.locator("#view form, #view input, #view textarea").count() == 0           # página só de orientação
+    shot(ana, "45-como-acolher")
     carla.goto(BASE + "/#/acolhimento"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
     carla.goto(BASE + "/#/acolhimento/novo"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
     ana.goto(BASE + "/#/"); ana.locator(".menubtn").click(); expect(ana.locator('.drawer a[href="#/acolher"]')).to_be_visible(timeout=10000); ana.keyboard.press("Escape")
@@ -1144,7 +1151,7 @@ with sync_playwright() as pw:
     expect(ana.locator(".jtrack li.now")).to_have_text("Aproximação", timeout=10000); expect(ana.locator(".jlog")).to_contain_text("Receber oração")
     shot(ana, "46-acolhimento-ficha")
     ana.goto(BASE + "/#/acolhimento"); ana.fill("#q", "Visitante Dois"); expect(ana.locator("#rows .li")).to_have_count(1, timeout=10000); ana.fill("#q", "Visitante Teste"); expect(ana.locator("#rows .li")).to_have_count(1, timeout=10000); shot(ana, "47-acolhimento-lista")
-    ok("acolhimento: Como acolher para o servo (4 etapas, sem formulário), cadastro só com nome, telefone com autorização, retorno sem duplicar, jornada por registro")
+    ok("acolhimento: Como acolher só para quem é da equipe/liderança (4 etapas, sem formulário), cadastro só com nome, telefone com autorização, retorno sem duplicar, jornada por registro")
 
     # ------------------------------------------------------------------ Ficha individual em abas: família, igreja/times, histórico, pastoral
     ana.goto(BASE + "/#/pessoas"); ana.fill("#q", "Visitante Dois"); expect(ana.locator("#rows .li", has_text="Visitante Dois")).to_have_count(1, timeout=10000); ana.locator("#rows .li", has_text="Visitante Dois").click()
@@ -1366,6 +1373,25 @@ with sync_playwright() as pw:
     ana.reload(); expect(ana.locator("#view")).to_contain_text("Confirmada", timeout=10000)
     carla.goto(BASE + "/#/celulas"); expect(carla.locator("#view")).to_contain_text("não tem acesso", timeout=10000)
     ok("células, programações e escalas (cadastro, reunião, relatório, recorrência, ordem do culto, escala, confirmação)")
+
+    # menu inteligente e "Para você" no SOMOS Um
+    ana.goto(BASE + "/#/destaques"); expect(ana.locator("#view h1")).to_contain_text("Destaques do SOMOS Um", timeout=10000)
+    ana.locator("#new").click(); ana.locator(".sheet #kind").select_option("study"); ana.fill(".sheet #title", "Conhecendo a Bíblia"); ana.fill(".sheet #body", "Um estudo para começar a ler a Bíblia.")
+    ana.fill(".sheet #url", "https://exemplo.org/biblia"); ana.locator(".sheet #ok").click(); toast_has(ana, "Destaque salvo")
+    expect(ana.locator("#view")).to_contain_text("Conhecendo a Bíblia", timeout=10000); expect(ana.locator("#view")).to_contain_text("No ar")
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("destaques overflow", ow); ana.wait_for_timeout(900); shot(ana, "73-destaques-admin")
+    carla.goto(BASE + "/#/igreja"); expect(carla.locator(".disc")).to_contain_text("Conhecendo a Bíblia", timeout=10000)
+    card = carla.locator('.disc a.dc-content', has_text="Conhecendo a Bíblia"); expect(card).to_have_attribute("href", "https://exemplo.org/biblia"); expect(card).to_have_attribute("target", "_blank")
+    assert carla.locator('.disc a[href="#/decisao"]').count() == 0          # membro não recebe o convite de decisão
+    assert carla.locator('.disc a[href="#/contato"]').count() == 0
+    ow = carla.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("descoberta overflow", ow); carla.wait_for_timeout(900); shot(carla, "74-para-voce")
+    carla.locator(".menubtn").click(); expect(carla.locator(".drawer .dgroup", has_text="Minha caminhada")).to_be_visible(timeout=10000)
+    assert carla.locator('.drawer a[href="#/decisao"]').count() == 0                      # membro não recebe "Decidi seguir a Jesus"
+    expect(carla.locator('.drawer a[href="#/jornadas"]')).to_be_visible()                  # mas participa de uma jornada: vê "Minhas jornadas"
+    carla.wait_for_timeout(900); shot(carla, "75-menu-agrupado"); carla.keyboard.press("Escape")
+    ana.goto(BASE + "/#/destaques"); ana.locator("[data-tg]").first.click(); toast_has(ana, "desativado")
+    carla.reload(); carla.wait_for_timeout(1800); assert carla.locator(".disc", has_text="Conhecendo a Bíblia").count() == 0
+    ok("menu inteligente e Para você: destaque cadastrado aparece para quem é do público, menu agrupado sem itens que não cabem, desativar remove o card")
 
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:

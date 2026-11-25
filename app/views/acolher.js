@@ -1,6 +1,6 @@
 // "Como acolher": orientações para todos do SOMOS Servos receberem bem quem chega. Página só de leitura (sem formulários).
 // O nome do item é provisório: fica em uma única constante para facilitar a troca.
-import { state, esc, icon, empty, hasServos, canWelcome, teamOnly } from "../core.js";
+import { state, esc, icon, empty, menuShow, canWelcome, teamOnly } from "../core.js";
 
 export const ACOLHER_NAME = "Como acolher";
 
@@ -24,7 +24,7 @@ export function register(route) {
 }
 
 function view(el) {
-  if (!hasServos()) { el.innerHTML = `<div class="pagehead"><h1>${esc(ACOLHER_NAME)}</h1></div>${empty("lock", "Esta página é do SOMOS Servos.", "Ela fica disponível para quem serve em algum time da igreja.")}`; return; }
+  if (!menuShow("welcome")) { el.innerHTML = `<div class="pagehead"><h1>${esc(ACOLHER_NAME)}</h1></div>${empty("lock", "Esta página é da equipe de acolhimento.", "Ela fica disponível para quem serve em um time com o recurso Visitantes, para a liderança e para quem recebeu a permissão de acolhimento.")}`; return; }
   el.innerHTML = `<div class="pagehead"><h1>${esc(ACOLHER_NAME)}</h1></div>
     <p class="muted" style="margin:-8px 0 18px">Acolher é responsabilidade de todos nós. Quatro passos para receber bem quem chega.</p>
     <div class="acsteps">${STEPS.map((s, i) => `<section class="card acstep">

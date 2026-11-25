@@ -1,11 +1,12 @@
 // Inicialização, estrutura (cabeçalho + navegação) e roteamento.
-import { sb, configured, state, menuShow, route, matchRoute, go, isEditPath, canGoBack, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, canChamados, hasServos, getTheme, setTheme, applyTheme, myName, headerActions, confirmDialog } from "./core.js";
+import { sb, configured, state, menuShow, refreshMenu, route, matchRoute, go, isEditPath, canGoBack, trackNav, leaveEdit, icon, esc, attr, avatar, teamBadge, loadSession, selectOrg, setSpace, findTeam, sheet, on, toast, hasRepertoire, isRepertoireStaff, isAdmin, teamOnly, blockedInTeamOnly, isStaff, canManageTeam, applyOrgTheme, errMsg, teamHasRepertoire, teamTypeLabel, teamHas, isGuest, canChamados, hasServos, getTheme, setTheme, applyTheme, myName, headerActions, confirmDialog } from "./core.js";
 import * as home from "./views/home.js";
 import * as servico from "./views/servico.js";
 import * as multimidia from "./views/multimidia.js";
 import * as ministerios from "./views/ministerios.js";
 import * as letras from "./views/letras.js";
 import * as ajuda from "./views/ajuda.js";
+import { hasTutorials } from "./views/ajuda.js";
 import * as igreja from "./views/igreja.js";
 import * as estudio from "./views/estudio.js";
 import * as ferramentas from "./views/ferramentas.js";
@@ -28,6 +29,7 @@ import * as segmentacao from "./views/segmentacao.js";
 import * as celulas from "./views/celulas.js";
 import * as programacoes from "./views/programacoes.js";
 import * as escalas from "./views/escalas.js";
+import * as destaques from "./views/destaques.js";
 import * as carteira from "./views/carteira.js";
 import * as chamados from "./views/chamados.js";
 import * as extras from "./views/extras.js";
@@ -41,7 +43,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); servico.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); chamados.register(route); pessoas.register(route); acolher.register(route); acolhimento.register(route); meuCadastro.register(route); novosConvertidos.register(route); jornadas.register(route); contatos.register(route); relatoriosPessoas.register(route); segmentacao.register(route); carteira.register(route); celulas.register(route); programacoes.register(route); escalas.register(route); extras.register(route);
+home.register(route); servico.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); chamados.register(route); pessoas.register(route); acolher.register(route); acolhimento.register(route); meuCadastro.register(route); novosConvertidos.register(route); jornadas.register(route); contatos.register(route); relatoriosPessoas.register(route); segmentacao.register(route); carteira.register(route); celulas.register(route); programacoes.register(route); escalas.register(route); destaques.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { const q = new URLSearchParams(location.hash.split("?")[1] || ""); await openPlayer(id, q.get("tom"), { lista: q.get("lista"), auto: q.get("auto") === "1" }); }, { overlay: true });
 
@@ -147,53 +149,49 @@ function spaceSwitcher() {
 
 // Menu lateral: perfil, o que é da igreja, da pessoa e do time, e ferramentas.
 function openMenu() {
-  const t = state.space;
-  const rep = t ? teamHasRepertoire(t) : hasRepertoire();
-  const estudio_ = t && teamHas(t, "estudio");
-  const asks = !isGuest() && state.orgTeams.some((x) => teamHas(x, "pedidos") && x.id !== t?.id);
-  // [ícone, texto, link ou ação]
-  const items = t ? [
-    ...(state.myTeams.length > 1 || !teamOnly() ? [["swap", "Trocar de time", "act:switch"]] : []),
-    ["userOff", "Indisponibilidades", "#/bloqueios"],
-    ...(canManageTeam(t.id) ? [["bars", "Panorama de escalas", "#/panorama"]] : []),
-    ...(estudio_ ? [["layers", "Estúdio de mídia", `#/times/${t.id}/estudio`], ["lyrics", "Letras", `#/times/${t.id}/letras`]] : []),
-    ...(rep ? [["music", "Músicas tocadas", "#/musicas/tocadas"], ["clock", "Metrônomo", "#/metronomo"]] : []),
-    ...(teamOnly() ? [] : [["gift", "Aniversariantes", "#/aniversariantes"]]),
-    ["play", "Tutoriais", "#/ajuda"],
-    ["heart", ACOLHER_NAME, "#/acolher"],
-    ["user", "Meu cadastro", "#/meu-cadastro"],
-    ...(menuShow("journeys") ? [["route", "Minhas jornadas", "#/jornadas"]] : []),
-    ["chat", "Solicitar contato", "#/contato"],
-    ...(menuShow("decision") ? [["heart", "Decidi seguir a Jesus", "#/decisao"]] : []),
-    ...(asks && !teamOnly() ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
-  ] : [
-    ["org", "Início da igreja", "#/"],
-    ["swap", "Trocar de time", "act:switch"],
-    ["calendar", "Agenda da igreja", "#/agenda"],
-    ["megaphone", "Avisos", "#/avisos"],
-    ["users", "Ministérios e times", "#/times"],
-    ["gift", "Aniversariantes", "#/aniversariantes"],
-    ["calendar", "Minhas escalas", "#/calendario/meu"],
-    ["userOff", "Indisponibilidades", "#/bloqueios"],
-    ["play", "Tutoriais", "#/ajuda"],
-    ...(hasServos() ? [["heart", ACOLHER_NAME, "#/acolher"]] : []),
-    ["user", "Meu cadastro", "#/meu-cadastro"],
-    ...(menuShow("journeys") ? [["route", "Minhas jornadas", "#/jornadas"]] : []),
-    ["chat", "Solicitar contato", "#/contato"],
-    ...(menuShow("decision") ? [["heart", "Decidi seguir a Jesus", "#/decisao"]] : []),
-    ...(asks ? [["inbox", "Pedir arte ou vídeo", "#/pedidos"]] : []),
-  ];
-  if (canChamados()) items.splice(1, 0, ["crown", "SOMOS Chamados", "#/chamados"]);
-  const entry = ([ic, l, h]) => h.startsWith("act:") ? `<button data-menuact="${h.slice(4)}">${icon(ic)}<span>${l}</span></button>` : `<a href="${h}">${icon(ic)}<span>${l}</span></a>`;
+  // Cada atalho aparece conforme a realidade da pessoa (o servidor decide em my_menu); o menu é refeito se algo mudar.
+  const build = () => {
+    const t = state.space;
+    const rep = t ? teamHasRepertoire(t) : hasRepertoire();
+    const estudio_ = t && teamHas(t, "estudio");
+    const arte = menuShow("media") && !isGuest() && !teamOnly();
+    const cond = (c, ...x) => (c ? x : []);
+    const top = [
+      ...(t ? [] : [["org", "Início da igreja", "#/"]]),
+      ...(canChamados() ? [["crown", "SOMOS Chamados", "#/chamados"]] : []),
+      ...cond(state.myTeams.length > 1 || (!teamOnly() && hasServos()), ["swap", "Trocar de time", "act:switch"]),
+    ];
+    const igreja = t ? cond(!teamOnly(), ["gift", "Aniversariantes", "#/aniversariantes"]) : [
+      ["calendar", "Agenda da igreja", "#/agenda"], ["megaphone", "Avisos", "#/avisos"], ["users", "Ministérios e times", "#/times"], ["gift", "Aniversariantes", "#/aniversariantes"]];
+    const caminhada = [
+      ["user", "Meu cadastro", "#/meu-cadastro"],
+      ...cond(menuShow("journeys"), ["route", "Minhas jornadas", "#/jornadas"]),
+      ["chat", "Solicitar contato", "#/contato"],
+      ...cond(menuShow("decision"), ["heart", "Decidi seguir a Jesus", "#/decisao"]),
+    ];
+    const servico = [
+      ...cond(menuShow("scales") && !t, ["calendar", "Minhas escalas", "#/calendario/meu"]),   // no time, "Minhas escalas" já está nos atalhos do início
+      ...cond(menuShow("scales"), ["userOff", "Indisponibilidades", "#/bloqueios"]),
+      ...cond(t && canManageTeam(t.id), ["bars", "Panorama de escalas", "#/panorama"]),
+      ...cond(estudio_, ["layers", "Estúdio de mídia", `#/times/${t?.id}/estudio`], ["lyrics", "Letras", `#/times/${t?.id}/letras`]),
+      ...cond(t && rep, ["music", "Músicas tocadas", "#/musicas/tocadas"], ["clock", "Metrônomo", "#/metronomo"]),
+      ...cond(menuShow("welcome"), ["heart", ACOLHER_NAME, "#/acolher"]),
+      ...cond(arte, ["inbox", "Pedir arte ou vídeo", "#/pedidos"]),
+      ...cond(hasTutorials(), ["play", "Tutoriais", "#/ajuda"]),
+    ];
+    const entry = ([ic, l, h]) => h.startsWith("act:") ? `<button data-menuact="${h.slice(4)}">${icon(ic)}<span>${l}</span></button>` : `<a href="${h}">${icon(ic)}<span>${l}</span></a>`;
+    return [[null, top], ["Igreja", igreja], ["Minha caminhada", caminhada], ["Serviço", servico]].filter((g) => g[1].length)
+      .map(([h, list]) => `${h ? `<p class="dgroup">${h}</p>` : ""}${list.map(entry).join("")}`).join("");
+  };
   const wrap = document.createElement("div");
   wrap.className = "drawer-wrap";
   wrap.innerHTML = `<aside class="drawer" role="dialog" aria-modal="true" aria-label="Menu">
     <a class="dprofile" href="#/perfil">${avatar({ ...state.profile, display_name: myName() }, 52, false)}<span class="grow"><b class="ellipsis">${esc(myName())}</b><small class="ellipsis">${esc(state.user?.email || "")}</small></span>${icon("chevronRight", "chev")}</a>
-    <nav class="dmenu">${items.map(entry).join("")}</nav>
+    <nav class="dmenu">${build()}</nav>
     <div class="dfoot"><button data-menuact="theme">${icon(getTheme() === "light" ? "moon" : "sun")}<span>${getTheme() === "light" ? "Tema escuro" : "Tema claro"}</span></button><button data-menuact="logout">${icon("logout")}<span>Sair da conta</span></button></div></aside>`;
   document.body.appendChild(wrap);
   document.body.classList.add("noscroll");
-  const close = () => { wrap.classList.add("out"); document.body.classList.remove("noscroll"); setTimeout(() => wrap.remove(), 200); window.removeEventListener("hashchange", close); document.removeEventListener("keydown", esc2); };
+  const close = () => { wrap.classList.add("out"); document.body.classList.remove("noscroll"); setTimeout(() => wrap.remove(), 200); window.removeEventListener("hashchange", close); document.removeEventListener("keydown", esc2); document.removeEventListener("menu-changed", redo); };
   const esc2 = (e) => { if (e.key === "Escape") close(); };
   wrap.addEventListener("click", async (e) => {
     const act = e.target.closest("[data-menuact]")?.dataset.menuact;
@@ -208,6 +206,9 @@ function openMenu() {
   });
   window.addEventListener("hashchange", close);
   document.addEventListener("keydown", esc2);
+  const redo = () => { const n = wrap.querySelector(".dmenu"); if (n) n.innerHTML = build(); };
+  document.addEventListener("menu-changed", redo);
+  refreshMenu(true);
   wrap.querySelector("a")?.focus({ preventScroll: true });
 }
 
@@ -289,6 +290,9 @@ async function render() {
   if (token === current) swap(); else { obs.disconnect(); clearTimeout(timer); }
 }
 window.addEventListener("hashchange", render);
+// o menu acompanha mudanças de vínculo, jornada e decisão sem sair do aplicativo
+window.addEventListener("hashchange", () => refreshMenu());
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshMenu(true); });
 // links dentro de uma tela de edição que levam para fora dela não empilham a edição no histórico
 // troca de time vinda de um compromisso do início ("este compromisso é do time X, deseja trocar?")
 document.addEventListener("somos:switch-team", (e) => { setSpace(e.detail.team); renderShell(); go(e.detail.path); });

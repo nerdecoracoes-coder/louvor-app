@@ -74,6 +74,17 @@ export const peopleCan = (a) => (state.access?.people || []).includes(a);
 // permissões dos módulos novos (o servidor confere de novo em cada operação)
 // atalho do menu visível? (sem a regra do servidor, mostra como antes)
 export const menuShow = (k) => state.menu?.[k] !== false;
+// atualiza os atalhos do menu (vínculo, jornada, decisão); só avisa a interface quando algo mudou
+let menuAt = 0;
+export async function refreshMenu(force = false) {
+  if (!state.org || !state.user || (!force && Date.now() - menuAt < 8000)) return;
+  menuAt = Date.now();
+  try {
+    const m = await sb.rpc("my_menu", { p_org: state.org.id });
+    const next = m.error ? null : m.data;
+    if (JSON.stringify(next) !== JSON.stringify(state.menu)) { state.menu = next; document.dispatchEvent(new Event("menu-changed")); }
+  } catch {}
+}
 export const modCan = (a) => (state.mods?.actions || []).includes(a);
 export const modAny = (...a) => a.some(modCan);
 export const cellScope = () => !!state.mods?.cell_scope;
@@ -239,6 +250,7 @@ const P = {
   flame: '<path d="M12 21.5c-3.9 0-6.5-2.6-6.5-6.2 0-2.7 1.6-4.5 3-6 1-1.1 1.7-2.3 1.7-4.3 3.2 1.5 5.3 3.8 5.8 6.5.6-.4 1.1-1.1 1.3-2 1.2 1.4 1.7 3.1 1.7 4.6 0 3.6-3.1 7.4-7 7.4z"/><path d="M12 21.5c-1.7 0-2.8-1.2-2.8-2.8 0-1.3.9-2.1 1.6-3 .4-.5.7-1 .8-1.7 1.9 1.1 3.2 2.6 3.2 4.7 0 1.6-1.1 2.8-2.8 2.8z"/>',
   star: '<path d="m12 2.8 2.8 5.8 6.4.9-4.6 4.5 1.1 6.4L12 17.4 6.3 20.4l1.1-6.4L2.8 9.5l6.4-.9z"/>',
   video: '<rect x="2.5" y="6" width="13" height="12" rx="2.5"/><path d="m15.5 10.5 6-3.5v10l-6-3.5z"/>',
+  user: '<circle cx="12" cy="8" r="3.8"/><path d="M4.5 20c.7-3.9 3.7-6 7.5-6s6.8 2.1 7.5 6"/>',
   userPlus: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><path d="M19 8v6M16 11h6"/>', upload: '<path d="M12 15V3m0 0L7.5 7.5M12 3l4.5 4.5"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
   church: '<path d="M12 2v4M10 4h4"/><path d="m12 6-5 4v11h10V10z"/><path d="M10 21v-5a2 2 0 0 1 4 0v5"/><path d="M7 12.5H2.5V21H7M17 12.5h4.5V21H17"/>',
   book: '<path d="M12 6.500C10 5 7.500 4.500 4 4.500v14c3.500 0 6 .5 8 2 2-1.500 4.500-2 8-2v-14c-3.500 0-6 .5-8 2z"/><path d="M12 6.500v14"/>',

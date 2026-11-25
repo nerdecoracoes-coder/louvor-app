@@ -1,9 +1,24 @@
 // Tutoriais em vídeo: gravação da tela com legendas e narração pela voz do próprio aparelho (gratuita).
-import { esc, icon, empty, on, state } from "../core.js";
+import { esc, icon, empty, on, state, isAdmin, isStaff, teamHas, menuShow } from "../core.js";
 
 // Em um time só aparecem os tutoriais daquele tipo de time; na visão da igreja, todos.
 const GRUPO_TIPOS = { "Escalas": null, "Equipe": null, "Louvor": ["louvor"], "Multimídia": ["multimidia"], "Ministério Infantil": ["infantil"], "Diáconos": ["diaconal"] };
-const visiveis = () => { const tp = state.space?.team_type; return TUTORIAIS.filter((t) => t.pronto !== false && (!tp || !GRUPO_TIPOS[t.grupo] || GRUPO_TIPOS[t.grupo].includes(tp))); };
+// Só aparecem os tutoriais de recursos que a pessoa pode usar (vínculo com time, liderança, permissão); em um time, também só os do tipo dele.
+const servePedidos = () => state.myTeams.some((x) => teamHas(x, "pedidos"));
+const REGRA = {
+  "criar-escala": () => isStaff(), "panorama": () => isStaff(), "confirmar-escala": () => menuShow("scales"),
+  "eventos-time": () => state.myTeams.some((x) => teamHas(x, "eventos")), "pedir-midia": () => menuShow("media"), "atender-pedido": servePedidos,
+  "visitantes": () => state.myTeams.some((x) => teamHas(x, "visitantes")) || menuShow("welcome"), "criancas": () => state.myTeams.some((x) => teamHas(x, "criancas")),
+  "checklist-pre-culto": () => state.myTeams.some((x) => teamHas(x, "checklist")), "roteiro-culto": () => state.myTeams.some((x) => teamHas(x, "roteiro")),
+  "estudio-slides": () => state.myTeams.some((x) => teamHas(x, "estudio")), "letras-midia": () => state.myTeams.some((x) => teamHas(x, "letras")), "letras-proprias": () => state.myTeams.some((x) => teamHas(x, "letras")),
+  "ferramentas-midia": () => state.myTeams.some((x) => teamHas(x, "estudio")), "pacote-culto": () => state.myTeams.some((x) => teamHas(x, "estudio") || teamHas(x, "letras")),
+  "devocional-semana": () => state.myTeams.some((x) => teamHas(x, "devocional")),
+};
+const visiveis = () => {
+  const tp = state.space?.team_type;
+  return TUTORIAIS.filter((t) => t.pronto !== false && (!tp || !GRUPO_TIPOS[t.grupo] || GRUPO_TIPOS[t.grupo].includes(tp)) && (isAdmin() || (REGRA[t.slug] ? REGRA[t.slug]() : state.myTeams.length > 0)));
+};
+export const hasTutorials = () => visiveis().length > 0;
 
 export const TUTORIAIS = [
   { grupo: "Escalas", slug: "criar-escala", title: "Como criar uma escala", about: "Escolher data, participantes e músicas, e avisar a equipe." },

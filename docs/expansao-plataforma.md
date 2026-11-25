@@ -74,6 +74,27 @@ O Louvor não foi alterado: `schedules` e `schedule_assignments` só são lidas.
 
 O servidor (`my_menu`) decide quais atalhos pessoais aparecem: **Decidi seguir a Jesus** só para visitante, congregado e pessoa sem ficha (membro apenas se a liderança liberar na ficha, `person_menu_decision_set`, com `people_edit` e escopo total); **Minhas jornadas** só se a pessoa participa de uma jornada ou há jornada pública aberta para a sua classificação; **Minhas escalas** só para quem está em escala publicada (últimos 30 dias ou futura). Ocultar atalho não bloqueia o acesso direto pela URL. Arquivo: `supabase/setup/atualizacao-2026-12-05-menu-por-publico.sql`. Testes: `tests/menu-publico.test.ts`.
 
+## 4.2 Menu inteligente e central de descoberta do SOMOS Um
+
+Arquivos: `supabase/migrations/20261206000001_menu_inteligente_descoberta.sql` (cópia em `supabase/setup/atualizacao-2026-12-06-menu-inteligente.sql`), `app/lib/cards.js`, `app/views/destaques.js`, `tests/menu-inteligente.test.ts`.
+
+**Diagnóstico (antes):** o menu era uma lista única, montada no navegador; "Decidi seguir a Jesus" e "Minhas jornadas" já eram filtrados pela classificação (4.1); "Como acolher" aparecia para todo servo; "Pedir arte ou vídeo" aparecia para qualquer membro e o banco aceitava o pedido de qualquer membro da igreja; tutoriais apareciam todos; a página inicial do SOMOS Um não tinha sugestões; **não existia catálogo de conteúdos/pregações**; não havia regra de "atualização cadastral periódica" (só o fluxo de pedido de alteração).
+
+**Regras de visibilidade (decididas em `my_menu`, no servidor):**
+- Decidi seguir a Jesus: consulta o histórico permanente (`faith_decisions` não anuladas, por pessoa ou conta). Aparece para visitante, frequentador e pessoa sem ficha **sem decisão registrada**; membro só se a liderança liberar na ficha; decisão registrada, novo convertido e membro com decisão: não aparece. Decisão anulada volta a mostrar.
+- Minhas jornadas: participante (inclusive concluída, para manter o histórico) ou jornada pública aberta para a sua classificação.
+- Minhas escalas e Indisponibilidades: quem pertence a algum time ou está em escala publicada; ao sair de todos os times, somem.
+- Como acolher: administrador, permissão de acolhimento (`people_welcome`) ou integrante de time com o recurso "Visitantes". Integrante do Louvor não vê.
+- Pedir arte ou vídeo: administrador, líder de time ou quem recebeu a permissão `media_request`; **também no banco** (a política de inserção em `media_requests` passou a exigir isso; o time de mídia continua podendo abrir pedidos internos).
+- Tutoriais: só os dos recursos que a pessoa usa (liderança, vínculo, recurso do time, permissão).
+- Sempre visíveis: Avisos, Meu cadastro, Solicitar contato, Tema, Sair.
+O menu foi reorganizado em Igreja / Minha caminhada / Serviço, e se atualiza sozinho (ao abrir o menu, ao trocar de tela e ao voltar para o app).
+
+**Cards "Para você" (`home_discover`):** continue sua jornada (atividade pendente), destaques/campanhas, estudo, última pregação, próximos eventos (agenda da igreja), último comunicado, jornadas abertas, decisão (só elegível sem decisão), carteira (só membro com carteira ativa), ministérios, solicitar contato (só não membros), atualizar cadastro (ficha sem alteração há mais de 180 dias e sem pedido em andamento — regra nova, simples). Todo card tem destino funcional e só existe com conteúdo real. Ordem e quantidade são configuráveis; comunicado urgente vai na frente; os convites institucionais giram de lugar a cada dia. Nada usa dado pastoral.
+**Administração:** Chamados → Destaques do SOMOS Um (permissão `discover_manage`): campanha/estudo/pregação, título, descrição, link, botão, imagem enviada pela própria administração, público (todos, visitantes, frequentadores, membros, participantes de uma jornada ou **segmento da Segmentação existente**), período, prioridade, urgente, ativar/desativar, arquivar (nada é apagado) e auditoria.
+
+**Limites reais:** (1) não foi possível baixar fotos de bancos de imagem (o ambiente bloqueia esses sites); os cards usam composição com ícone e as cores do SOMOS, com imagem opcional enviada pela administração, de jornada ou de comunicado; (2) estudos e pregações só aparecem quando cadastrados em Destaques — o catálogo completo de conteúdos (planos de leitura, transmissões) é da Fase 5; (3) "Eventos" usa a agenda da igreja; eventos com inscrição são da Fase 2; (4) a regra de privacidade de Aniversariantes não existe como configuração, então o item continua como estava; (5) a página inicial ainda mostra as "Ações da igreja" (atalhos de administração) para quem tem permissão — não foram movidas.
+
 ## 5. Como aplicar no Supabase
 
-Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` e depois `atualizacao-2026-12-05-menu-por-publico.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.
+Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` e `atualizacao-2026-12-06-menu-inteligente.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.

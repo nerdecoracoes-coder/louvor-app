@@ -1,6 +1,6 @@
 // Ministério de Multimídia: funções padrão, roteiro do culto (com as músicas do louvor), pedidos de mídia e checklist.
 import { describe, expect, test, beforeAll } from "bun:test";
-import { newUser, joinChurch } from "./helpers";
+import { newUser, joinChurch, serviceKey, REST } from "./helpers";
 
 let admin: any, lider: any, operador: any, louvorLider: any, membro: any, fora: any;
 let org = "", midia = "", louvor = "", schMidia = "", schLouvor = "", song = "", req = "";
@@ -52,7 +52,12 @@ describe("multimídia", () => {
   });
 
   test("pedido de mídia: membro da igreja pede; o time é avisado; só o time muda a situação; quem pediu é avisado quando fica pronto", async () => {
-    const r = await membro.api.post("media_requests", { org_id: org, team_id: midia, requested_by: membro.id, title: "Arte do retiro", kind: "arte", due_date: "2026-12-01" });
+    const pedido = () => membro.api.post("media_requests", { org_id: org, team_id: midia, requested_by: membro.id, title: "Arte do retiro", kind: "arte", due_date: "2026-12-01" });
+    expect((await pedido()).ok).toBe(false);   // sem permissão (nem liderança), o banco recusa
+    const sk = await serviceKey();
+    const g = await fetch(`${REST}/access_grants`, { method: "POST", headers: { Authorization: `Bearer ${sk}`, apikey: sk, "Content-Type": "application/json" }, body: JSON.stringify({ org_id: org, user_id: membro.id, role_key: "secretary", title: "Pede mídia", actions: ["media_request"] }) });
+    expect(g.ok).toBe(true);
+    const r = await pedido();
     expect(r.status).toBe(201); req = r.data[0].id;
     expect((await lider.api.get(`/notifications?user_id=eq.${lider.id}&kind=eq.media_request`)).data.length).toBeGreaterThan(0);
     expect((await fora.api.get(`/media_requests?id=eq.${req}`)).data).toHaveLength(0);

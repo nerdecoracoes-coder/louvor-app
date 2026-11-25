@@ -1567,3 +1567,45 @@ label.li input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--a
 .li.stack > .row { width: 100%; }
 .li-link { display: block; color: inherit; text-decoration: none; }
 .li > input[type="checkbox"] { flex: none; }
+
+/* ---- Central de descoberta do SOMOS Um (cards "Para você") + grupos do menu lateral ---- */
+.dgroup { margin: 14px 4px 4px; padding: 0 12px; font-size: 12px; font-weight: 600; color: var(--dim); letter-spacing: .02em; }
+.disc { margin-top: 6px; }
+.disc-row { display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; margin: 0 -20px; padding: 2px 20px 6px; }
+.disc-row::-webkit-scrollbar { display: none; }
+.dc { position: relative; display: flex; flex-direction: column; flex: 0 0 min(78%, 300px); scroll-snap-align: start; overflow: hidden; border-radius: var(--r-lg); background: var(--surface); border: 1px solid var(--line-2); color: var(--text); text-decoration: none; transition: transform .2s var(--ease), border-color .2s; }
+.dc:hover { border-color: rgba(var(--accent-rgb), .55); }
+.dc:active { transform: scale(.985); }
+.dc:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; }
+.dc-body { display: flex; flex-direction: column; gap: 6px; padding: 14px 16px 16px; min-width: 0; }
+.dc-body b { font-size: 15px; line-height: 1.3; letter-spacing: -.01em; }
+.dc-body small { color: var(--muted); font-size: 13px; line-height: 1.45; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.dc-tag { align-self: flex-start; font-size: 11px; font-weight: 600; color: var(--tag-ink); background: rgba(var(--accent-rgb), .14); border-radius: 999px; padding: 3px 9px; }
+.dc-go { margin-top: 4px; display: inline-flex; align-items: center; gap: 2px; font-size: 13px; font-weight: 600; color: var(--accent-ink); }
+.dc-go .ic { width: 16px; height: 16px; }
+.dc-art { position: relative; display: block; aspect-ratio: 16 / 9; overflow: hidden; background: radial-gradient(120% 140% at 12% 0%, rgba(var(--accent-rgb), .55), rgba(var(--accent-rgb), .12) 55%, transparent 75%), linear-gradient(135deg, rgba(var(--w), .06), rgba(var(--w), .02)); }
+.dc-art img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.dc-ico { position: absolute; left: 14px; bottom: 12px; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(var(--w), .14); color: var(--text); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+.dc-ico .ic { width: 22px; height: 22px; }
+.dc-art:has(img) .dc-ico { display: none; }
+.dc-content .dc-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 50%, rgba(0, 0, 0, .35)); }
+.dc-content .dc-ico { left: 50%; bottom: 50%; transform: translate(-50%, 50%); width: 52px; height: 52px; background: rgba(var(--accent-rgb), .9); color: #fff; z-index: 1; }
+.dc-content .dc-art:has(img) .dc-ico { display: grid; }
+.dc-feature .dc-art { aspect-ratio: 2 / 1; }
+.dc-urgent { border-color: rgba(var(--accent-rgb), .7); box-shadow: 0 0 0 1px rgba(var(--accent-rgb), .35); }
+.dc-urgent .dc-tag { background: var(--accent); color: #fff; }
+.dc-event .dc-art, .dc-journey .dc-art, .dc-notice .dc-art, .dc-progress .dc-art { aspect-ratio: 3 / 1; }
+.dc-progress .bar { margin-top: 2px; }
+.dc-pct { font-size: 12px !important; }
+.dc-h, .dc-compact { flex-direction: row; align-items: center; gap: 12px; padding: 14px 14px; }
+.dc-h .dc-body, .dc-compact .dc-body { padding: 0; }
+.dc-round { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: rgba(var(--accent-rgb), .16); color: var(--accent-ink); }
+.dc-round .ic { width: 22px; height: 22px; }
+.dc-compact { flex-basis: min(64%, 240px); }
+@media (min-width: 760px) {
+  .disc-row { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); overflow: visible; margin: 0; padding: 2px 0 6px; }
+  .dc, .dc-compact { flex: initial; }
+  .dc-urgent, .dc-feature:first-child { grid-column: span 2; }
+}
+@media (max-width: 520px) { .disc-row { margin: 0 -16px; padding-left: 16px; padding-right: 16px; } }
+@media (prefers-reduced-motion: reduce) { .dc { transition: none; } }
