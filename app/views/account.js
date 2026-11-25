@@ -223,6 +223,7 @@ async function profileView(_, el) {
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Meu perfil</h1></div>
     <div class="row gap-l mb"><button class="hero-av" id="av" aria-label="Trocar foto">${avatar({ ...p, avatar_url: photo }, 96)}<span class="cam">${icon("camera")}</span></button><div class="col gap-s"><button class="btn ghost sm" id="ph">${icon("camera")} ${photo ? "Trocar foto" : "Adicionar foto"}</button>
       <span class="small muted">${esc(state.user.email || "")}</span></div></div>
+    ${state.org ? `<div class="list mb"><a class="li" href="#/carteira">${icon("badge")}<span class="grow"><span class="t">Carteira Digital</span><span class="s">Sua identificação de membro da igreja</span></span>${icon("chevronRight", "chev")}</a></div>` : ""}
     <form class="card" id="pf">
       <label class="field"><span>Nome completo</span><input name="full_name" required maxlength="100" value="${attr(p.full_name || "")}"></label>
       <div class="two"><label class="field"><span>WhatsApp</span><input name="phone" type="tel" value="${attr(p.phone || "")}" placeholder="(21) 99999-9999"></label>

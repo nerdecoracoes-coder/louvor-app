@@ -1303,6 +1303,40 @@ with sync_playwright() as pw:
     ana.locator("#view #aud").click(); expect(ana.locator(".sheet")).to_contain_text("Lista de pessoas", timeout=10000); ana.keyboard.press("Escape"); shot(ana, "63-relatorios-exportacoes")
     ok("relatórios de pessoas: áreas, filtros, período, gráficos, exportação XLSX/CSV/PDF e registro")
 
+    # segmentação e carteira digital
+    PG = dict(os.environ, PGHOST="127.0.0.1", PGPORT="54322", PGUSER="postgres")
+    subprocess.run(["psql", "-q", "-c", """insert into people (org_id, user_id, full_name, classification, status, birth_date, sex, city)
+        select om.org_id, om.user_id, pr.full_name, 'member', 'active', '1990-05-01', 'F', 'Rio' from org_members om join profiles pr on pr.id = om.user_id where pr.full_name = 'Carla Dias'
+        on conflict (org_id, user_id) where user_id is not null do update set classification = 'member', status = 'active', city = 'Rio'"""], env=PG, check=True)
+    ana.goto(BASE + "/#/chamados"); expect(ana.locator("#view")).to_contain_text("Segmentação", timeout=10000); expect(ana.locator("#view")).to_contain_text("Carteiras Digitais")
+    ana.goto(BASE + "/#/segmentacao/novo"); expect(ana.locator("#prev")).to_contain_text("encontrada", timeout=15000)
+    ana.fill("#nm", "Membros do Rio"); ana.locator("#bld [data-add]").first.click()
+    ana.locator("#bld [data-field]").nth(1).select_option("city"); ana.locator("#bld [data-cmp]").nth(1).select_option("eq"); ana.locator("#bld [data-val]").nth(1).fill("Rio"); ana.locator("#bld [data-val]").nth(1).dispatch_event("change")
+    expect(ana.locator("#prev")).to_contain_text("Carla Dias", timeout=10000)
+    ow = ana.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("segmento overflow", ow); shot(ana, "64-segmento-construtor")
+    ana.locator("#save").click(); expect(ana.locator("#view")).to_contain_text("Membros do Rio", timeout=10000); expect(ana.locator("#view")).to_contain_text("Carla Dias"); expect(ana.locator("#view")).to_contain_text("Segmento criado")
+    ana.goto(BASE + "/#/segmentacao/grupos"); ana.locator("#newg").click(); ana.fill(".sheet #nm", "Comissão do evento"); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#view")).to_contain_text("Comissão do evento", timeout=10000); ana.locator("#add").click(); ana.locator(".sheet [data-p]").first.check(); ana.locator(".sheet #ok").click()
+    expect(ana.locator("#view")).to_contain_text("Participantes (1)", timeout=10000); ana.locator("[data-rm]").first.click(); expect(ana.locator("#view")).to_contain_text("Participantes (0)", timeout=10000); expect(ana.locator("#view")).to_contain_text("saiu")
+    ana.goto(BASE + "/#/carteiras"); expect(ana.locator("#list")).to_contain_text("Carla Dias", timeout=15000); shot(ana, "65-carteiras-gestao")
+    ana.locator("#batch").click(); ana.locator(".sheet #go").click(); expect(ana.locator(".sheet #out")).to_contain_text("emitida", timeout=10000); ana.keyboard.press("Escape")
+    ana.locator("#st").select_option("active"); expect(ana.locator("#list")).to_contain_text("M-00001", timeout=10000)
+    carla.goto(BASE + "/#/perfil"); expect(carla.locator("#view")).to_contain_text("Carteira Digital", timeout=10000); carla.goto(BASE + "/#/carteira")
+    expect(carla.locator(".wcard")).to_contain_text("CARTEIRA DE MEMBRO", timeout=10000); expect(carla.locator(".wcard")).to_contain_text("Carla Dias"); expect(carla.locator(".wcard")).to_contain_text("M-0000")
+    ow = carla.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("carteira overflow", ow); shot(carla, "66-carteira-membro")
+    carla.locator("#big").click(); expect(carla.locator(".sheet svg")).to_be_visible(timeout=5000); carla.keyboard.press("Escape")
+    carla.goto(BASE + "/#/carteira"); carla.wait_for_selector(".wcard #qr svg")
+    vurl = carla.locator(".wcard #qr").get_attribute("data-url"); assert "#/validar-carteira/" in vurl
+    cpub3, pub3 = ctx(br); pub3.goto(vurl)
+    expect(pub3.locator("#app")).to_contain_text("Carteira válida", timeout=15000); expect(pub3.locator("#app")).to_contain_text("Carla Dias"); expect(pub3.locator("#app")).to_contain_text("não comprova a identidade civil")
+    assert "98888" not in pub3.inner_text("#app")
+    ow = pub3.evaluate("document.documentElement.scrollWidth - window.innerWidth"); assert ow <= 1, ("validacao overflow", ow); shot(pub3, "67-validacao-publica")
+    subprocess.run(["psql", "-q", "-c", "update wallets set status = 'suspended', suspended_at = now() where person_id in (select id from people where full_name = 'Carla Dias')"], env=PG, check=True)
+    pub3.reload(); expect(pub3.locator("#app")).to_contain_text("Carteira suspensa", timeout=15000)
+    carla.reload(); expect(carla.locator("#view")).to_contain_text("Carteira suspensa", timeout=10000); assert carla.locator(".wcard").count() == 0
+    pub3.goto(BASE + "/#/validar-carteira/" + "0" * 32 + "." + "0" * 32); expect(pub3.locator("#app")).to_contain_text("Carteira não encontrada", timeout=15000); cpub3.close()
+    ok("segmentação (construtor com prévia, histórico, grupos manuais) e carteira digital (lote, carteira do membro, QR)")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
         for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}", "/#/acolher"]:

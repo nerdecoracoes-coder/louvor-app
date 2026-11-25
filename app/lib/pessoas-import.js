@@ -37,6 +37,10 @@ Object.assign(ERRORS, {
   invalid_bands: "Faixas etárias inválidas: cada faixa começa onde a anterior termina e a última não tem limite.", invalid_format: "Formato de arquivo inválido.",
 });
 Object.assign(ERRORS, {
+  invalid_criteria: "Confira os critérios: algum valor está vazio ou inválido.", invalid_field: "Campo não permitido em segmentos.", invalid_operator: "Esse operador não vale para o campo escolhido.", criteria_required: "Inclua ao menos uma condição.", duplicate_name: "Já existe um item com esse nome.", invalid_owner: "Responsável inválido.", segment_inactive: "Este segmento está desativado.", group_not_active: "Este grupo não está ativo.",
+  not_eligible: "A pessoa precisa ser membro ativo para ter carteira.", person_pending: "O cadastro ainda está pendente de aprovação.", already_issued: "Esta pessoa já tem carteira. Use Reemitir se precisar de um novo QR Code.", rate_limited: "Muitas tentativas seguidas. Aguarde alguns minutos.", invalid_config: "Confira os dados da configuração.", too_many: "Seleção grande demais para um lote. Divida em partes.",
+});
+Object.assign(ERRORS, {
   version_conflict: "Outra pessoa alterou isto agora. Os dados foram atualizados, confira e tente de novo.", journey_empty: "A jornada precisa ter ao menos uma etapa com atividade antes de ser ativada.", step_not_empty: "Esta etapa tem atividades. Remova-as antes.",
   invalid_order: "A ordem enviada não confere com a lista atual.", invalid_requires: "Escolha apenas etapas anteriores.", auto_needs_event: "Atividade automática precisa de um evento da agenda.", already_participant: "Esta pessoa já participa desta jornada.",
   journey_not_active: "Esta jornada não está ativa.", journey_archived: "Jornada arquivada não pode ser alterada.", not_eligible: "Esta jornada não está disponível para o seu perfil.", no_person_record: "Você ainda não tem ficha na igreja.",
