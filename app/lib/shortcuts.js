@@ -20,14 +20,18 @@ export const teamShortcuts = (t) => [
   ["play", "Tutoriais", "#/ajuda"],
 ].filter(Boolean);
 
-// Barra de baixo da igreja: só o que NÃO está como seção na página inicial (Agenda e Times já estão lá, por isso saíram da barra).
-export const churchNav = (settingsHref) => [
-  ["inicio", "home", "Início", "#/"],
-  menuShow("scales") ? ["escalas", "calendar", "Escalas", "#/calendario/meu"] : state.menu?.events === true ? ["eventos", "star", "Eventos", "#/eventos"] : null,
-  ["cuidado", "heart", "Cuidado", "#/cuidado"],
-  ["chat", "chat", "Chat", "#/chat"],
-  ["config", "settings", "Ajustes", settingsHref],
-].filter(Boolean);
+// Barra de baixo da igreja: sem chat (a conversa com a liderança é por outros caminhos) e só com o que NÃO é seção do Início
+// (Agenda e Times já estão lá). Início, Cuidado e Ajustes são fixos; entram até 2 destes, na ordem, se a pessoa tiver o recurso.
+export const churchNav = (settingsHref) => {
+  const m = state.menu || {};
+  const extra = [
+    menuShow("scales") && ["escalas", "calendar", "Escalas", "#/calendario/meu"],
+    m.events === true && ["eventos", "star", "Eventos", "#/eventos"],
+    m.sermons === true && ["pregacoes", "mic", "Pregações", "#/pregacoes"],
+    m.contents === true && ["conteudos", "play", "Conteúdos", "#/conteudos"],
+  ].filter(Boolean).slice(0, 2);
+  return [["inicio", "home", "Início", "#/"], ...extra, ["cuidado", "heart", "Cuidado", "#/cuidado"], ["config", "settings", "Ajustes", settingsHref]];
+};
 
 export const churchShortcuts = () => [
   ["megaphone", "Avisos", "#/avisos"],

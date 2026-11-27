@@ -431,6 +431,7 @@ with sync_playwright() as pw:
     expect(ana.locator(".bottomnav")).to_be_visible(timeout=10000)
     assert ana.locator('.bottomnav a[href="#/agenda"], .bottomnav a[href="#/times"]').count() == 0 and ana.locator(".bottomnav a").count() <= 5
     expect(ana.locator('.bottomnav [data-nav="cuidado"]')).to_be_visible()
+    assert ana.locator('.bottomnav [data-nav="chat"]').count() == 0   # a visão da igreja não tem chat
     jovens_id = ana.locator(".teamcard a", has_text="Jovens").get_attribute("href").split("/")[-1]
     bruno.goto(BASE + "/#/times"); card = bruno.locator(".teamcard", has_text="Jovens"); expect(card).to_be_visible(timeout=10000)
     expect(card).to_contain_text("Para entrar, fale com o líder"); expect(card.locator("a[href*='/times/']")).to_have_count(0)

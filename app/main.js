@@ -89,6 +89,8 @@ function navActive(path) {
   if (path.startsWith("/calendario")) return "escalas";
   if (path.startsWith("/cuidado")) return "cuidado";
   if (path.startsWith("/eventos")) return "eventos";
+  if (path.startsWith("/pregacoes")) return "pregacoes";
+  if (path.startsWith("/conteudos")) return "conteudos";
   return "";
 }
 
