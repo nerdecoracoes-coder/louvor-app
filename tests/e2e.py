@@ -1456,6 +1456,25 @@ with sync_playwright() as pw:
     errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]   # recusa esperada: sem permissão de cuidado
     ok("cuidado: pedido de oração e de atendimento pelo membro, leitura e atualização pela liderança autorizada, acesso negado a quem não tem permissão")
 
+    # experiência digital: conteúdo, plano de leitura, atalho da Home e busca integrada
+    ana.goto(BASE + "/#/digital-gestao"); ana.reload(); expect(ana.locator("#view h1")).to_contain_text("Experiência digital", timeout=10000)
+    ana.locator("#new").click(); ana.locator(".sheet #k").select_option("video"); ana.fill(".sheet #t", "Conhecendo a Bíblia"); ana.fill(".sheet #d", "Primeiro estudo da série."); ana.fill(".sheet #u", "https://exemplo.com/estudo1"); ana.locator(".sheet #ok").click(); toast_has(ana, "Conteúdo salvo")
+    ana.locator("#body .li", has_text="Conhecendo a Bíblia").first.click(); ana.locator(".sheet #st").click(); toast_has(ana, "Conteúdo publicado")
+    ana.locator('[data-t="pla"]').click(); ana.locator("#new").click(); ana.fill(".sheet #t", "João em 3 dias"); ana.fill(".sheet #days", "João 1 | Dia 1 | Comece com calma\nJoão 2\nJoão 3"); ana.locator(".sheet #ok").click(); toast_has(ana, "Plano salvo")
+    ana.locator("#body .li", has_text="João em 3 dias").first.click(); ana.locator(".sheet #st").click(); toast_has(ana, "Plano publicado")
+    ana.locator('[data-t="ata"]').click(); ana.locator("#new").click(); ana.fill(".sheet #l", "Nossos cultos"); ana.locator(".sheet #r").select_option("#/agenda"); ana.locator(".sheet #ok").click(); toast_has(ana, "Atalho salvo")
+    ovf(ana, "digital gestão"); ana.wait_for_timeout(600); shot(ana, "86-digital-gestao")
+    carla.goto(BASE + "/#/conteudos"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Conhecendo a Bíblia", timeout=10000); ovf(carla, "conteúdos"); carla.wait_for_timeout(600); shot(carla, "87-conteudos")
+    carla.locator("#view a.li", has_text="Conhecendo a Bíblia").click(); expect(carla.locator("#view")).to_contain_text("Assistir", timeout=10000); ovf(carla, "conteúdo aberto")
+    carla.goto(BASE + "/#/planos"); carla.reload(); expect(carla.locator("#view")).to_contain_text("João em 3 dias", timeout=10000); carla.locator("#view a.li", has_text="João em 3 dias").click()
+    carla.locator("#go").click(); toast_has(carla, "Plano iniciado"); carla.locator("[data-d='1']").check(); expect(carla.locator("#view")).to_contain_text("1 de 3 dias", timeout=10000); ovf(carla, "plano"); carla.wait_for_timeout(600); shot(carla, "88-plano-leitura")
+    carla.goto(BASE + "/#/busca"); carla.reload(); carla.fill("#q", "bíblia"); expect(carla.locator("#res")).to_contain_text("Conhecendo a Bíblia", timeout=10000); ovf(carla, "busca"); carla.wait_for_timeout(500); shot(carla, "89-busca")
+    carla.goto(BASE + "/#/"); carla.reload(); expect(carla.locator("#dsc .quick")).to_contain_text("Nossos cultos", timeout=10000); expect(carla.locator('a[href="#/busca"]').first).to_be_visible(); ovf(carla, "home com atalhos")
+    carla.locator(".menubtn").click(); expect(carla.locator('.drawer a[href="#/conteudos"]')).to_be_visible(timeout=10000); expect(carla.locator('.drawer a[href="#/planos"]')).to_be_visible(); carla.keyboard.press("Escape")
+    n_err = len(errors); carla.goto(BASE + "/#/digital-gestao"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Você não tem acesso", timeout=10000); carla.wait_for_timeout(500)
+    errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]
+    ok("experiência digital: conteúdo publicado, plano de leitura com progresso, atalho na Home, busca integrada, itens no menu e acesso negado à gestão sem permissão")
+
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:
         for route in ["/#/", "/#/times", "/#/musicas", "/#/chat", f"/#/escala/nova/{louvor_id}", "/#/acolher"]:

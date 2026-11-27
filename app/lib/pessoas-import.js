@@ -149,3 +149,10 @@ Object.assign(ERRORS, {
 });
 
 Object.assign(ERRORS, { decision_unavailable: "Este registro é para visitantes e frequentadores que ainda não registraram uma decisão. Para oração ou acompanhamento, use Cuidado com Pessoas.", decision_rule_fixed: "Esta opção segue a classificação e o histórico da pessoa e não pode ser liberada manualmente." });
+
+Object.assign(ERRORS, {
+  dig_title_required: "Informe o título.", dig_invalid_kind: "Tipo de conteúdo inválido.", dig_invalid_audience: "Escolha quem pode ver.", dig_invalid_series: "Série inválida.", dig_invalid_link: "Link inválido. Use um endereço que comece com https://.",
+  dig_body_long: "Texto longo demais.", dig_link_required: "Para publicar, informe o link do vídeo, áudio ou material.", dig_invalid_status: "Situação inválida.", dig_invalid_days: "Os dias do plano estão inválidos.",
+  dig_plan_in_use: "Há pessoas lendo este plano: só é possível acrescentar ou ajustar dias, não remover.", dig_passage_required: "Cada dia precisa de uma passagem ou leitura.", dig_plan_empty: "Adicione ao menos um dia antes de publicar.",
+  dig_not_enrolled: "Comece o plano antes de marcar os dias.", dig_label_required: "Informe o nome do atalho (até 24 letras).", dig_too_many_shortcuts: "Já há 8 atalhos ativos. Desative um antes de ativar outro.",
+});

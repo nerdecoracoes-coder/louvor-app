@@ -163,7 +163,7 @@ function seriesForm(again) {
 // ---------------------------------------------------------------- pregações (membro)
 async function sermons(el, alive) {
   const org = state.org?.id; el.innerHTML = `${head("Pregações")}${spinner()}`;
-  let f = { q: "", series_id: "", category: "" };
+  let f = { q: decodeURIComponent((location.hash.split("?q=")[1] || "").split("&")[0]), series_id: "", category: "" };
   const load = async () => {
     const x = await sb.rpc("sermon_list", { p_org: org, p_filter: { q: f.q || null, series_id: f.series_id || null, category: f.category || null } }); if (!alive()) return;
     if (x.error) return fail(el, "Pregações", x.error);

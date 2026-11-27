@@ -49,7 +49,7 @@ Limitações técnicas relevantes: hospedagem estática (Cloudflare Pages) + Sup
 | 4. Financeiro | Implementado e testado (contas, lançamentos, a pagar/receber, aprovação, orçamento, relatórios; **sem pagamento online**) | Fase 3 |
 | 5. Comunicação | Implementado e testado (comunicados com agenda/validade/público/fixação, preferências de notificação, pregações; **sem push/e-mail externo**) | Fase 4 |
 | 6. Cuidado Pastoral e Intercessão | Implementado e testado (pedidos de oração, grupos de intercessão, solicitação e registro de atendimento, trilha de acessos) | Fase 4 |
-| 7. Experiência Digital | Pendente | Fase 5 |
+| 7. Experiência Digital | Implementado e testado (conteúdos, planos de leitura, busca integrada, atalhos da Home; **sem upload de vídeo/áudio nem transmissão ao vivo**) | Fase 5 |
 | 8. Múltiplas Igrejas | Pendente | Fase 6 |
 | 9. Integrações e Recursos Técnicos | Pendente | Fase 6 |
 
@@ -153,6 +153,18 @@ Arquivos: `supabase/migrations/20261210000001_decisao_elegibilidade.sql` (cópia
 **Atalho manual removido:** o botão da ficha que liberava a opção a membros saiu; `person_menu_decision_set` recusa e as marcas antigas foram zeradas. O histórico de decisões não é alterado nem apagado.
 **Consequência a conhecer:** conta **sem ficha** não tem classificação e, pela regra, não vê a opção nem envia o formulário (antes ficava "aguardando associação"). O canal "Solicitar contato" continua aberto a todos, e oração/acompanhamento seguem em Cuidado com Pessoas.
 
+## 4.8 Fase 5 — Experiência Digital
+
+Arquivos: `supabase/migrations/20261211000001_experiencia_digital.sql` (cópia em `supabase/setup/atualizacao-2026-12-11-experiencia-digital.sql`), `app/views/digital.js`, `tests/experiencia-digital.test.ts`. Entradas: Menu → Conteúdos, Planos de leitura e Buscar; busca e atalhos na Home; gestão em SOMOS Chamados → Experiência digital.
+
+**Permissão nova:** `dig_manage` (administrador ou concessão; liderança de time e desenvolvedor não ganham acesso). Tabelas fechadas por RLS; tudo por funções.
+**Home (9.1):** a página inicial já reunia agenda, eventos, comunicados, pregações e "Para você" (Fases anteriores). Agora ganha a barra de busca e os atalhos configuráveis, e dois cards automáticos: *plano de leitura* (continuar ou começar) e *conteúdo novo*, só quando existem e a pessoa pode abrir. Nenhuma função administrativa aparece para usuário comum.
+**Conteúdos (9.2):** vídeo, áudio, estudo, material para baixar e institucional; séries; assunto; público (todos, visitante, frequentador, membro); rascunho/publicado (vídeo, áudio e material só publicam com link). Pregações seguem na Fase 4 (nada duplicado). Planos de leitura: dias com passagem, título e anotação; inscrição e progresso individuais; a gestão vê só contagens (inscritos, concluídos); dia com progresso não pode ser removido; despublicar não tira o plano de quem já começou.
+**Busca integrada (9.3):** `search_all` encontra eventos, programações e agenda, pregações, conteúdos, planos, comunicados e nome da igreja, aplicando as mesmas regras de público e visibilidade (rascunho e conteúdo de outro público nunca aparecem; programação "só liderança" só para liderança). Curingas são ignorados; mínimo de 2 letras. Cada resultado leva a uma rota existente.
+**Atalhos (9.4):** nome (até 24 letras), ícone, destino interno ou `https://`, público, ordem e ativo; máximo de 8 ativos. **Acolhimento (9.5)** não foi alterado: nenhum formulário novo e nenhuma coleta de dados.
+
+**Limites reais:** (1) vídeo/áudio/material são **links externos** (YouTube, Drive etc.); só a imagem é enviada ao app, não há upload de vídeo, áudio ou PDF nem leitura offline; (2) **transmissão ao vivo** não existe (dependeria de serviço externo); (3) a busca **não ignora acentos** ("biblia" não acha "Bíblia") e a pregação aberta pela busca abre a lista já filtrada; (4) planos de leitura não têm lembrete diário nem anotações pessoais; (5) as fotos dos cards continuam opcionais, enviadas pela administração (o ambiente bloqueia bancos de imagem).
+
 ## 5. Como aplicar no Supabase
 
-Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` e `atualizacao-2026-12-08-financeiro.sql`, `atualizacao-2026-12-09-comunicacao.sql` e `atualizacao-2026-12-09-cuidado.sql` e `atualizacao-2026-12-10-decisao-elegibilidade.sql` (nesta ordem) no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.
+Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` e `atualizacao-2026-12-08-financeiro.sql`, `atualizacao-2026-12-09-comunicacao.sql` e `atualizacao-2026-12-09-cuidado.sql` `atualizacao-2026-12-10-decisao-elegibilidade.sql` e `atualizacao-2026-12-11-experiencia-digital.sql` (nesta ordem) no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.
