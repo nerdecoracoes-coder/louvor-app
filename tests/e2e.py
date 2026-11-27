@@ -608,6 +608,11 @@ with sync_playwright() as pw:
             ana.goto(f"{BASE}/#/times/{tid}/visitantes"); ana.locator("#addv").click()
             ana.fill(".sheet input[name=name]", "Paulo Lima"); ana.locator(".sheet button.primary").click()
             expect(ana.locator(".li", has_text="Paulo Lima")).to_contain_text("Novo", timeout=10000); shot(ana, "21d-visitantes")
+    # barra de baixo igual em todo time (no máximo 5); o recurso principal do time é atalho do Início, não botão da barra
+    ana.evaluate("t => document.dispatchEvent(new CustomEvent('somos:switch-team', { detail: { team: t, path: '/' } }))", tid); expect(ana.locator(".quick")).to_contain_text("Visitantes", timeout=10000)
+    assert ana.locator(".bottomnav a").count() <= 5 and ana.locator('.bottomnav [data-nav="visitantes"]').count() == 0
+    ana.locator(".menubtn").click(); expect(ana.locator(".drawer .dprofile")).to_be_visible()
+    assert ana.locator('.drawer a[href="#/"], .drawer a[href="#/bloqueios"]').count() == 0; ana.keyboard.press("Escape")
     ok("Infantil: cadastro, entrada com código e saída; Diáconos: registro de visitantes")
     ok("Multimídia: recursos do tipo, checklist sugerido, roteiro com as músicas e letras do louvor, pedido de mídia até a entrega")
 
@@ -719,7 +724,11 @@ with sync_playwright() as pw:
     assert carla.locator(".sec h2", has_text="Disponibilidade").count() == 0  # disponibilidade saiu do início
     carla.locator(".menubtn").click(); 
     expect(carla.locator(".drawer .dprofile")).to_contain_text("Carla Dias")
-    expect(carla.locator(".drawer").get_by_text("Indisponibilidades", exact=True)).to_be_visible()
+    # sem repetição: o que está nos atalhos do Início ou na barra não reaparece no menu lateral
+    expect(carla.locator(".quick")).to_contain_text("Bloqueios")
+    assert carla.locator(".drawer").get_by_text("Indisponibilidades", exact=True).count() == 0
+    assert carla.locator('.drawer a[href="#/bloqueios"], .drawer a[href="#/aniversariantes"], .drawer a[href="#/ajuda"], .drawer a[href="#/"]').count() == 0
+    assert carla.locator(".bottomnav a").count() <= 5
     assert carla.locator(".drawer").get_by_text("Panorama de escalas", exact=True).count() == 0   # panorama é só do líder
     for t in ["Visão geral da igreja", "Configurações"]:   # foram para a barra de navegação
         assert carla.locator(".drawer").get_by_text(t, exact=True).count() == 0
@@ -729,9 +738,9 @@ with sync_playwright() as pw:
     expect(carla.locator(".quick")).to_contain_text("Escalas"); expect(carla.locator(".quick")).to_contain_text("Músicas")
     assert carla.locator(".drawer").get_by_text("Avisos", exact=True).count() == 0
     shot(carla, "21-menu-lateral")
-    for t in ["Trocar de time", "Músicas tocadas", "Aniversariantes", "Metrônomo", "Sair da conta"]:
+    for t in ["Trocar de time", "Músicas tocadas", "Metrônomo", "Sair da conta"]:
         expect(carla.locator(".drawer").get_by_text(t, exact=True)).to_be_visible()
-    for t in ["Minhas escalas", "Eventos do time", "Devocional"]:   # já estão no início do time (com "Ver mais")
+    for t in ["Minhas escalas", "Eventos do time", "Devocional", "Aniversariantes"]:   # já estão no início do time
         assert carla.locator(".drawer").get_by_text(t, exact=True).count() == 0
     carla.locator(".drawer [data-menuact=switch]").click()
     expect(carla.locator(".sheet", has_text="Meus times")).to_be_visible(); carla.keyboard.press("Escape"); carla.goto(BASE + "/#/"); carla.wait_for_timeout(300)

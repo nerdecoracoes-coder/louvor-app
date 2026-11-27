@@ -6,3 +6,7 @@
 - Dois temas sempre: escuro (padrão) e claro. Use só tokens CSS (`--accent`, `--accent-ink`, `--text`, `--surface`, `rgba(var(--w), X)`); nunca cores fixas.
 - Cor principal e dos textos de ação: **azul** da logo (#3753D1). **Evitar roxo/lilás** em textos e botões (o dono não gosta); roxo só no gradiente da logo.
 - Mantenha o comportamento do Ministério de Louvor intacto.
+
+## Navegação (sem repetição)
+- Barra de baixo: no máximo 5 botões, iguais em todos os times (Início, Chat, Time, Igreja, Ajustes). Recurso próprio de um tipo de time (Pedidos, Visitantes, Crianças) é atalho do Início, nunca botão da barra.
+- Atalhos do Início ficam em `app/lib/shortcuts.js`. O menu lateral (`openMenu` em `app/main.js`) filtra sozinho tudo o que já está na barra ou nesses atalhos; ao criar um atalho novo, basta incluí-lo lá.

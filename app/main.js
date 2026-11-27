@@ -40,6 +40,7 @@ import * as integracoes from "./views/integracoes.js";
 import * as carteira from "./views/carteira.js";
 import * as chamados from "./views/chamados.js";
 import * as extras from "./views/extras.js";
+import { teamShortcuts, churchShortcuts, alsoOnScreen } from "./lib/shortcuts.js";
 import { openPlayer, closePlayer } from "./player/view.js";
 
 applyTheme();
@@ -58,11 +59,9 @@ route("/player/:id", async ({ id }) => { const q = new URLSearchParams(location.
 // O app abre no último time usado; o seletor no topo troca de time ou leva para a igreja.
 function navItems() {
   const t = state.space;
+  // No máximo 5 botões, iguais em todos os times (Pedidos, Visitantes, Crianças e Músicas viraram atalhos do Início).
   if (t) return [
     ["inicio", "home", "Início", "#/"],
-    ...(teamHas(t, "pedidos") ? [["pedidos", "inbox", "Pedidos", `#/times/${t.id}/pedidos`]] : []),
-    ...(teamHas(t, "criancas") ? [["criancas", "users", "Crianças", `#/times/${t.id}/criancas`]] : []),
-    ...(teamHas(t, "visitantes") ? [["visitantes", "users", "Visitantes", `#/times/${t.id}/visitantes`]] : []),
     ["chat", "chat", "Chat", `#/chat/${t.id}`],
     ["time", "users", "Time", `#/times/${t.id}`],
     ...(teamOnly() ? [] : [["igreja", "church", "Igreja", "#/igreja"]]),
@@ -72,7 +71,6 @@ function navItems() {
     ["inicio", "home", "Início", "#/"],
     ["times", "users", "Times", "#/times"],
     ["calendario", "calendar", "Agenda", "#/agenda"],
-    ...(hasRepertoire() && !state.myTeams.length ? [["musicas", "music", "Músicas", "#/musicas"]] : []),
     ["chat", "chat", "Chat", "#/chat"],
     ["config", "settings", "Ajustes", settingsHref()],
   ];
@@ -88,9 +86,7 @@ function navActive(path) {
   if (path.startsWith("/chat")) return "chat";
   if (path.startsWith("/perfil") || path === "/org" || path.startsWith("/org/") || (t && path.startsWith(`/times/${t.id}/config`))) return "config";
   if (t && path.startsWith("/igreja")) return "igreja";
-  if (t && path.startsWith(`/times/${t.id}/criancas`)) return "criancas";
-  if (t && path.startsWith(`/times/${t.id}/visitantes`)) return "visitantes";
-  if (t && (path.startsWith(`/times/${t.id}/pedidos`) || path.startsWith("/pedido"))) return "pedidos";
+  if (t && (path.startsWith(`/times/${t.id}/criancas`) || path.startsWith(`/times/${t.id}/visitantes`) || path.startsWith(`/times/${t.id}/pedidos`) || path.startsWith("/pedido"))) return "inicio";   // agora são atalhos do Início
   if (t) {
     if (path.startsWith(`/times/${t.id}/escalas`) || path.startsWith("/escala") || path.startsWith("/calendario") || path === "/panorama") return "escalas";
     if (path.startsWith(`/times/${t.id}`)) return "time";
@@ -188,7 +184,10 @@ function openMenu() {
       ...cond(hasTutorials(), ["play", "Tutoriais", "#/ajuda"]),
     ];
     const entry = ([ic, l, h]) => h.startsWith("act:") ? `<button data-menuact="${h.slice(4)}">${icon(ic)}<span>${l}</span></button>` : `<a href="${h}">${icon(ic)}<span>${l}</span></a>`;
-    return [[null, top], ["Igreja", igreja], ["Minha caminhada", caminhada], ["Serviço", servico]].filter((g) => g[1].length)
+    // sem repetição: o que já está na barra de baixo ou nos atalhos do Início não aparece de novo aqui
+    const seen = new Set([...navItems().map((x) => x[3]), ...(t ? teamShortcuts(t) : churchShortcuts()).map((x) => x[2]), ...alsoOnScreen(t)]);
+    return [[null, top], ["Igreja", igreja], ["Minha caminhada", caminhada], ["Serviço", servico]]
+      .map(([h, list]) => [h, list.filter(([, , href]) => !seen.has(href))]).filter((g) => g[1].length)
       .map(([h, list]) => `${h ? `<p class="dgroup">${h}</p>` : ""}${list.map(entry).join("")}`).join("");
   };
   const wrap = document.createElement("div");

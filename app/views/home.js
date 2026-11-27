@@ -6,6 +6,7 @@ import { openRequestsCard, receivedRepertoiresCard } from "./multimidia.js";
 import { churchHome, pendingScalesCard } from "./igreja.js";
 import { teamExtras } from "./eventos.js";
 import { maybeService, previewOn } from "./servico.js";
+import { teamShortcuts } from "../lib/shortcuts.js";
 
 
 export function register(route) {
@@ -245,7 +246,7 @@ async function teamHome(team, el, alive) {
       <p class="roles">${esc([roleNames.length > 3 ? `${roleNames.slice(0, 3).join(", ")} +${roleNames.length - 3}` : roleNames.join(", "), team.is_leader ? "Líder" : ""].filter(Boolean).join(" · ") || teamTypeLabel(team))}</p></div>
     <button class="hero-av" id="heroav" aria-label="${noPhoto ? "Adicionar foto" : "Meu perfil"}">${avatar({ ...state.profile, display_name: myName() }, 56)}${noPhoto ? `<span class="cam">${icon("camera")}</span>` : ""}</button>
   </section>
-  ${quickRow([["calendar","Escalas",`#/times/${team.id}/escalas`],teamHasRepertoire(team)?["music","Músicas","#/musicas"]:null,["userOff","Bloqueios","#/bloqueios"],teamHas(team,"estudio")?["layers","Estúdio",`#/times/${team.id}/estudio`]:null,teamOnly()?null:["gift","Aniversários","#/aniversariantes"],["play","Tutoriais","#/ajuda"]])}
+  ${quickRow(teamShortcuts(team))}
   ${noPhoto ? `<button class="photo-hint" id="addphoto">${icon("camera")}<span><b>Adicione sua foto</b><small>Ajuda a equipe a reconhecer você nas escalas e no chat.</small></span></button>` : ""}
 
   <div id="pend"></div>
