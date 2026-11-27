@@ -47,8 +47,8 @@ Limitações técnicas relevantes: hospedagem estática (Cloudflare Pages) + Sup
 | 2. Cultos, Programações e Escalas | Implementado e testado (banco + telas) | Fase 1 |
 | 3. Eventos | Implementado e testado (inscrição, ingresso QR, espera, check-in; **sem pagamento**) | Fase 2 |
 | 4. Financeiro | Implementado e testado (contas, lançamentos, a pagar/receber, aprovação, orçamento, relatórios; **sem pagamento online**) | Fase 3 |
-| 5. Comunicação | Pendente | Fase 4 |
-| 6. Cuidado Pastoral e Intercessão | Pendente | Fase 4 |
+| 5. Comunicação | Implementado e testado (comunicados com agenda/validade/público/fixação, preferências de notificação, pregações; **sem push/e-mail externo**) | Fase 4 |
+| 6. Cuidado Pastoral e Intercessão | Implementado e testado (pedidos de oração, grupos de intercessão, solicitação e registro de atendimento, trilha de acessos) | Fase 4 |
 | 7. Experiência Digital | Pendente | Fase 5 |
 | 8. Múltiplas Igrejas | Pendente | Fase 6 |
 | 9. Integrações e Recursos Técnicos | Pendente | Fase 6 |
@@ -123,6 +123,28 @@ Arquivos: `supabase/migrations/20261208000001_financeiro.sql` (cópia em `supaba
 
 **Limites reais:** (1) sem Pix/cartão pelo app (depende de provedor e credenciais); (2) sem extrato do contribuinte para o próprio membro nem recibo/declaração anual; (3) sem conciliação com extrato bancário e sem importação; (4) comprovante só em imagem ou PDF até 10 MB, enviado pelo app; as políticas do bucket foram testadas pela regra (`fin_storage_ok`), pois a pilha local não tem o serviço de arquivos — confirmar um envio real após aplicar o SQL; (5) moeda única (R$); (6) o relatório é por data de baixa (regime de caixa), não por competência.
 
+## 4.5 Fase 4A — Comunicação
+
+Arquivos: `supabase/migrations/20261209000001_comunicacao.sql` (cópia em `supabase/setup/atualizacao-2026-12-09-comunicacao.sql`), `app/views/comunicacao.js`, `tests/comunicacao.test.ts`. Entrada: SOMOS Chamados → Comunicação; pregações em Menu → Pregações; preferências em Conta → Notificações.
+
+**Permissões novas:** `comm_manage` (criar/editar rascunhos), `comm_publish` (publicar, agendar, despublicar, fixar), `comm_sermons` (pregações). Liderança de time e desenvolvedor não ganham acesso.
+**Comunicados:** reaproveitam a tabela `announcements` e o feed existente (Home/Avisos); não há segundo feed. Estados: rascunho, agendado, no ar, vencido, despublicado, calculados no servidor pela data. Público reaproveita Segmentação: todos, visitantes, frequentadores, membros, segmento, grupo, célula (ministérios, times e redes via segmentos). Até 3 fixados, link (https ou tela do app) e validade. Excluir só rascunho que nunca foi publicado.
+**Notificações:** aviso interno a quem é do público, uma vez por comunicado, sem avisar quem publicou. Preferências por grupo (comunicados, eventos, escalas, financeiro, conversas, lembretes); o essencial não se desliga. Limite de 5 avisos de comunicado por pessoa a cada 24 h.
+**Pregações:** título, pregador, data, série, passagem, descrição, vídeo, áudio, imagem, links (até 8), público e rascunho/publicado; busca e filtro por série/categoria.
+
+**Limites reais:** (1) **push e e-mail não existem** (dependem de configuração externa); só notificação interna; (2) comunicado agendado fica visível na hora marcada mesmo sem o servidor, mas o *aviso* depende do `pg_cron` (a cada 10 min) estar ativo no Supabase; (3) o card "Última pregação" da Home continua vindo dos Destaques; a página de pregações é separada; (4) mídia das pregações é link externo (YouTube etc.), sem upload de vídeo.
+
+## 4.6 Fase 4B — Cuidado com Pessoas
+
+Arquivos: `supabase/migrations/20261209000002_cuidado.sql` (cópia em `supabase/setup/atualizacao-2026-12-09-cuidado.sql`), `app/views/cuidado.js`, `tests/cuidado.test.ts`. Entrada: Menu/Chamados → Cuidado com Pessoas (membros); área de gestão só com permissão.
+
+**Permissões novas:** `care_prayer` (caixa de pedidos de oração), `care_pastoral` (solicitações e registros de atendimento), `care_manage` (grupos de intercessão, anonimato, resumo e trilha de acessos). Gerir **não** dá leitura dos pedidos. Nem administrador lê as tabelas diretamente; tudo passa por funções que conferem a permissão.
+**Pedido de oração:** a pessoa escolhe entre "só liderança autorizada" ou "um grupo de intercessão" (nunca a igreja toda); pode pedir acompanhamento; anônimo só se a igreja permitir e a identidade nunca é devolvida. Situação: recebido, em oração, acompanhamento, encerrado; responsável só entre autorizados (ou integrantes do grupo). Anotações internas não vão a quem pediu. Integrantes do grupo veem só os pedidos do próprio grupo e registram "orei".
+**Atendimento pastoral:** a *solicitação* (o que a pessoa pede, com tema e preferência) é separada do *registro realizado* (data, resumo, retorno). Agendar exige responsável autorizado e data; encaminhar exige motivo. A observação restrita só é lida por quem registrou; outros da equipe veem apenas que existe.
+**Confidencialidade:** notificações não carregam conteúdo; `mod_audit` não guarda texto; toda abertura/listagem de pedido ou registro entra em `care_access` (visível a `care_manage`); relatório só tem contagens; nenhuma função de segmentação ou relatório geral lê estas tabelas (verificado por teste).
+
+**Limites reais:** (1) quem tem `care_pastoral`/`care_prayer` vê o conteúdo que a função permite, então a concessão deve ser criteriosa; (2) administrador também fica na lista de autorizados; (3) não há exportação nem vínculo automático do registro à ficha da pessoa além do `person_id` opcional; (4) sem lembrete automático de retorno agendado.
+
 ## 5. Como aplicar no Supabase
 
-Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` e `atualizacao-2026-12-08-financeiro.sql` no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.
+Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` e `atualizacao-2026-12-08-financeiro.sql`, `atualizacao-2026-12-09-comunicacao.sql` e `atualizacao-2026-12-09-cuidado.sql` (nesta ordem) no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.

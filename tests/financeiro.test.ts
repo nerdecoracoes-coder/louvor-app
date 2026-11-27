@@ -8,7 +8,7 @@ const sk = async () => { const k = await serviceKey(); return { Authorization: `
 const rows = async (q: string) => (await (await fetch(`${REST}/${q}`, { headers: await sk() })).json()) as any[];
 const msg = (r: any) => String(r.data?.message ?? "");
 const rpc = (u: any, fn: string, a: any) => u.api.rpc(fn, a);
-const day = (n: number) => new Date(Date.now() + n * 864e5).toISOString().slice(0, 10);
+const day = (n: number) => new Date(Date.now() + n * 864e5).toLocaleDateString("sv-SE", { timeZone: "America/Sao_Paulo" });
 const catalog = async (u: any, o = org) => (await rpc(u, "fin_catalog", { p_org: o })).data;
 const catId = async (kind: string, name: string, o = org, u = admin) => (await catalog(u, o)).categories.find((c: any) => c.kind === kind && c.name === name).id as string;
 const accId = async (name: string, o = org, u = admin) => (await catalog(u, o)).accounts.find((a: any) => a.name === name).id as string;

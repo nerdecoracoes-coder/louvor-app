@@ -13048,3 +13048,1044 @@ grant execute on function public.fin_catalog(uuid), public.fin_catalog_save(uuid
 select to_regclass('public.fin_entries') is not null and to_regclass('public.fin_budgets') is not null
    and 'fin_approve' = any (public.module_actions()) and 'fin_donors' = any (public.module_actions())
    and exists (select 1 from pg_proc where proname = 'fin_entry_decide') as financeiro_ok;
+
+-- >>> supabase/migrations/20261209000001_comunicacao.sql
+-- =====================================================================
+-- SOMOS — Fase 4A: Comunicação (comunicados com público, agendamento, validade e fixação; pregações; preferências de notificação).
+--  * Reaproveita a tabela de avisos (announcements): colunas novas com padrão que mantém o comportamento atual (aviso existente = publicado para toda a igreja).
+--  * Público reutiliza a Segmentação (segmentos e grupos), a classificação da pessoa e as células. Não há segundo sistema de segmentação.
+--  * Rascunho, agendado, vencido e despublicado NÃO aparecem para quem não administra: a regra está na política da tabela (banco), não só na tela.
+--  * Notificação interna só sai quando o comunicado está publicado e no horário, só para quem faz parte do público, e respeita as preferências de cada pessoa.
+--    Limite de 5 avisos novos por pessoa em 24 h (o conteúdo continua no mural). Agendados são enviados por pg_cron a cada 10 min (se o pg_cron não estiver ativo, o app
+--    mostra o comunicado na hora marcada, mas a notificação só sai quando alguém publicar de novo ou o agendamento for ativado).
+--  * Notificação push (celular) e e-mail NÃO estão incluídos: dependem de chaves e serviços externos.
+--  * Permissões novas: comm_manage (criar e editar), comm_publish (publicar, agendar, despublicar, fixar), comm_sermons (pregações). Só administrador ou concessão.
+-- Nada é apagado: avisos publicados só são despublicados; só rascunho nunca publicado pode ser excluído.
+-- =====================================================================
+
+create or replace function public.module_actions() returns text[] language sql immutable as $$
+  select array['cells_view','cells_manage','cells_members','cells_meetings','cells_supervision','cells_reports',
+               'prog_view','prog_manage','prog_publish','prog_run','roster_view','roster_manage','roster_approve',
+               'media_request','discover_manage','ev_view','ev_manage','ev_publish','ev_checkin',
+               'fin_view','fin_entry','fin_approve','fin_manage','fin_donors',
+               'comm_manage','comm_publish','comm_sermons']::text[]
+$$;
+
+create or replace function public.comm_staff(p_org uuid, p_actions text[]) returns boolean
+language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and (exists (select 1 from org_members where org_id = p_org and user_id = auth.uid() and role = 'admin')
+    or exists (select 1 from access_grants g where g.org_id = p_org and g.user_id = auth.uid() and g.actions && p_actions))
+$$;
+create or replace function public.comm_need(p_org uuid, p_actions text[]) returns void
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not public.comm_staff(p_org, p_actions) then raise exception 'forbidden'; end if;
+end $$;
+
+-- ---------------------------------------------------------------- avisos: colunas novas
+alter table public.announcements
+  add column if not exists status text not null default 'published',
+  add column if not exists audience text not null default 'all',
+  add column if not exists segment_id uuid references public.seg_segments(id) on delete set null,
+  add column if not exists group_id uuid references public.seg_groups(id) on delete set null,
+  add column if not exists cell_id uuid references public.cells(id) on delete set null,
+  add column if not exists publish_at timestamptz,
+  add column if not exists expires_at timestamptz,
+  add column if not exists pinned boolean not null default false,
+  add column if not exists link_label text,
+  add column if not exists notified_at timestamptz,
+  add column if not exists updated_at timestamptz not null default now(),
+  add column if not exists updated_by uuid references auth.users(id) on delete set null;
+do $$ begin
+  alter table public.announcements add constraint announcements_status_chk check (status in ('draft','published','unpublished'));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.announcements add constraint announcements_audience_chk check (audience in ('all','visitor','attender','member','segment','group','cell'));
+exception when duplicate_object then null; end $$;
+do $$ begin
+  alter table public.announcements add constraint announcements_link_chk check (link_url is null or (length(link_url) <= 600 and (link_url ~* '^https?://' or link_url ~ '^#/')));
+exception when duplicate_object then null; end $$;
+update public.announcements set notified_at = created_at where notified_at is null;   -- os avisos já existentes foram notificados pelo gatilho antigo
+create index if not exists announcements_org_live on public.announcements (org_id, pinned desc, created_at desc) where team_id is null;
+
+-- ---------------------------------------------------------------- público
+create or replace function public.comm_aud_ok(p_org uuid, p_user uuid, p_aud text, p_segment uuid, p_group uuid, p_cell uuid) returns boolean
+language plpgsql stable security definer set search_path = public as $$
+declare pe people; s seg_segments; v_ok boolean := false;
+begin
+  if p_aud = 'all' then return true; end if;
+  select * into pe from people where org_id = p_org and user_id = p_user and status in ('active','inactive','pending') order by created_at limit 1;
+  if pe.id is null then return false; end if;
+  if p_aud in ('visitor','attender','member') then return pe.classification = p_aud; end if;
+  if p_aud = 'group' then return exists (select 1 from seg_group_members m where m.group_id = p_group and m.status = 'active' and m.person_id in (select id from people where org_id = p_org and user_id = p_user)); end if;
+  if p_aud = 'cell' then return exists (select 1 from cell_members m where m.cell_id = p_cell and m.status = 'active' and m.person_id in (select id from people where org_id = p_org and user_id = p_user)); end if;
+  if p_aud = 'segment' then
+    select * into s from seg_segments where id = p_segment and org_id = p_org and active;
+    if s.id is null then return false; end if;
+    execute format('select exists (select 1 from public.people p where p.id = %L and (%s))', pe.id, public.sg_cond(p_org, s.criteria, 0)) into v_ok;
+    return coalesce(v_ok, false);
+  end if;
+  return false;
+end $$;
+
+create or replace function public.comm_ann_live(a public.announcements) returns boolean
+language sql stable as $$
+  select a.status = 'published' and (a.publish_at is null or a.publish_at <= now()) and (a.expires_at is null or a.expires_at > now())
+$$;
+create or replace function public.comm_ann_ok(a public.announcements) returns boolean
+language sql stable security definer set search_path = public as $$
+  select public.comm_ann_live(a) and public.comm_aud_ok(a.org_id, auth.uid(), a.audience, a.segment_id, a.group_id, a.cell_id)
+$$;
+
+-- leitura: avisos de time seguem iguais; avisos da igreja só aparecem publicados, no horário, dentro da validade e para o público certo (quem administra vê tudo)
+drop policy if exists an_select on public.announcements;
+create policy an_select on public.announcements for select to authenticated
+  using (case when team_id is not null then public.is_team_member(team_id) or public.is_org_admin(org_id)
+              else public.is_org_member(org_id) and (public.can_edit_agenda(org_id) or public.comm_staff(org_id, array['comm_manage','comm_publish']) or public.comm_ann_ok(announcements)) end);
+
+-- ---------------------------------------------------------------- preferências e envio de notificações
+create table if not exists public.notif_prefs (
+  user_id uuid not null references auth.users(id) on delete cascade,
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  grp text not null check (grp in ('comunicados','eventos','escalas','financeiro','conversas','lembretes')),
+  enabled boolean not null default true,
+  updated_at timestamptz not null default now(),
+  primary key (user_id, org_id, grp)
+);
+alter table public.notif_prefs enable row level security;
+revoke all on public.notif_prefs from anon, authenticated;
+
+create or replace function public.notif_group(p_kind text) returns text language sql immutable as $$
+  select case
+    when p_kind = 'announcement' then 'comunicados'
+    when p_kind like 'event\_%' or p_kind in ('registration','evento') then 'eventos'
+    when p_kind like 'schedule\_%' or p_kind like 'roster\_%' or p_kind like 'escala\_%' or p_kind in ('rehearsal','repertoire') then 'escalas'
+    when p_kind like 'fin\_%' then 'financeiro'
+    when p_kind = 'message' then 'conversas'
+    when p_kind = 'devocional' then 'lembretes'
+    else 'essencial' end
+$$;
+
+-- mesma assinatura de antes; agora respeita preferências (só os grupos que podem ser silenciados) e limita avisos novos por dia
+create or replace function public.notify_user(p_user uuid, p_org uuid, p_kind text, p_title text,
+  p_body text default null, p_link text default null, p_data jsonb default null) returns void
+language plpgsql security definer set search_path = public as $$
+declare g text := public.notif_group(p_kind);
+begin
+  if g <> 'essencial' and p_org is not null and exists (select 1 from notif_prefs where user_id = p_user and org_id = p_org and grp = g and not enabled) then return; end if;
+  if p_kind = 'announcement' and (select count(*) from notifications where user_id = p_user and kind = 'announcement' and created_at > now() - interval '24 hours') >= 5 then return; end if;
+  insert into notifications (user_id, org_id, kind, title, body, link, data) values (p_user, p_org, p_kind, p_title, p_body, p_link, p_data);
+end $$;
+revoke execute on function public.notify_user(uuid, uuid, text, text, text, text, jsonb) from public, anon, authenticated;
+
+create or replace function public.notif_prefs_get(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not public.is_org_member(p_org) then raise exception 'forbidden'; end if;
+  return jsonb_build_object(
+    'push', jsonb_build_object('configured', false),
+    'groups', (select jsonb_agg(jsonb_build_object('key', k, 'label', l, 'hint', h, 'enabled', coalesce((select enabled from notif_prefs where user_id = auth.uid() and org_id = p_org and grp = k), true)) order by o)
+               from (values (1, 'comunicados', 'Comunicados', 'Avisos novos da igreja'), (2, 'eventos', 'Eventos', 'Inscrição, lista de espera e mudanças'),
+                            (3, 'escalas', 'Escalas', 'Convites, mudanças e lembretes de escala'), (4, 'financeiro', 'Financeiro', 'Despesas aguardando aprovação'),
+                            (5, 'conversas', 'Conversas', 'Mensagens dos times'), (6, 'lembretes', 'Lembretes', 'Devocionais e lembretes')) v(o, k, l, h)),
+    'note', 'Avisos de segurança, pedidos de cuidado, solicitações pendentes e respostas a você sempre chegam.');
+end $$;
+create or replace function public.notif_prefs_set(p_org uuid, p_grp text, p_enabled boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not public.is_org_member(p_org) then raise exception 'forbidden'; end if;
+  if p_grp not in ('comunicados','eventos','escalas','financeiro','conversas','lembretes') then raise exception 'invalid_group'; end if;
+  insert into notif_prefs (user_id, org_id, grp, enabled, updated_at) values (auth.uid(), p_org, p_grp, coalesce(p_enabled, true), now())
+    on conflict (user_id, org_id, grp) do update set enabled = excluded.enabled, updated_at = now();
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- envio do comunicado (uma vez só)
+create or replace function public.comm_notify(p_id uuid) returns int
+language plpgsql security definer set search_path = public as $$
+declare a announcements; u record; n int := 0;
+begin
+  select * into a from announcements where id = p_id for update;
+  if a.id is null or a.team_id is not null or a.notified_at is not null or not public.comm_ann_live(a) then return 0; end if;
+  update announcements set notified_at = now() where id = p_id;
+  for u in select user_id from org_members where org_id = a.org_id and user_id is distinct from a.created_by and user_id is distinct from auth.uid() loop
+    if public.comm_aud_ok(a.org_id, u.user_id, a.audience, a.segment_id, a.group_id, a.cell_id) then
+      perform public.notify_user(u.user_id, a.org_id, 'announcement', 'Novo aviso: ' || a.title, left(coalesce(a.body, ''), 140), '#/avisos', jsonb_build_object('announcement_id', a.id));
+      n := n + 1;
+    end if;
+  end loop;
+  return n;
+end $$;
+
+create or replace function public.on_announcement() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if new.team_id is null then
+    perform public.comm_notify(new.id);   -- só envia se já está publicado e no horário
+    return new;
+  end if;
+  insert into notifications (user_id, org_id, kind, title, body, link, data)
+  select user_id, new.org_id, 'announcement', 'Novo aviso: ' || new.title, left(coalesce(new.body, ''), 140), '#/times/' || new.team_id || '/avisos', jsonb_build_object('announcement_id', new.id)
+  from team_members where team_id = new.team_id and user_id is distinct from new.created_by;
+  return new;
+end $$;
+
+create or replace function public.comm_dispatch() returns int
+language plpgsql security definer set search_path = public as $$
+declare r record; n int := 0;
+begin
+  for r in select id from announcements where team_id is null and notified_at is null and status = 'published' and publish_at is not null and publish_at <= now() loop
+    n := n + public.comm_notify(r.id);
+  end loop;
+  return n;
+end $$;
+revoke execute on function public.comm_notify(uuid), public.comm_dispatch(), public.comm_aud_ok(uuid, uuid, text, uuid, uuid, uuid), public.comm_staff(uuid, text[]), public.comm_need(uuid, text[]) from public, anon, authenticated;
+grant execute on function public.comm_ann_ok(public.announcements), public.comm_ann_live(public.announcements), public.comm_staff(uuid, text[]) to authenticated;
+
+do $$ begin
+  create extension if not exists pg_cron;
+  perform cron.unschedule(jobid) from cron.job where jobname = 'somos-comunicados-agendados';
+  perform cron.schedule('somos-comunicados-agendados', '*/10 * * * *', 'select public.comm_dispatch()');
+exception when others then raise notice 'pg_cron indisponível: %', sqlerrm;
+end $$;
+
+-- ---------------------------------------------------------------- gestão dos comunicados
+create or replace function public.comm_ann_state(a public.announcements) returns text
+language sql stable as $$
+  select case when a.status = 'draft' then 'draft' when a.status = 'unpublished' then 'unpublished'
+              when a.expires_at is not null and a.expires_at <= now() then 'expired'
+              when a.publish_at is not null and a.publish_at > now() then 'scheduled' else 'live' end
+$$;
+
+create or replace function public.comm_ann_list(p_org uuid, p_filter jsonb default '{}'::jsonb) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare v_st text := nullif(p_filter->>'state', ''); v_q text := nullif(trim(coalesce(p_filter->>'q', '')), '');
+begin
+  perform public.comm_need(p_org, array['comm_manage','comm_publish']);
+  return jsonb_build_object(
+    'can', jsonb_build_object('manage', public.comm_staff(p_org, array['comm_manage']), 'publish', public.comm_staff(p_org, array['comm_publish']), 'sermons', public.comm_staff(p_org, array['comm_sermons'])),
+    'segments', coalesce((select jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name) order by s.name) from seg_segments s where s.org_id = p_org and s.active), '[]'::jsonb),
+    'groups', coalesce((select jsonb_agg(jsonb_build_object('id', g.id, 'name', g.name) order by g.name) from seg_groups g where g.org_id = p_org and g.status = 'active'), '[]'::jsonb),
+    'cells', coalesce((select jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name) order by c.name) from cells c where c.org_id = p_org), '[]'::jsonb),
+    'push', jsonb_build_object('configured', false),
+    'items', coalesce((select jsonb_agg(x order by x->>'pin' desc, x->>'sort' desc) from (
+      select jsonb_build_object('id', a.id, 'title', a.title, 'body', a.body, 'link_url', a.link_url, 'link_label', a.link_label, 'tag', a.tag, 'image_url', a.image_url, 'audience', a.audience,
+             'segment_id', a.segment_id, 'group_id', a.group_id, 'cell_id', a.cell_id, 'publish_at', a.publish_at, 'expires_at', a.expires_at, 'pinned', a.pinned, 'status', a.status,
+             'state', public.comm_ann_state(a), 'notified', a.notified_at is not null, 'created_at', a.created_at, 'updated_at', a.updated_at,
+             'pin', case when a.pinned then '1' else '0' end, 'sort', to_char(coalesce(a.publish_at, a.created_at), 'YYYYMMDDHH24MISS')) x
+        from announcements a where a.org_id = p_org and a.team_id is null
+         and (v_st is null or public.comm_ann_state(a) = v_st) and (v_q is null or a.title ilike '%' || v_q || '%') order by coalesce(a.publish_at, a.created_at) desc limit 200) t), '[]'::jsonb));
+end $$;
+
+create or replace function public.comm_ann_save(p_org uuid, p_id uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare a announcements; v_title text := trim(coalesce(p->>'title', '')); v_aud text := coalesce(nullif(p->>'audience', ''), 'all'); v_seg uuid := nullif(p->>'segment_id', '')::uuid;
+        v_grp uuid := nullif(p->>'group_id', '')::uuid; v_cell uuid := nullif(p->>'cell_id', '')::uuid; v_link text := nullif(trim(coalesce(p->>'link_url', '')), '');
+        v_exp timestamptz := nullif(p->>'expires_at', '')::timestamptz; v_id uuid := p_id;
+begin
+  perform public.comm_need(p_org, array['comm_manage']);
+  if length(v_title) not between 1 and 140 then raise exception 'comm_title_required'; end if;
+  if v_aud not in ('all','visitor','attender','member','segment','group','cell') then raise exception 'comm_invalid_audience'; end if;
+  if (v_aud = 'segment' and not exists (select 1 from seg_segments where id = v_seg and org_id = p_org and active))
+     or (v_aud = 'group' and not exists (select 1 from seg_groups where id = v_grp and org_id = p_org and status = 'active'))
+     or (v_aud = 'cell' and not exists (select 1 from cells where id = v_cell and org_id = p_org)) then raise exception 'comm_invalid_audience'; end if;
+  if v_aud <> 'segment' then v_seg := null; end if; if v_aud <> 'group' then v_grp := null; end if; if v_aud <> 'cell' then v_cell := null; end if;
+  if v_link is not null and not (length(v_link) <= 600 and (v_link ~* '^https?://' or v_link ~ '^#/')) then raise exception 'comm_invalid_link'; end if;
+  if length(coalesce(p->>'body', '')) > 4000 then raise exception 'comm_body_long'; end if;
+  begin
+    if p_id is null then
+      insert into announcements (org_id, team_id, title, body, link_url, link_label, tag, image_url, audience, segment_id, group_id, cell_id, expires_at, status, created_by, updated_by)
+      values (p_org, null, v_title, nullif(p->>'body', ''), v_link, nullif(left(trim(coalesce(p->>'link_label', '')), 40), ''), nullif(left(trim(coalesce(p->>'tag', '')), 30), ''), nullif(p->>'image_url', ''), v_aud, v_seg, v_grp, v_cell, v_exp, 'draft', auth.uid(), auth.uid())
+      returning id into v_id;
+    else
+      select * into a from announcements where id = p_id and org_id = p_org and team_id is null for update; if a.id is null then raise exception 'not_found'; end if;
+      update announcements set title = v_title, body = nullif(p->>'body', ''), link_url = v_link, link_label = nullif(left(trim(coalesce(p->>'link_label', '')), 40), ''), tag = nullif(left(trim(coalesce(p->>'tag', '')), 30), ''),
+        image_url = coalesce(nullif(p->>'image_url', ''), image_url), audience = v_aud, segment_id = v_seg, group_id = v_grp, cell_id = v_cell, expires_at = v_exp, updated_by = auth.uid(), updated_at = now() where id = p_id;
+    end if;
+  exception when check_violation then raise exception 'comm_invalid_link'; end;
+  perform public.mod_log(p_org, 'comm', 'announcement', v_id, case when p_id is null then 'create' else 'update' end, null, jsonb_build_object('title', v_title, 'audience', v_aud));
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+
+-- publica agora (p_when nulo) ou agenda para uma data futura
+create or replace function public.comm_ann_publish(p_id uuid, p_when timestamptz default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare a announcements; v_n int := 0; v_sched boolean;
+begin
+  select * into a from announcements where id = p_id and team_id is null for update; if a.id is null then raise exception 'not_found'; end if;
+  perform public.comm_need(a.org_id, array['comm_publish']);
+  if a.expires_at is not null and a.expires_at <= coalesce(p_when, now()) then raise exception 'comm_expired'; end if;
+  v_sched := p_when is not null and p_when > now();
+  update announcements set status = 'published', publish_at = case when v_sched then p_when else null end, updated_by = auth.uid(), updated_at = now() where id = p_id;
+  perform public.mod_log(a.org_id, 'comm', 'announcement', p_id, case when v_sched then 'schedule' else 'publish' end, null, jsonb_build_object('title', a.title, 'when', p_when));
+  if not v_sched then v_n := public.comm_notify(p_id); end if;
+  return jsonb_build_object('ok', true, 'scheduled', v_sched, 'notified', v_n);
+end $$;
+
+create or replace function public.comm_ann_unpublish(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare a announcements;
+begin
+  select * into a from announcements where id = p_id and team_id is null for update; if a.id is null then raise exception 'not_found'; end if;
+  perform public.comm_need(a.org_id, array['comm_publish']);
+  if a.status <> 'published' then raise exception 'comm_not_published'; end if;
+  update announcements set status = 'unpublished', pinned = false, updated_by = auth.uid(), updated_at = now() where id = p_id;
+  perform public.mod_log(a.org_id, 'comm', 'announcement', p_id, 'unpublish', null, jsonb_build_object('title', a.title));
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.comm_ann_pin(p_id uuid, p_pinned boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare a announcements;
+begin
+  select * into a from announcements where id = p_id and team_id is null for update; if a.id is null then raise exception 'not_found'; end if;
+  perform public.comm_need(a.org_id, array['comm_publish']);
+  if p_pinned and a.status <> 'published' then raise exception 'comm_not_published'; end if;
+  if p_pinned and not a.pinned and (select count(*) from announcements x where x.org_id = a.org_id and x.team_id is null and x.pinned and x.status = 'published') >= 3 then raise exception 'comm_too_many_pinned'; end if;
+  update announcements set pinned = coalesce(p_pinned, false), updated_by = auth.uid(), updated_at = now() where id = p_id;
+  perform public.mod_log(a.org_id, 'comm', 'announcement', p_id, case when p_pinned then 'pin' else 'unpin' end, null, jsonb_build_object('title', a.title));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- só rascunho que nunca foi publicado pode ser excluído; o resto é despublicado
+create or replace function public.comm_ann_delete(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare a announcements;
+begin
+  select * into a from announcements where id = p_id and team_id is null for update; if a.id is null then raise exception 'not_found'; end if;
+  perform public.comm_need(a.org_id, array['comm_manage']);
+  if a.status <> 'draft' or a.notified_at is not null then raise exception 'comm_not_draft'; end if;
+  delete from announcements where id = p_id;
+  perform public.mod_log(a.org_id, 'comm', 'announcement', p_id, 'delete_draft', null, jsonb_build_object('title', a.title));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- pregações e mensagens
+create table if not exists public.sermon_series (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (length(trim(name)) between 1 and 100),
+  description text check (description is null or length(description) <= 500),
+  image_url text check (image_url is null or length(image_url) <= 600),
+  created_at timestamptz not null default now()
+);
+create unique index if not exists sermon_series_name on public.sermon_series (org_id, lower(name));
+create table if not exists public.sermons (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  title text not null check (length(trim(title)) between 1 and 160),
+  preacher text check (preacher is null or length(preacher) <= 120),
+  preached_on date,
+  series_id uuid references public.sermon_series(id) on delete set null,
+  category text check (category is null or length(category) <= 40),
+  scripture text check (scripture is null or length(scripture) <= 160),
+  description text check (description is null or length(description) <= 3000),
+  video_url text check (video_url is null or (length(video_url) <= 600 and video_url ~* '^https?://')),
+  audio_url text check (audio_url is null or (length(audio_url) <= 600 and audio_url ~* '^https?://')),
+  image_url text check (image_url is null or length(image_url) <= 600),
+  links jsonb not null default '[]'::jsonb check (jsonb_typeof(links) = 'array' and jsonb_array_length(links) <= 8),
+  audience text not null default 'all' check (audience in ('all','visitor','attender','member')),
+  status text not null default 'draft' check (status in ('draft','published')),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists sermons_org_date on public.sermons (org_id, status, preached_on desc nulls last);
+alter table public.sermon_series enable row level security; alter table public.sermons enable row level security;
+revoke all on public.sermon_series, public.sermons from anon, authenticated;
+
+-- lista para qualquer membro (publicadas e do seu público) ou para a equipe (tudo). Busca por título, pregador, texto bíblico, série e descrição.
+create or replace function public.sermon_list(p_org uuid, p_filter jsonb default '{}'::jsonb) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare v_staff boolean; v_cls text; v_q text := nullif(trim(coalesce(p_filter->>'q', '')), ''); v_series uuid := nullif(p_filter->>'series_id', '')::uuid; v_cat text := nullif(p_filter->>'category', '');
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not public.is_org_member(p_org) then raise exception 'forbidden'; end if;
+  v_staff := public.comm_staff(p_org, array['comm_sermons']);
+  select classification into v_cls from people where org_id = p_org and user_id = auth.uid() and status in ('active','inactive','pending') order by created_at limit 1;
+  return jsonb_build_object('can', v_staff,
+    'series', coalesce((select jsonb_agg(jsonb_build_object('id', s.id, 'name', s.name, 'description', s.description, 'image_url', s.image_url, 'count', (select count(*) from sermons z where z.series_id = s.id and (v_staff or (z.status = 'published' and (z.audience = 'all' or z.audience = v_cls))))) order by s.name) from sermon_series s where s.org_id = p_org), '[]'::jsonb),
+    'categories', coalesce((select jsonb_agg(distinct z.category) from sermons z where z.org_id = p_org and z.category is not null and (v_staff or (z.status = 'published' and (z.audience = 'all' or z.audience = v_cls)))), '[]'::jsonb),
+    'items', coalesce((select jsonb_agg(to_jsonb(x) - 'created_by' order by x.preached_on desc nulls last, x.created_at desc) from (
+      select z.id, z.title, z.preacher, z.preached_on, z.series_id, sr.name as series, z.category, z.scripture, z.description, z.video_url, z.audio_url, z.image_url, z.links, z.audience, z.status, z.created_at, z.created_by
+        from sermons z left join sermon_series sr on sr.id = z.series_id
+       where z.org_id = p_org and (v_staff or (z.status = 'published' and (z.audience = 'all' or z.audience = v_cls)))
+         and (v_series is null or z.series_id = v_series) and (v_cat is null or z.category = v_cat)
+         and (v_q is null or z.title ilike '%' || v_q || '%' or z.preacher ilike '%' || v_q || '%' or z.scripture ilike '%' || v_q || '%' or z.description ilike '%' || v_q || '%' or sr.name ilike '%' || v_q || '%')
+       order by z.preached_on desc nulls last, z.created_at desc limit 200) x), '[]'::jsonb));
+end $$;
+
+create or replace function public.sermon_save(p_org uuid, p_id uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_title text := trim(coalesce(p->>'title', '')); v_series uuid := nullif(p->>'series_id', '')::uuid; v_aud text := coalesce(nullif(p->>'audience', ''), 'all'); v_links jsonb := coalesce(p->'links', '[]'::jsonb); v_id uuid := p_id; l jsonb;
+begin
+  perform public.comm_need(p_org, array['comm_sermons']);
+  if length(v_title) not between 1 and 160 then raise exception 'comm_title_required'; end if;
+  if v_aud not in ('all','visitor','attender','member') then raise exception 'comm_invalid_audience'; end if;
+  if v_series is not null and not exists (select 1 from sermon_series where id = v_series and org_id = p_org) then raise exception 'comm_invalid_series'; end if;
+  if jsonb_typeof(v_links) <> 'array' or jsonb_array_length(v_links) > 8 then raise exception 'comm_invalid_link'; end if;
+  for l in select * from jsonb_array_elements(v_links) loop
+    if coalesce(l->>'url', '') !~* '^https?://' or length(l->>'url') > 600 or length(coalesce(l->>'label', '')) > 60 then raise exception 'comm_invalid_link'; end if;
+  end loop;
+  begin
+    if p_id is null then
+      insert into sermons (org_id, title, preacher, preached_on, series_id, category, scripture, description, video_url, audio_url, image_url, links, audience, created_by)
+      values (p_org, v_title, nullif(trim(p->>'preacher'), ''), nullif(p->>'preached_on', '')::date, v_series, nullif(trim(p->>'category'), ''), nullif(trim(p->>'scripture'), ''), nullif(trim(p->>'description'), ''),
+              nullif(trim(p->>'video_url'), ''), nullif(trim(p->>'audio_url'), ''), nullif(p->>'image_url', ''), v_links, v_aud, auth.uid()) returning id into v_id;
+    else
+      update sermons set title = v_title, preacher = nullif(trim(p->>'preacher'), ''), preached_on = nullif(p->>'preached_on', '')::date, series_id = v_series, category = nullif(trim(p->>'category'), ''),
+        scripture = nullif(trim(p->>'scripture'), ''), description = nullif(trim(p->>'description'), ''), video_url = nullif(trim(p->>'video_url'), ''), audio_url = nullif(trim(p->>'audio_url'), ''),
+        image_url = coalesce(nullif(p->>'image_url', ''), image_url), links = v_links, audience = v_aud, updated_at = now() where id = p_id and org_id = p_org;
+      if not found then raise exception 'not_found'; end if;
+    end if;
+  exception when check_violation then raise exception 'comm_invalid_link'; end;
+  perform public.mod_log(p_org, 'comm', 'sermon', v_id, case when p_id is null then 'create' else 'update' end, null, jsonb_build_object('title', v_title));
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+
+create or replace function public.sermon_set_status(p_id uuid, p_publish boolean) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare z sermons;
+begin
+  select * into z from sermons where id = p_id for update; if z.id is null then raise exception 'not_found'; end if;
+  perform public.comm_need(z.org_id, array['comm_sermons']);
+  update sermons set status = case when p_publish then 'published' else 'draft' end, updated_at = now() where id = p_id;
+  perform public.mod_log(z.org_id, 'comm', 'sermon', p_id, case when p_publish then 'publish' else 'unpublish' end, null, jsonb_build_object('title', z.title));
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.sermon_series_save(p_org uuid, p_id uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_name text := trim(coalesce(p->>'name', '')); v_id uuid := p_id;
+begin
+  perform public.comm_need(p_org, array['comm_sermons']);
+  if length(v_name) not between 1 and 100 then raise exception 'comm_title_required'; end if;
+  begin
+    if p_id is null then insert into sermon_series (org_id, name, description, image_url) values (p_org, v_name, nullif(trim(p->>'description'), ''), nullif(p->>'image_url', '')) returning id into v_id;
+    else update sermon_series set name = v_name, description = nullif(trim(p->>'description'), ''), image_url = coalesce(nullif(p->>'image_url', ''), image_url) where id = p_id and org_id = p_org; if not found then raise exception 'not_found'; end if; end if;
+  exception when unique_violation then raise exception 'name_taken'; end;
+  perform public.mod_log(p_org, 'comm', 'series', v_id, case when p_id is null then 'create' else 'update' end, null, jsonb_build_object('name', v_name));
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+
+revoke execute on function public.comm_ann_list(uuid, jsonb), public.comm_ann_save(uuid, uuid, jsonb), public.comm_ann_publish(uuid, timestamptz), public.comm_ann_unpublish(uuid), public.comm_ann_pin(uuid, boolean),
+  public.comm_ann_delete(uuid), public.sermon_list(uuid, jsonb), public.sermon_save(uuid, uuid, jsonb), public.sermon_set_status(uuid, boolean), public.sermon_series_save(uuid, uuid, jsonb),
+  public.notif_prefs_get(uuid), public.notif_prefs_set(uuid, text, boolean), public.comm_ann_state(public.announcements) from public, anon;
+grant execute on function public.comm_ann_list(uuid, jsonb), public.comm_ann_save(uuid, uuid, jsonb), public.comm_ann_publish(uuid, timestamptz), public.comm_ann_unpublish(uuid), public.comm_ann_pin(uuid, boolean),
+  public.comm_ann_delete(uuid), public.sermon_list(uuid, jsonb), public.sermon_save(uuid, uuid, jsonb), public.sermon_set_status(uuid, boolean), public.sermon_series_save(uuid, uuid, jsonb),
+  public.notif_prefs_get(uuid), public.notif_prefs_set(uuid, text, boolean), public.comm_ann_state(public.announcements) to authenticated;
+
+-- ---------------------------------------------------------------- menu: Pregações aparece só quando há pregação publicada para a pessoa (mesma função, uma chave a mais)
+create or replace function public.my_menu(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare pe people; v_ids uuid[]; v_dec boolean; v_scales boolean; v_welcome boolean; v_ev boolean; v_tk boolean; v_sm boolean;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not exists (select 1 from org_members where org_id = p_org and user_id = auth.uid()) then raise exception 'forbidden'; end if;
+  select * into pe from people where org_id = p_org and user_id = auth.uid() and status in ('active','inactive','pending') order by created_at limit 1;
+  v_ids := array(select id from people where org_id = p_org and user_id = auth.uid());
+  -- a decisão é consultada na estrutura permanente (registros não anulados), nunca só pela classificação
+  v_dec := exists (select 1 from faith_decisions d where d.org_id = p_org and d.voided_at is null and (d.person_id = any (v_ids) or d.self_user = auth.uid()));
+  v_scales := exists (select 1 from team_members m where m.org_id = p_org and m.user_id = auth.uid())
+    or exists (select 1 from roster_assignments a join rosters r on r.id = a.roster_id where a.person_id = any (v_ids) and a.status in ('invited','confirmed','declined','sub_requested')
+                and r.status not in ('draft') and r.starts_at > now() - interval '30 days');
+  v_welcome := exists (select 1 from org_members where org_id = p_org and user_id = auth.uid() and role = 'admin')
+    or public.has_people_perm(p_org, 'people_welcome')
+    or exists (select 1 from team_members m where m.org_id = p_org and m.user_id = auth.uid() and public.team_has_feature(m.team_id, 'visitantes'));
+  v_ev := exists (select 1 from ev_events e where e.org_id = p_org and e.status = 'published' and coalesce(e.ends_at, e.starts_at + interval '3 hours') >= now() and public.ev_eligible(e, pe));
+  v_tk := exists (select 1 from ev_registrations g join ev_events e on e.id = g.event_id where g.org_id = p_org and g.user_id = auth.uid() and g.status in ('confirmed','waitlist') and coalesce(e.ends_at, e.starts_at + interval '3 hours') >= now() - interval '7 days');
+  v_sm := exists (select 1 from sermons s where s.org_id = p_org and s.status = 'published' and (s.audience = 'all' or (pe.id is not null and pe.classification = s.audience)));
+  return jsonb_build_object(
+    'sermons', v_sm, 'events', v_ev, 'tickets', v_tk,
+    'classification', pe.classification,
+    'has_decision', v_dec,
+    'decision', (not v_dec and (pe.id is null or pe.classification <> 'member')) or coalesce(pe.menu_decision, false),
+    'journeys', exists (select 1 from journey_participants x where x.person_id = any (v_ids) and x.status <> 'cancelled')
+                or exists (select 1 from journeys j where j.org_id = p_org and j.status = 'active' and j.visibility = 'public' and j.enroll_voluntary and pe.id is not null
+                           and (j.eligible_classes is null or pe.classification = any (j.eligible_classes))
+                           and not exists (select 1 from journey_participants x where x.journey_id = j.id and x.person_id = any (v_ids) and x.status <> 'cancelled')),
+    'scales', v_scales,
+    'rosters', v_scales,
+    'welcome', v_welcome,
+    'media', public.can_request_media(p_org),
+    'leader', exists (select 1 from team_members m where m.org_id = p_org and m.user_id = auth.uid() and m.is_leader));
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Para desfazer: restaurar a política an_select e o gatilho on_announcement da migração 20261103; as colunas novas podem ficar (têm padrão seguro);
+-- drop das funções comm_*/sermon_*/notif_prefs_*, das tabelas sermons, sermon_series e notif_prefs; notify_user volta à versão simples (insert direto).
+-- ---------------------------------------------------------------------
+-- Verificação (deve retornar true):
+select 'comm_publish' = any (public.module_actions()) and to_regclass('public.sermons') is not null and to_regclass('public.notif_prefs') is not null
+   and exists (select 1 from pg_proc where proname = 'comm_ann_publish') and exists (select 1 from information_schema.columns where table_name = 'announcements' and column_name = 'audience') as comunicacao_ok;
+
+-- >>> supabase/migrations/20261209000002_cuidado.sql
+-- =====================================================================
+-- SOMOS — Fase 4B: Cuidado com Pessoas (pedidos de oração, intercessão e atendimento pastoral).
+--  * Área de proteção reforçada. Tudo fechado na tabela (nem o administrador lê direto); o acesso é por funções que conferem a permissão e registram quem abriu o quê (care_access).
+--  * Permissões novas (só administrador ou concessão; liderança/integrante de time e desenvolvedor NÃO ganham acesso):
+--      care_prayer (receber, distribuir e acompanhar pedidos de oração), care_pastoral (solicitações e registro dos atendimentos), care_manage (grupos de intercessão, regras, relatório e trilha de acessos).
+--  * Pedido de oração: a pessoa escolhe entre "só a liderança autorizada" ou "um grupo de intercessão"; pode ser anônimo se a igreja permitir (a identidade nunca é devolvida a ninguém).
+--    Pedidos nunca ficam disponíveis para toda a igreja, e notificações não carregam o conteúdo.
+--  * Solicitação de atendimento (o que a pessoa pede) é separada do registro do atendimento realizado; observações restritas só o autor lê.
+--  * Nada é usado em relatórios gerais ou segmentações: estas tabelas não são lidas por nenhuma função de relatório/segmentação. O relatório próprio só tem contagens.
+--  * Reaproveita: notificações internas (sem conteúdo sensível), auditoria única (mod_audit, sem texto dos pedidos), fichas de pessoas (opcional, só por id).
+-- =====================================================================
+
+create or replace function public.module_actions() returns text[] language sql immutable as $$
+  select array['cells_view','cells_manage','cells_members','cells_meetings','cells_supervision','cells_reports',
+               'prog_view','prog_manage','prog_publish','prog_run','roster_view','roster_manage','roster_approve',
+               'media_request','discover_manage','ev_view','ev_manage','ev_publish','ev_checkin',
+               'fin_view','fin_entry','fin_approve','fin_manage','fin_donors',
+               'comm_manage','comm_publish','comm_sermons','care_prayer','care_pastoral','care_manage']::text[]
+$$;
+
+create table if not exists public.care_settings (
+  org_id uuid primary key references public.organizations(id) on delete cascade,
+  allow_anonymous boolean not null default false,
+  updated_by uuid references auth.users(id) on delete set null,
+  updated_at timestamptz not null default now()
+);
+create table if not exists public.prayer_groups (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (length(trim(name)) between 1 and 80),
+  description text check (description is null or length(description) <= 300),
+  active boolean not null default true,
+  created_at timestamptz not null default now()
+);
+create unique index if not exists prayer_groups_name on public.prayer_groups (org_id, lower(name));
+create table if not exists public.prayer_group_members (
+  id uuid primary key default gen_random_uuid(),
+  group_id uuid not null references public.prayer_groups(id) on delete cascade,
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  is_leader boolean not null default false,
+  added_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (group_id, user_id)
+);
+create index if not exists prayer_group_members_user on public.prayer_group_members (user_id);
+create table if not exists public.prayer_requests (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  requester_id uuid not null references auth.users(id) on delete cascade,
+  body text not null check (length(trim(body)) between 1 and 2000),
+  category text check (category is null or length(category) <= 40),
+  privacy text not null default 'leadership' check (privacy in ('leadership','group')),
+  group_id uuid references public.prayer_groups(id) on delete set null,
+  anonymous boolean not null default false,
+  wants_followup boolean not null default false,
+  status text not null default 'received' check (status in ('received','in_prayer','followup','closed')),
+  assigned_to uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  closed_at timestamptz,
+  check (privacy <> 'group' or group_id is not null)
+);
+create index if not exists prayer_requests_org on public.prayer_requests (org_id, status, created_at desc);
+create index if not exists prayer_requests_owner on public.prayer_requests (requester_id, created_at desc);
+create table if not exists public.prayer_events (
+  id bigint generated always as identity primary key,
+  request_id uuid not null references public.prayer_requests(id) on delete cascade,
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  actor uuid references auth.users(id) on delete set null,
+  action text not null check (action in ('created','status','assigned','note','shared','praying','closed_by_requester')),
+  note text check (note is null or length(note) <= 300),
+  to_requester boolean not null default false,
+  created_at timestamptz not null default now()
+);
+create index if not exists prayer_events_req on public.prayer_events (request_id, id);
+create table if not exists public.pastoral_requests (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  requester_id uuid not null references auth.users(id) on delete cascade,
+  topic text not null check (topic in ('counsel','visit','family','grief','spiritual','other')),
+  body text check (body is null or length(body) <= 1000),
+  preferred text check (preferred is null or length(preferred) <= 200),
+  status text not null default 'requested' check (status in ('requested','scheduled','done','cancelled','referred')),
+  responsible uuid references auth.users(id) on delete set null,
+  scheduled_at timestamptz,
+  referral_note text check (referral_note is null or length(referral_note) <= 300),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists pastoral_requests_org on public.pastoral_requests (org_id, status, created_at desc);
+create table if not exists public.pastoral_sessions (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  request_id uuid references public.pastoral_requests(id) on delete set null,
+  person_id uuid references public.people(id) on delete set null,
+  held_at timestamptz not null,
+  held_by uuid not null references auth.users(id) on delete set null,
+  summary text check (summary is null or length(summary) <= 2000),
+  restricted_note text check (restricted_note is null or length(restricted_note) <= 4000),
+  followup_on date,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists pastoral_sessions_org on public.pastoral_sessions (org_id, held_at desc);
+create table if not exists public.care_access (
+  id bigint generated always as identity primary key,
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  actor uuid references auth.users(id) on delete set null,
+  entity text not null check (entity in ('prayer','pastoral_request','pastoral_session')),
+  entity_id uuid,
+  action text not null check (action in ('read','list')),
+  at timestamptz not null default now()
+);
+create index if not exists care_access_org on public.care_access (org_id, at desc);
+
+do $$ declare t text; begin
+  foreach t in array array['care_settings','prayer_groups','prayer_group_members','prayer_requests','prayer_events','pastoral_requests','pastoral_sessions','care_access'] loop
+    execute format('alter table public.%I enable row level security', t);
+    execute format('revoke all on public.%I from anon, authenticated', t);
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------- auxiliares
+create or replace function public.care_staff(p_org uuid, p_actions text[]) returns boolean
+language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and (exists (select 1 from org_members where org_id = p_org and user_id = auth.uid() and role = 'admin')
+    or exists (select 1 from access_grants g where g.org_id = p_org and g.user_id = auth.uid() and g.actions && p_actions))
+$$;
+create or replace function public.care_need(p_org uuid, p_actions text[]) returns void
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not public.care_staff(p_org, p_actions) then raise exception 'forbidden'; end if;
+end $$;
+create or replace function public.care_member(p_org uuid) returns void
+language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not exists (select 1 from org_members where org_id = p_org and user_id = auth.uid()) then raise exception 'forbidden'; end if;
+end $$;
+create or replace function public.care_uname(p_org uuid, p_user uuid) returns text
+language sql stable security definer set search_path = public as $$
+  select coalesce((select coalesce(nullif(trim(social_name), ''), full_name) from people where org_id = p_org and user_id = p_user order by created_at limit 1),
+                  (select coalesce(nullif(trim(full_name), ''), 'Pessoa') from profiles where id = p_user))
+$$;
+create or replace function public.care_in_group(p_group uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (select 1 from prayer_group_members m where m.group_id = p_group and m.user_id = auth.uid())
+$$;
+create or replace function public.care_log(p_org uuid, p_entity text, p_id uuid, p_action text) returns void
+language sql security definer set search_path = public as $$
+  insert into care_access (org_id, actor, entity, entity_id, action) values (p_org, auth.uid(), p_entity, p_id, p_action)
+$$;
+-- avisa quem cuida do assunto, sem conteúdo (só que existe algo novo)
+create or replace function public.care_notify(p_org uuid, p_action text, p_group uuid, p_kind text, p_title text, p_link text) returns void
+language plpgsql security definer set search_path = public as $$
+declare u uuid;
+begin
+  for u in select distinct x from (
+      select user_id x from org_members where org_id = p_org and role = 'admin'
+      union select user_id from access_grants where org_id = p_org and p_action = any (actions)
+      union select user_id from prayer_group_members where p_group is not null and group_id = p_group) y
+    where x is not null and x is distinct from auth.uid() loop
+    perform public.notify_user(u, p_org, p_kind, p_title, null, p_link, null);
+  end loop;
+end $$;
+revoke execute on function public.care_staff(uuid, text[]), public.care_need(uuid, text[]), public.care_member(uuid), public.care_uname(uuid, uuid), public.care_in_group(uuid),
+  public.care_log(uuid, text, uuid, text), public.care_notify(uuid, text, uuid, text, text, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- visão geral e regras
+create or replace function public.care_overview(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.care_member(p_org);
+  return jsonb_build_object(
+    'allow_anonymous', coalesce((select allow_anonymous from care_settings where org_id = p_org), false),
+    'can', jsonb_build_object('prayer', public.care_staff(p_org, array['care_prayer']), 'pastoral', public.care_staff(p_org, array['care_pastoral']), 'manage', public.care_staff(p_org, array['care_manage'])),
+    'groups', coalesce((select jsonb_agg(jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description) order by g.name) from prayer_groups g where g.org_id = p_org and g.active), '[]'::jsonb),
+    'in_group', exists (select 1 from prayer_group_members m where m.org_id = p_org and m.user_id = auth.uid()));
+end $$;
+
+create or replace function public.care_settings_save(p_org uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.care_need(p_org, array['care_manage']);
+  insert into care_settings (org_id, allow_anonymous, updated_by, updated_at) values (p_org, coalesce((p->>'allow_anonymous')::boolean, false), auth.uid(), now())
+    on conflict (org_id) do update set allow_anonymous = excluded.allow_anonymous, updated_by = auth.uid(), updated_at = now();
+  perform public.mod_log(p_org, 'care', 'settings', p_org, 'update', null, jsonb_build_object('allow_anonymous', coalesce((p->>'allow_anonymous')::boolean, false)));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- grupos de intercessão
+create or replace function public.care_group_save(p_org uuid, p_id uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_name text := trim(coalesce(p->>'name', '')); v_id uuid := p_id;
+begin
+  perform public.care_need(p_org, array['care_manage']);
+  if length(v_name) not between 1 and 80 then raise exception 'name_required'; end if;
+  begin
+    if p_id is null then insert into prayer_groups (org_id, name, description, active) values (p_org, v_name, nullif(trim(coalesce(p->>'description', '')), ''), coalesce((p->>'active')::boolean, true)) returning id into v_id;
+    else update prayer_groups set name = v_name, description = nullif(trim(coalesce(p->>'description', '')), ''), active = coalesce((p->>'active')::boolean, true) where id = p_id and org_id = p_org; if not found then raise exception 'not_found'; end if; end if;
+  exception when unique_violation then raise exception 'name_taken'; end;
+  perform public.mod_log(p_org, 'care', 'group', v_id, case when p_id is null then 'create' else 'update' end, null, jsonb_build_object('name', v_name));
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+create or replace function public.care_group_member_set(p_group uuid, p_user uuid, p_in boolean, p_leader boolean default false) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare g prayer_groups;
+begin
+  select * into g from prayer_groups where id = p_group; if g.id is null then raise exception 'not_found'; end if;
+  perform public.care_need(g.org_id, array['care_manage']);
+  if coalesce(p_in, true) then
+    if not exists (select 1 from org_members where org_id = g.org_id and user_id = p_user and role <> 'guest') then raise exception 'care_invalid_member'; end if;
+    insert into prayer_group_members (group_id, org_id, user_id, is_leader, added_by) values (p_group, g.org_id, p_user, coalesce(p_leader, false), auth.uid())
+      on conflict (group_id, user_id) do update set is_leader = excluded.is_leader;
+  else delete from prayer_group_members where group_id = p_group and user_id = p_user; end if;
+  perform public.mod_log(g.org_id, 'care', 'group', p_group, case when coalesce(p_in, true) then 'member_add' else 'member_remove' end, null, jsonb_build_object('user', p_user));
+  return jsonb_build_object('ok', true);
+end $$;
+create or replace function public.care_group_list(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.care_need(p_org, array['care_manage']);
+  return jsonb_build_object(
+    'groups', coalesce((select jsonb_agg(jsonb_build_object('id', g.id, 'name', g.name, 'description', g.description, 'active', g.active,
+        'members', coalesce((select jsonb_agg(jsonb_build_object('user_id', m.user_id, 'name', public.care_uname(p_org, m.user_id), 'is_leader', m.is_leader) order by public.care_uname(p_org, m.user_id)) from prayer_group_members m where m.group_id = g.id), '[]'::jsonb))
+        order by g.active desc, g.name) from prayer_groups g where g.org_id = p_org), '[]'::jsonb),
+    'candidates', coalesce((select jsonb_agg(jsonb_build_object('user_id', o.user_id, 'name', public.care_uname(p_org, o.user_id)) order by public.care_uname(p_org, o.user_id)) from org_members o where o.org_id = p_org and o.role <> 'guest'), '[]'::jsonb),
+    'authorized', coalesce((select jsonb_agg(jsonb_build_object('user_id', x.u, 'name', public.care_uname(p_org, x.u))) from (
+        select user_id u from org_members where org_id = p_org and role = 'admin' union select user_id from access_grants where org_id = p_org and actions && array['care_prayer','care_pastoral','care_manage']) x), '[]'::jsonb));
+end $$;
+
+-- ---------------------------------------------------------------- pedidos de oração
+create or replace function public.prayer_request_create(p_org uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_body text := trim(coalesce(p->>'body', '')); v_priv text := coalesce(nullif(p->>'privacy', ''), 'leadership'); v_grp uuid := nullif(p->>'group_id', '')::uuid; v_anon boolean := coalesce((p->>'anonymous')::boolean, false); v_id uuid;
+begin
+  perform public.care_member(p_org);
+  if length(v_body) not between 1 and 2000 then raise exception 'care_body_required'; end if;
+  if v_priv not in ('leadership','group') then raise exception 'care_invalid_privacy'; end if;
+  if v_priv = 'group' and not exists (select 1 from prayer_groups where id = v_grp and org_id = p_org and active) then raise exception 'care_invalid_group'; end if;
+  if v_priv = 'leadership' then v_grp := null; end if;
+  if v_anon and not coalesce((select allow_anonymous from care_settings where org_id = p_org), false) then raise exception 'care_anonymous_off'; end if;
+  if (select count(*) from prayer_requests where org_id = p_org and requester_id = auth.uid() and created_at > now() - interval '24 hours') >= 5 then raise exception 'care_rate_limit'; end if;
+  insert into prayer_requests (org_id, requester_id, body, category, privacy, group_id, anonymous, wants_followup)
+  values (p_org, auth.uid(), v_body, nullif(left(trim(coalesce(p->>'category', '')), 40), ''), v_priv, v_grp, v_anon, coalesce((p->>'wants_followup')::boolean, false)) returning id into v_id;
+  insert into prayer_events (request_id, org_id, actor, action, to_requester) values (v_id, p_org, case when v_anon then null else auth.uid() end, 'created', true);
+  perform public.mod_log(p_org, 'care', 'prayer', v_id, 'create', null, jsonb_build_object('privacy', v_priv));
+  perform public.care_notify(p_org, 'care_prayer', v_grp, 'care_prayer_new', 'Novo pedido de oração recebido', '#/cuidado-gestao');
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+
+create or replace function public.prayer_my_requests(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.care_member(p_org);
+  return coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'body', r.body, 'category', r.category, 'privacy', r.privacy, 'group', (select name from prayer_groups where id = r.group_id), 'anonymous', r.anonymous,
+      'wants_followup', r.wants_followup, 'status', r.status, 'created_at', r.created_at, 'updated_at', r.updated_at,
+      'events', coalesce((select jsonb_agg(jsonb_build_object('action', e.action, 'at', e.created_at) order by e.id) from prayer_events e where e.request_id = r.id and e.to_requester and e.action in ('created','status','closed_by_requester')), '[]'::jsonb)) order by r.created_at desc)
+    from prayer_requests r where r.org_id = p_org and r.requester_id = auth.uid()), '[]'::jsonb);
+end $$;
+
+create or replace function public.prayer_my_close(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r prayer_requests;
+begin
+  select * into r from prayer_requests where id = p_id and requester_id = auth.uid() for update; if r.id is null then raise exception 'not_found'; end if;
+  if r.status = 'closed' then raise exception 'care_already_closed'; end if;
+  update prayer_requests set status = 'closed', closed_at = now(), updated_at = now() where id = p_id;
+  insert into prayer_events (request_id, org_id, actor, action, to_requester) values (p_id, r.org_id, case when r.anonymous then null else auth.uid() end, 'closed_by_requester', true);
+  perform public.mod_log(r.org_id, 'care', 'prayer', p_id, 'closed_by_requester', null, null);
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- caixa de entrada da liderança autorizada (todos os pedidos da igreja; anônimo nunca mostra a pessoa)
+create or replace function public.prayer_inbox(p_org uuid, p_filter jsonb default '{}'::jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_st text := nullif(p_filter->>'status', ''); v_as text := nullif(p_filter->>'assigned', ''); v_open boolean := coalesce((p_filter->>'open')::boolean, false);
+begin
+  perform public.care_need(p_org, array['care_prayer']);
+  perform public.care_log(p_org, 'prayer', null, 'list');
+  return coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'body', r.body, 'category', r.category, 'privacy', r.privacy, 'group_id', r.group_id, 'group', (select name from prayer_groups where id = r.group_id),
+      'anonymous', r.anonymous, 'requester', case when r.anonymous then null else public.care_uname(p_org, r.requester_id) end, 'wants_followup', r.wants_followup, 'status', r.status,
+      'assigned_to', r.assigned_to, 'assigned', public.care_uname(p_org, r.assigned_to), 'mine', r.assigned_to = auth.uid(), 'created_at', r.created_at, 'updated_at', r.updated_at) order by r.created_at desc)
+    from prayer_requests r where r.org_id = p_org and (v_st is null or r.status = v_st) and (not v_open or r.status <> 'closed')
+      and (v_as is null or (v_as = 'me' and r.assigned_to = auth.uid()) or (v_as = 'none' and r.assigned_to is null))), '[]'::jsonb);
+end $$;
+
+-- pedidos compartilhados com os grupos de que a pessoa participa
+create or replace function public.prayer_group_inbox(p_org uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+begin
+  perform public.care_member(p_org);
+  if not exists (select 1 from prayer_group_members where org_id = p_org and user_id = auth.uid()) then raise exception 'forbidden'; end if;
+  perform public.care_log(p_org, 'prayer', null, 'list');
+  return coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'body', r.body, 'category', r.category, 'group', g.name, 'anonymous', r.anonymous,
+      'requester', case when r.anonymous then null else public.care_uname(p_org, r.requester_id) end, 'status', r.status, 'created_at', r.created_at,
+      'prayers', (select count(*) from prayer_events e where e.request_id = r.id and e.action = 'praying'), 'prayed_by_me', exists (select 1 from prayer_events e where e.request_id = r.id and e.action = 'praying' and e.actor = auth.uid())) order by r.created_at desc)
+    from prayer_requests r join prayer_groups g on g.id = r.group_id
+    where r.org_id = p_org and r.privacy = 'group' and r.status <> 'closed' and exists (select 1 from prayer_group_members m where m.group_id = r.group_id and m.user_id = auth.uid())), '[]'::jsonb);
+end $$;
+
+create or replace function public.prayer_request_get(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r prayer_requests; v_staff boolean; v_grp boolean; v_own boolean;
+begin
+  select * into r from prayer_requests where id = p_id; if r.id is null then raise exception 'not_found'; end if;
+  v_own := r.requester_id = auth.uid(); v_staff := public.care_staff(r.org_id, array['care_prayer']); v_grp := r.privacy = 'group' and public.care_in_group(r.group_id);
+  if not (v_own or v_staff or v_grp) then raise exception 'forbidden'; end if;
+  if not v_own then perform public.care_log(r.org_id, 'prayer', p_id, 'read'); end if;
+  return jsonb_build_object('request', jsonb_build_object('id', r.id, 'body', r.body, 'category', r.category, 'privacy', r.privacy, 'group_id', r.group_id, 'group', (select name from prayer_groups where id = r.group_id),
+      'anonymous', r.anonymous, 'requester', case when v_own then 'Você' when r.anonymous then null else public.care_uname(r.org_id, r.requester_id) end, 'wants_followup', r.wants_followup, 'status', r.status,
+      'assigned_to', case when v_staff then r.assigned_to end, 'assigned', case when v_staff then public.care_uname(r.org_id, r.assigned_to) end, 'created_at', r.created_at, 'updated_at', r.updated_at),
+    'mine', v_own, 'staff', v_staff, 'group_member', v_grp,
+    'events', case when v_staff then coalesce((select jsonb_agg(jsonb_build_object('action', e.action, 'note', e.note, 'at', e.created_at, 'by', case when e.actor is null then null else public.care_uname(r.org_id, e.actor) end) order by e.id)
+                                              from prayer_events e where e.request_id = r.id), '[]'::jsonb)
+                else coalesce((select jsonb_agg(jsonb_build_object('action', e.action, 'at', e.created_at) order by e.id) from prayer_events e where e.request_id = r.id and e.to_requester and v_own), '[]'::jsonb) end,
+    'prayers', (select count(*) from prayer_events e where e.request_id = r.id and e.action = 'praying'),
+    'authorized', case when v_staff then coalesce((select jsonb_agg(jsonb_build_object('user_id', x.u, 'name', public.care_uname(r.org_id, x.u))) from (
+        select user_id u from org_members where org_id = r.org_id and role = 'admin' union select user_id from access_grants where org_id = r.org_id and 'care_prayer' = any (actions)
+        union select user_id from prayer_group_members where r.privacy = 'group' and group_id = r.group_id) x), '[]'::jsonb) end);
+end $$;
+
+-- liderança autorizada: situação, responsável e anotação interna. Pedido só da liderança só pode ter responsável da liderança autorizada.
+create or replace function public.prayer_request_update(p_id uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r prayer_requests; v_st text := nullif(p->>'status', ''); v_as uuid := nullif(p->>'assigned_to', '')::uuid; v_note text := nullif(trim(coalesce(p->>'note', '')), ''); v_ok boolean; v_changed boolean := false;
+begin
+  select * into r from prayer_requests where id = p_id for update; if r.id is null then raise exception 'not_found'; end if;
+  perform public.care_need(r.org_id, array['care_prayer']);
+  if v_st is not null and v_st not in ('received','in_prayer','followup','closed') then raise exception 'care_invalid_status'; end if;
+  if v_note is not null and length(v_note) > 300 then raise exception 'care_note_long'; end if;
+  if p ? 'assigned_to' and v_as is not null then
+    v_ok := exists (select 1 from org_members where org_id = r.org_id and user_id = v_as and role = 'admin') or exists (select 1 from access_grants g where g.org_id = r.org_id and g.user_id = v_as and 'care_prayer' = any (g.actions))
+         or (r.privacy = 'group' and exists (select 1 from prayer_group_members m where m.group_id = r.group_id and m.user_id = v_as));
+    if not v_ok then raise exception 'care_invalid_assignee'; end if;
+  end if;
+  if p ? 'assigned_to' and v_as is distinct from r.assigned_to then
+    update prayer_requests set assigned_to = v_as, updated_at = now() where id = p_id;
+    insert into prayer_events (request_id, org_id, actor, action) values (p_id, r.org_id, auth.uid(), 'assigned');
+    if v_as is not null and v_as is distinct from auth.uid() then perform public.notify_user(v_as, r.org_id, 'care_prayer_assigned', 'Você recebeu um pedido de oração para acompanhar', null, '#/cuidado-gestao', null); end if;
+    v_changed := true;
+  end if;
+  if v_st is not null and v_st <> r.status then
+    update prayer_requests set status = v_st, updated_at = now(), closed_at = case when v_st = 'closed' then now() else null end where id = p_id;
+    insert into prayer_events (request_id, org_id, actor, action, to_requester) values (p_id, r.org_id, auth.uid(), 'status', true);
+    perform public.notify_user(r.requester_id, r.org_id, 'care_prayer_update', 'Seu pedido de oração foi atualizado', case v_st when 'in_prayer' then 'Estamos orando por você.' when 'followup' then 'Alguém vai acompanhar você.' when 'closed' then 'Seu pedido foi encerrado.' else null end, '#/cuidado', null);
+    v_changed := true;
+  end if;
+  if v_note is not null then insert into prayer_events (request_id, org_id, actor, action, note) values (p_id, r.org_id, auth.uid(), 'note', v_note); v_changed := true; end if;
+  if v_changed then perform public.mod_log(r.org_id, 'care', 'prayer', p_id, 'update', null, jsonb_build_object('status', coalesce(v_st, r.status))); end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- quem está no grupo (ou a liderança) registra que está orando; não muda a situação
+create or replace function public.prayer_request_pray(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r prayer_requests;
+begin
+  select * into r from prayer_requests where id = p_id; if r.id is null then raise exception 'not_found'; end if;
+  if not (public.care_staff(r.org_id, array['care_prayer']) or (r.privacy = 'group' and public.care_in_group(r.group_id))) then raise exception 'forbidden'; end if;
+  if r.status = 'closed' then raise exception 'care_already_closed'; end if;
+  if not exists (select 1 from prayer_events where request_id = p_id and action = 'praying' and actor = auth.uid()) then
+    insert into prayer_events (request_id, org_id, actor, action) values (p_id, r.org_id, auth.uid(), 'praying');
+  end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- atendimento pastoral: solicitação (o que a pessoa pede)
+create or replace function public.pastoral_request_create(p_org uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_topic text := coalesce(nullif(p->>'topic', ''), 'other'); v_id uuid;
+begin
+  perform public.care_member(p_org);
+  if v_topic not in ('counsel','visit','family','grief','spiritual','other') then raise exception 'care_invalid_topic'; end if;
+  if length(coalesce(p->>'body', '')) > 1000 or length(coalesce(p->>'preferred', '')) > 200 then raise exception 'care_body_long'; end if;
+  if (select count(*) from pastoral_requests where org_id = p_org and requester_id = auth.uid() and status in ('requested','scheduled')) >= 3 then raise exception 'care_rate_limit'; end if;
+  insert into pastoral_requests (org_id, requester_id, topic, body, preferred) values (p_org, auth.uid(), v_topic, nullif(trim(coalesce(p->>'body', '')), ''), nullif(trim(coalesce(p->>'preferred', '')), '')) returning id into v_id;
+  perform public.mod_log(p_org, 'care', 'pastoral_request', v_id, 'create', null, jsonb_build_object('topic', v_topic));
+  perform public.care_notify(p_org, 'care_pastoral', null, 'care_pastoral_new', 'Nova solicitação de atendimento', '#/cuidado-gestao');
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+
+create or replace function public.pastoral_my_requests(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.care_member(p_org);
+  return coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'topic', r.topic, 'body', r.body, 'preferred', r.preferred, 'status', r.status, 'scheduled_at', case when r.status = 'scheduled' then r.scheduled_at end,
+      'responsible', case when r.status = 'scheduled' then public.care_uname(p_org, r.responsible) end, 'created_at', r.created_at) order by r.created_at desc)
+    from pastoral_requests r where r.org_id = p_org and r.requester_id = auth.uid()), '[]'::jsonb);
+end $$;
+create or replace function public.pastoral_my_cancel(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r pastoral_requests;
+begin
+  select * into r from pastoral_requests where id = p_id and requester_id = auth.uid() for update; if r.id is null then raise exception 'not_found'; end if;
+  if r.status not in ('requested','scheduled') then raise exception 'care_not_open'; end if;
+  update pastoral_requests set status = 'cancelled', updated_at = now() where id = p_id;
+  perform public.mod_log(r.org_id, 'care', 'pastoral_request', p_id, 'cancel_by_requester', null, null);
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.pastoral_inbox(p_org uuid, p_filter jsonb default '{}'::jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_st text := nullif(p_filter->>'status', '');
+begin
+  perform public.care_need(p_org, array['care_pastoral']);
+  perform public.care_log(p_org, 'pastoral_request', null, 'list');
+  return jsonb_build_object(
+    'authorized', coalesce((select jsonb_agg(jsonb_build_object('user_id', x.u, 'name', public.care_uname(p_org, x.u))) from (
+        select user_id u from org_members where org_id = p_org and role = 'admin' union select user_id from access_grants where org_id = p_org and 'care_pastoral' = any (actions)) x), '[]'::jsonb),
+    'items', coalesce((select jsonb_agg(jsonb_build_object('id', r.id, 'topic', r.topic, 'status', r.status, 'requester', public.care_uname(p_org, r.requester_id), 'responsible_id', r.responsible,
+        'responsible', public.care_uname(p_org, r.responsible), 'scheduled_at', r.scheduled_at, 'created_at', r.created_at, 'mine', r.responsible = auth.uid()) order by (r.status = 'requested') desc, r.created_at desc)
+      from pastoral_requests r where r.org_id = p_org and (v_st is null or r.status = v_st)), '[]'::jsonb));
+end $$;
+
+create or replace function public.pastoral_request_get(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r pastoral_requests; v_own boolean; v_staff boolean;
+begin
+  select * into r from pastoral_requests where id = p_id; if r.id is null then raise exception 'not_found'; end if;
+  v_own := r.requester_id = auth.uid(); v_staff := public.care_staff(r.org_id, array['care_pastoral']);
+  if not (v_own or v_staff) then raise exception 'forbidden'; end if;
+  if not v_own then perform public.care_log(r.org_id, 'pastoral_request', p_id, 'read'); end if;
+  return jsonb_build_object('request', jsonb_build_object('id', r.id, 'topic', r.topic, 'body', r.body, 'preferred', r.preferred, 'status', r.status, 'requester', public.care_uname(r.org_id, r.requester_id),
+      'responsible_id', r.responsible, 'responsible', public.care_uname(r.org_id, r.responsible), 'scheduled_at', r.scheduled_at, 'referral_note', case when v_staff then r.referral_note end, 'created_at', r.created_at),
+    'staff', v_staff, 'mine', v_own,
+    'history', case when v_staff then public.mod_history(r.org_id, 'care', 'pastoral_request', r.id) else '[]'::jsonb end);
+end $$;
+
+create or replace function public.pastoral_request_update(p_id uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare r pastoral_requests; v_st text := nullif(p->>'status', ''); v_resp uuid := nullif(p->>'responsible', '')::uuid; v_when timestamptz := nullif(p->>'scheduled_at', '')::timestamptz; v_ref text := nullif(trim(coalesce(p->>'referral_note', '')), '');
+begin
+  select * into r from pastoral_requests where id = p_id for update; if r.id is null then raise exception 'not_found'; end if;
+  perform public.care_need(r.org_id, array['care_pastoral']);
+  if v_st is not null and v_st not in ('requested','scheduled','cancelled','referred') then raise exception 'care_invalid_status'; end if;
+  if r.status in ('done','cancelled') then raise exception 'care_not_open'; end if;
+  if v_resp is not null and not (exists (select 1 from org_members where org_id = r.org_id and user_id = v_resp and role = 'admin') or exists (select 1 from access_grants g where g.org_id = r.org_id and g.user_id = v_resp and 'care_pastoral' = any (g.actions))) then raise exception 'care_invalid_assignee'; end if;
+  if v_st = 'scheduled' and (coalesce(v_resp, r.responsible) is null or v_when is null) then raise exception 'care_schedule_required'; end if;
+  if v_st = 'referred' and v_ref is null then raise exception 'care_referral_required'; end if;
+  if v_ref is not null and length(v_ref) > 300 then raise exception 'care_note_long'; end if;
+  update pastoral_requests set status = coalesce(v_st, status), responsible = coalesce(v_resp, responsible), scheduled_at = coalesce(v_when, scheduled_at), referral_note = coalesce(v_ref, referral_note), updated_at = now() where id = p_id;
+  perform public.mod_log(r.org_id, 'care', 'pastoral_request', p_id, coalesce(v_st, 'update'), null, null);
+  if v_st in ('scheduled','referred','cancelled') and r.requester_id is distinct from auth.uid() then
+    perform public.notify_user(r.requester_id, r.org_id, 'care_pastoral_update', 'Sua solicitação de atendimento foi atualizada', 'Veja os detalhes em Cuidado.', '#/cuidado', null);
+  end if;
+  if v_resp is not null and v_resp is distinct from r.responsible and v_resp is distinct from auth.uid() then perform public.notify_user(v_resp, r.org_id, 'care_pastoral_assigned', 'Você recebeu um atendimento para acompanhar', null, '#/cuidado-gestao', null); end if;
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- registro do atendimento realizado (separado da solicitação). Observação restrita: só o autor lê.
+create or replace function public.pastoral_session_save(p_org uuid, p_id uuid, p jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare s pastoral_sessions; v_req uuid := nullif(p->>'request_id', '')::uuid; v_person uuid := nullif(p->>'person_id', '')::uuid; v_at timestamptz := nullif(p->>'held_at', '')::timestamptz; v_id uuid := p_id; q pastoral_requests;
+begin
+  perform public.care_need(p_org, array['care_pastoral']);
+  if v_at is null then raise exception 'care_date_required'; end if;
+  if v_at > now() + interval '5 minutes' then raise exception 'care_future_date'; end if;
+  if length(coalesce(p->>'summary', '')) > 2000 or length(coalesce(p->>'restricted_note', '')) > 4000 then raise exception 'care_body_long'; end if;
+  if v_person is not null and not exists (select 1 from people where id = v_person and org_id = p_org) then raise exception 'care_invalid_person'; end if;
+  if v_req is not null then
+    select * into q from pastoral_requests where id = v_req and org_id = p_org for update; if q.id is null then raise exception 'not_found'; end if;
+  end if;
+  if p_id is null then
+    insert into pastoral_sessions (org_id, request_id, person_id, held_at, held_by, summary, restricted_note, followup_on)
+    values (p_org, v_req, v_person, v_at, auth.uid(), nullif(trim(coalesce(p->>'summary', '')), ''), nullif(trim(coalesce(p->>'restricted_note', '')), ''), nullif(p->>'followup_on', '')::date) returning id into v_id;
+    if v_req is not null and q.status in ('requested','scheduled') then update pastoral_requests set status = 'done', updated_at = now() where id = v_req; end if;
+  else
+    select * into s from pastoral_sessions where id = p_id and org_id = p_org for update; if s.id is null then raise exception 'not_found'; end if;
+    if s.held_by is distinct from auth.uid() then raise exception 'forbidden'; end if;
+    update pastoral_sessions set held_at = v_at, person_id = v_person, summary = nullif(trim(coalesce(p->>'summary', '')), ''), restricted_note = nullif(trim(coalesce(p->>'restricted_note', '')), ''), followup_on = nullif(p->>'followup_on', '')::date, updated_at = now() where id = p_id;
+  end if;
+  perform public.mod_log(p_org, 'care', 'pastoral_session', v_id, case when p_id is null then 'create' else 'update' end, null, null);
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+
+create or replace function public.pastoral_session_list(p_org uuid, p_filter jsonb default '{}'::jsonb) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_req uuid := nullif(p_filter->>'request_id', '')::uuid; v_person uuid := nullif(p_filter->>'person_id', '')::uuid;
+begin
+  perform public.care_need(p_org, array['care_pastoral']);
+  perform public.care_log(p_org, 'pastoral_session', null, 'list');
+  return coalesce((select jsonb_agg(jsonb_build_object('id', s.id, 'request_id', s.request_id, 'person_id', s.person_id, 'person', public.mod_pname(s.person_id), 'held_at', s.held_at, 'held_by', public.care_uname(p_org, s.held_by),
+      'mine', s.held_by = auth.uid(), 'summary', s.summary, 'followup_on', s.followup_on, 'has_restricted', s.restricted_note is not null,
+      'restricted_note', case when s.held_by = auth.uid() then s.restricted_note end) order by s.held_at desc)
+    from pastoral_sessions s where s.org_id = p_org and (v_req is null or s.request_id = v_req) and (v_person is null or s.person_id = v_person)), '[]'::jsonb);
+end $$;
+
+-- ---------------------------------------------------------------- relatório (só contagens) e trilha de acessos
+create or replace function public.care_report(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.care_need(p_org, array['care_manage']);
+  return jsonb_build_object(
+    'prayer', (select jsonb_build_object('total', count(*), 'received', count(*) filter (where status = 'received'), 'in_prayer', count(*) filter (where status = 'in_prayer'), 'followup', count(*) filter (where status = 'followup'), 'closed', count(*) filter (where status = 'closed'),
+        'unassigned_open', count(*) filter (where status <> 'closed' and assigned_to is null), 'last_30_days', count(*) filter (where created_at > now() - interval '30 days')) from prayer_requests where org_id = p_org),
+    'pastoral', (select jsonb_build_object('requested', count(*) filter (where status = 'requested'), 'scheduled', count(*) filter (where status = 'scheduled'), 'done', count(*) filter (where status = 'done'), 'referred', count(*) filter (where status = 'referred'),
+        'cancelled', count(*) filter (where status = 'cancelled')) from pastoral_requests where org_id = p_org),
+    'sessions', (select jsonb_build_object('last_30_days', count(*) filter (where held_at > now() - interval '30 days'), 'last_90_days', count(*) filter (where held_at > now() - interval '90 days')) from pastoral_sessions where org_id = p_org),
+    'groups', (select count(*) from prayer_groups where org_id = p_org and active));
+end $$;
+create or replace function public.care_access_log(p_org uuid, p_limit int default 100) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.care_need(p_org, array['care_manage']);
+  return coalesce((select jsonb_agg(jsonb_build_object('at', a.at, 'actor', public.care_uname(p_org, a.actor), 'entity', a.entity, 'action', a.action) order by a.id desc)
+    from (select * from care_access where org_id = p_org order by id desc limit least(greatest(coalesce(p_limit, 100), 1), 300)) a), '[]'::jsonb);
+end $$;
+
+revoke execute on function public.care_overview(uuid), public.care_settings_save(uuid, jsonb), public.care_group_save(uuid, uuid, jsonb), public.care_group_member_set(uuid, uuid, boolean, boolean), public.care_group_list(uuid),
+  public.prayer_request_create(uuid, jsonb), public.prayer_my_requests(uuid), public.prayer_my_close(uuid), public.prayer_inbox(uuid, jsonb), public.prayer_group_inbox(uuid), public.prayer_request_get(uuid),
+  public.prayer_request_update(uuid, jsonb), public.prayer_request_pray(uuid), public.pastoral_request_create(uuid, jsonb), public.pastoral_my_requests(uuid), public.pastoral_my_cancel(uuid),
+  public.pastoral_inbox(uuid, jsonb), public.pastoral_request_get(uuid), public.pastoral_request_update(uuid, jsonb), public.pastoral_session_save(uuid, uuid, jsonb), public.pastoral_session_list(uuid, jsonb),
+  public.care_report(uuid), public.care_access_log(uuid, int) from public, anon;
+grant execute on function public.care_overview(uuid), public.care_settings_save(uuid, jsonb), public.care_group_save(uuid, uuid, jsonb), public.care_group_member_set(uuid, uuid, boolean, boolean), public.care_group_list(uuid),
+  public.prayer_request_create(uuid, jsonb), public.prayer_my_requests(uuid), public.prayer_my_close(uuid), public.prayer_inbox(uuid, jsonb), public.prayer_group_inbox(uuid), public.prayer_request_get(uuid),
+  public.prayer_request_update(uuid, jsonb), public.prayer_request_pray(uuid), public.pastoral_request_create(uuid, jsonb), public.pastoral_my_requests(uuid), public.pastoral_my_cancel(uuid),
+  public.pastoral_inbox(uuid, jsonb), public.pastoral_request_get(uuid), public.pastoral_request_update(uuid, jsonb), public.pastoral_session_save(uuid, uuid, jsonb), public.pastoral_session_list(uuid, jsonb),
+  public.care_report(uuid), public.care_access_log(uuid, int) to authenticated;
+
+-- ---------------------------------------------------------------- menu: item "Pedidos do meu grupo" só para quem participa de um grupo de intercessão
+create or replace function public.my_menu(p_org uuid) returns jsonb
+language plpgsql stable security definer set search_path = public as $$
+declare pe people; v_ids uuid[]; v_dec boolean; v_scales boolean; v_welcome boolean; v_ev boolean; v_tk boolean; v_sm boolean; v_ic boolean;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not exists (select 1 from org_members where org_id = p_org and user_id = auth.uid()) then raise exception 'forbidden'; end if;
+  select * into pe from people where org_id = p_org and user_id = auth.uid() and status in ('active','inactive','pending') order by created_at limit 1;
+  v_ids := array(select id from people where org_id = p_org and user_id = auth.uid());
+  -- a decisão é consultada na estrutura permanente (registros não anulados), nunca só pela classificação
+  v_dec := exists (select 1 from faith_decisions d where d.org_id = p_org and d.voided_at is null and (d.person_id = any (v_ids) or d.self_user = auth.uid()));
+  v_scales := exists (select 1 from team_members m where m.org_id = p_org and m.user_id = auth.uid())
+    or exists (select 1 from roster_assignments a join rosters r on r.id = a.roster_id where a.person_id = any (v_ids) and a.status in ('invited','confirmed','declined','sub_requested')
+                and r.status not in ('draft') and r.starts_at > now() - interval '30 days');
+  v_welcome := exists (select 1 from org_members where org_id = p_org and user_id = auth.uid() and role = 'admin')
+    or public.has_people_perm(p_org, 'people_welcome')
+    or exists (select 1 from team_members m where m.org_id = p_org and m.user_id = auth.uid() and public.team_has_feature(m.team_id, 'visitantes'));
+  v_ev := exists (select 1 from ev_events e where e.org_id = p_org and e.status = 'published' and coalesce(e.ends_at, e.starts_at + interval '3 hours') >= now() and public.ev_eligible(e, pe));
+  v_tk := exists (select 1 from ev_registrations g join ev_events e on e.id = g.event_id where g.org_id = p_org and g.user_id = auth.uid() and g.status in ('confirmed','waitlist') and coalesce(e.ends_at, e.starts_at + interval '3 hours') >= now() - interval '7 days');
+  v_sm := exists (select 1 from sermons s where s.org_id = p_org and s.status = 'published' and (s.audience = 'all' or (pe.id is not null and pe.classification = s.audience)));
+  v_ic := exists (select 1 from prayer_group_members g where g.org_id = p_org and g.user_id = auth.uid());
+  return jsonb_build_object(
+    'sermons', v_sm, 'intercession', v_ic, 'events', v_ev, 'tickets', v_tk,
+    'classification', pe.classification,
+    'has_decision', v_dec,
+    'decision', (not v_dec and (pe.id is null or pe.classification <> 'member')) or coalesce(pe.menu_decision, false),
+    'journeys', exists (select 1 from journey_participants x where x.person_id = any (v_ids) and x.status <> 'cancelled')
+                or exists (select 1 from journeys j where j.org_id = p_org and j.status = 'active' and j.visibility = 'public' and j.enroll_voluntary and pe.id is not null
+                           and (j.eligible_classes is null or pe.classification = any (j.eligible_classes))
+                           and not exists (select 1 from journey_participants x where x.journey_id = j.id and x.person_id = any (v_ids) and x.status <> 'cancelled')),
+    'scales', v_scales,
+    'rosters', v_scales,
+    'welcome', v_welcome,
+    'media', public.can_request_media(p_org),
+    'leader', exists (select 1 from team_members m where m.org_id = p_org and m.user_id = auth.uid() and m.is_leader));
+end $$;
+
+-- ---------------------------------------------------------------------
+-- Para desfazer: drop das funções care_*, prayer_*, pastoral_* e das tabelas care_settings, prayer_*, pastoral_*, care_access (apaga os pedidos e registros!);
+-- module_actions e my_menu voltam às versões da migração de comunicação.
+-- ---------------------------------------------------------------------
+-- Verificação (deve retornar true):
+select 'care_manage' = any (public.module_actions()) and to_regclass('public.prayer_requests') is not null and to_regclass('public.pastoral_sessions') is not null
+   and exists (select 1 from pg_proc where proname = 'prayer_request_update') and exists (select 1 from pg_proc where proname = 'pastoral_session_save') as cuidado_ok;

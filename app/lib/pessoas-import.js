@@ -133,3 +133,17 @@ Object.assign(ERRORS, {
   invalid_type: "Tipo de cadastro inválido.", donor_forbidden: "Você não tem permissão para identificar quem contribuiu. Use contribuição anônima.", invalid_receipt: "Comprovante inválido. Envie o arquivo de novo.",
   fin_invalid_data: "Confira os campos: algum valor está fora do permitido.",
 });
+Object.assign(ERRORS, {
+  comm_title_required: "Informe o título.", comm_invalid_audience: "Escolha um público válido (segmento, grupo ou célula ativos).", comm_invalid_link: "Link inválido. Use um endereço que comece com https:// (ou #/ para uma tela do app).",
+  comm_body_long: "O texto é longo demais (máximo 4000 caracteres).", comm_expired: "A validade já passou. Ajuste a data de validade antes de publicar.", comm_not_published: "Este comunicado não está publicado.",
+  comm_too_many_pinned: "Já há 3 comunicados fixados. Desafixe um antes de fixar outro.", comm_not_draft: "Só rascunho que nunca foi publicado pode ser excluído. Use Despublicar.", comm_invalid_series: "Série inválida.",
+  invalid_group: "Grupo de notificação inválido.",
+});
+
+Object.assign(ERRORS, {
+  care_body_required: "Escreva o pedido.", care_invalid_privacy: "Escolha quem pode ler o pedido.", care_invalid_group: "Escolha um grupo de intercessão ativo.", care_anonymous_off: "A igreja não está permitindo pedidos anônimos no momento.",
+  care_rate_limit: "Você já enviou pedidos demais por enquanto. Tente novamente mais tarde.", care_already_closed: "Este pedido já foi encerrado.", care_invalid_status: "Situação inválida.", care_note_long: "Texto longo demais (máximo 300 caracteres).",
+  care_invalid_assignee: "Escolha como responsável alguém com acesso autorizado a este assunto.", care_invalid_topic: "Escolha o assunto.", care_body_long: "Texto longo demais.", care_not_open: "Esta solicitação não está mais aberta.",
+  care_schedule_required: "Para agendar, informe o responsável e a data e hora.", care_referral_required: "Para encaminhar, descreva o encaminhamento.", care_date_required: "Informe a data e hora do atendimento.", care_future_date: "A data do atendimento não pode estar no futuro.",
+  care_invalid_person: "Pessoa inválida.", care_invalid_member: "Só integrantes da igreja podem entrar no grupo.",
+});

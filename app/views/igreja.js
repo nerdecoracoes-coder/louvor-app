@@ -133,7 +133,7 @@ async function agenda(el, alive) {
 export async function churchHome(el, alive) {
   el.innerHTML = spinner();
   const [notices, evs, ppl, teams, ttl] = await Promise.all([
-    must(sb.from("announcements").select("*").eq("org_id", state.org.id).is("team_id", null).order("created_at", { ascending: false }).limit(5)),
+    must(sb.from("announcements").select("*").eq("org_id", state.org.id).is("team_id", null).order("pinned", { ascending: false }).order("created_at", { ascending: false }).limit(5)),
     upcoming(60), people(),
     must(sb.from("teams").select("*").eq("org_id", state.org.id).order("name")),
     titles(),

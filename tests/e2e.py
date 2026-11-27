@@ -149,7 +149,6 @@ with sync_playwright() as pw:
     # ------------------------------------------------------------------ Google Drive (pasta simulada)
     root_id = json.loads(urllib.request.urlopen(BASE + "/__dev/drive").read())["rootId"]
     ana.goto(BASE + "/#/org/drive")
-    expect(ana.get_by_text("teste@projeto.iam.gserviceaccount.com")).to_be_visible(timeout=10000) if False else None
     ana.fill("input[name=folder]", f"https://drive.google.com/drive/folders/{root_id}")
     ana.locator("#conn").click()
     toast_has(ana, "conectada")
@@ -1435,6 +1434,29 @@ with sync_playwright() as pw:
     n_err = len(errors); carla.goto(BASE + "/#/financeiro"); expect(carla.locator("#view")).to_contain_text("Você não tem acesso", timeout=10000); carla.wait_for_timeout(500)
     errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]   # recusa esperada: sem permissão financeira
     ok("financeiro: lançamento, receita anônima baixada, baixa, regra de aprovação bloqueando pagamento, orçamento, cadastros e acesso negado a quem não tem permissão")
+
+    # comunicação: rascunho -> publicar (admin) -> membro vê no mural; pregações; preferências
+    ana.goto(BASE + "/#/comunicacao"); expect(ana.locator("#view h1")).to_contain_text("Comunicação", timeout=10000)
+    ana.locator("#new").click(); ana.fill(".sheet #t", "Culto de gratidão"); ana.fill(".sheet #b", "Venha celebrar conosco no domingo."); ana.locator(".sheet #ok").click(); toast_has(ana, "salvo")
+    ana.wait_for_timeout(600); ana.locator("#body .li", has_text="Culto de gratidão").first.click(); ana.locator(".sheet #pub").click(); ana.locator(".sheet #go").click(); toast_has(ana, "publicado")
+    ovf(ana, "comunicação gestão"); ana.wait_for_timeout(700); shot(ana, "82-comunicacao-gestao")
+    carla.goto(BASE + "/#/avisos"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Culto de gratidão", timeout=10000); ovf(carla, "avisos membro")
+    carla.goto(BASE + "/#/notificacoes/preferencias"); expect(carla.locator("#view")).to_contain_text("Preferências", timeout=10000); ovf(carla, "preferências"); carla.wait_for_timeout(500); shot(carla, "83-notificacoes-preferencias")
+    carla.goto(BASE + "/#/pregacoes"); expect(carla.locator("#view h1")).to_contain_text("Pregações", timeout=10000); ovf(carla, "pregações")
+    ok("comunicação: comunicado criado como rascunho, publicado pela gestão e visto pelo membro; preferências e pregações abrem sem rolagem horizontal")
+
+    # cuidado: membro pede oração e atendimento; liderança autorizada vê; membro comum não acessa a gestão
+    carla.goto(BASE + "/#/cuidado"); carla.reload(); expect(carla.locator("#view h1")).to_contain_text("Cuidado com Pessoas", timeout=10000)
+    carla.locator("#np").click(); carla.fill(".sheet #body", "Peço oração pela minha família."); carla.locator(".sheet #go").click(); toast_has(carla, "Pedido enviado")
+    expect(carla.locator("#view")).to_contain_text("Meus pedidos de oração"); carla.locator("#na").click(); carla.fill(".sheet #body", "Gostaria de conversar com um pastor."); carla.locator(".sheet #go").click(); toast_has(carla, "Solicitação enviada")
+    ovf(carla, "cuidado membro"); carla.wait_for_timeout(700); shot(carla, "84-cuidado-membro")
+    ana.goto(BASE + "/#/cuidado-gestao"); ana.reload(); expect(ana.locator("#view h1")).to_contain_text("Área de cuidado", timeout=10000)
+    ana.locator("#body .li").first.click(); expect(ana.locator(".sheet")).to_contain_text("Peço oração pela minha família", timeout=10000); ovf(ana, "cuidado gestão"); ana.wait_for_timeout(600); shot(ana, "85-cuidado-pedido")
+    ana.locator(".sheet #st").select_option("in_prayer"); ana.locator(".sheet #save").click(); toast_has(ana, "Pedido atualizado")
+    ana.locator('[data-t="req"]').click(); expect(ana.locator("#body")).to_contain_text("Aconselhamento", timeout=10000); ana.locator('[data-t="rep"]').click(); expect(ana.locator("#body")).to_contain_text("Últimos acessos", timeout=10000); ovf(ana, "cuidado resumo")
+    n_err = len(errors); carla.goto(BASE + "/#/cuidado-gestao"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Você não tem acesso", timeout=10000); carla.wait_for_timeout(500)
+    errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]   # recusa esperada: sem permissão de cuidado
+    ok("cuidado: pedido de oração e de atendimento pelo membro, leitura e atualização pela liderança autorizada, acesso negado a quem não tem permissão")
 
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:

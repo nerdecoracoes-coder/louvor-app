@@ -132,7 +132,7 @@ async function homeView(_, el, alive) {
   el.innerHTML = spinner();
   const [roles, notices, ups, ppl] = await Promise.all([
     myRoles(),
-    must(sb.from("announcements").select("*").eq("org_id", state.org.id).is("team_id", null).order("created_at", { ascending: false }).limit(5)),
+    must(sb.from("announcements").select("*").eq("org_id", state.org.id).is("team_id", null).order("pinned", { ascending: false }).order("created_at", { ascending: false }).limit(5)),
     upcomingAssignments(),
     people(),
   ]);
@@ -305,6 +305,7 @@ export function noticeCard(n) {
 
 export function openNotice(n, ppl) {
   if (!n) return;
+  const internal = typeof n.link_url === "string" && /^#\//.test(n.link_url) ? n.link_url : null;
   const link = safeUrl(n.link_url);
   const img = safeUrl(n.image_url);
   const canDel = n.created_by === state.user.id || isAdmin() || (n.team_id && canManageTeam(n.team_id)) || (!n.team_id && canEditAgenda());
@@ -312,7 +313,7 @@ export function openNotice(n, ppl) {
     ${n.tag ? `<span class="tag">${esc(n.tag)}</span>` : ""}<h3 style="margin-top:8px">${esc(n.title)}</h3>
     ${n.event_at ? `<p class="row gap-s muted">${icon("calendar")}${esc(fDateLong(n.event_at))} às ${fTime(n.event_at)}</p>` : ""}
     ${n.body ? `<p>${linkify(n.body)}</p>` : ""}
-    ${link ? `<a class="btn ghost block mt" href="${attr(link)}" target="_blank" rel="noopener">${icon("link")} Abrir link</a>` : ""}
+    ${link ? `<a class="btn ghost block mt" href="${attr(link)}" target="_blank" rel="noopener">${icon("link")} ${esc(n.link_label || "Abrir link")}</a>` : ""}${internal ? `<a class="btn ghost block mt" href="${attr(internal)}" data-close>${icon("link")} ${esc(n.link_label || "Abrir")}</a>` : ""}
     <p class="tiny muted mt">Publicado por ${esc(personName(ppl, n.created_by))} em ${fDate(n.created_at)}</p>
     ${canDel ? `<button class="btn danger sm mt" data-del>${icon("trash")} Excluir aviso</button>` : ""}`);
   s.el.querySelector("[data-del]")?.addEventListener("click", async () => {
@@ -326,12 +327,12 @@ export function openNotice(n, ppl) {
 async function noticesView(_, el) {
   el.innerHTML = spinner();
   const [rows, ppl] = await Promise.all([
-    must(sb.from("announcements").select("*,teams(name)").eq("org_id", state.org.id).order("created_at", { ascending: false }).limit(100)),
+    must(sb.from("announcements").select("*,teams(name)").eq("org_id", state.org.id).order("pinned", { ascending: false }).order("created_at", { ascending: false }).limit(100)),
     people(),
   ]);
   el.innerHTML = `<div class="pagehead"><a class="back" href="#/">${icon("chevronLeft")}</a><h1>Avisos</h1>${canPostNotice() ? `<a class="btn primary sm" href="#/avisos/novo">${icon("plus")} Novo</a>` : ""}</div>
     ${rows.length ? `<div class="list">${rows.map((n) => `<button class="li" data-notice="${n.id}"><span class="cover" style="width:48px;height:48px">${safeUrl(n.image_url) ? `<img src="${attr(n.image_url)}" alt="">` : icon("megaphone")}</span>
-      <span class="grow"><span class="t">${esc(n.title)}</span><span class="s">${n.teams ? esc(n.teams.name) + " · " : ""}${esc(personName(ppl, n.created_by))} · ${fDate(n.created_at)}</span></span>${n.tag ? `<span class="tag soft">${esc(n.tag)}</span>` : ""}</button>`).join("")}</div>`
+      <span class="grow"><span class="t">${n.pinned ? `<span class="tag soft" style="margin-right:6px">Fixado</span>` : ""}${esc(n.title)}</span><span class="s">${n.teams ? esc(n.teams.name) + " · " : ""}${esc(personName(ppl, n.created_by))} · ${fDate(n.created_at)}</span></span>${n.tag ? `<span class="tag soft">${esc(n.tag)}</span>` : ""}</button>`).join("")}</div>`
       : `<div class="card">${empty("megaphone", "Nenhum aviso publicado")}</div>`}`;
   on(el, "click", "[data-notice]", (e, b) => openNotice(rows.find((n) => n.id === b.dataset.notice), ppl));
 }
