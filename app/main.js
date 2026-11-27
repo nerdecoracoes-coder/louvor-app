@@ -40,7 +40,7 @@ import * as integracoes from "./views/integracoes.js";
 import * as carteira from "./views/carteira.js";
 import * as chamados from "./views/chamados.js";
 import * as extras from "./views/extras.js";
-import { teamShortcuts, churchShortcuts, alsoOnScreen } from "./lib/shortcuts.js";
+import { teamShortcuts, churchShortcuts, churchNav, alsoOnScreen } from "./lib/shortcuts.js";
 import { openPlayer, closePlayer } from "./player/view.js";
 
 applyTheme();
@@ -67,13 +67,7 @@ function navItems() {
     ...(teamOnly() ? [] : [["igreja", "church", "Igreja", "#/igreja"]]),
     ["config", "settings", "Ajustes", settingsHref()],
   ];
-  return [
-    ["inicio", "home", "Início", "#/"],
-    ["times", "users", "Times", "#/times"],
-    ["calendario", "calendar", "Agenda", "#/agenda"],
-    ["chat", "chat", "Chat", "#/chat"],
-    ["config", "settings", "Ajustes", settingsHref()],
-  ];
+  return churchNav(settingsHref());
 }
 function settingsHref() {
   const t = state.space;
@@ -92,8 +86,9 @@ function navActive(path) {
     if (path.startsWith(`/times/${t.id}`)) return "time";
     return "";
   }
-  if (path.startsWith("/times")) return "times";
-  if (path.startsWith("/agenda") || path.startsWith("/calendario")) return "calendario";
+  if (path.startsWith("/calendario")) return "escalas";
+  if (path.startsWith("/cuidado")) return "cuidado";
+  if (path.startsWith("/eventos")) return "eventos";
   return "";
 }
 
@@ -311,6 +306,10 @@ document.addEventListener("click", (e) => {
   const a = e.target.closest?.('a[href^="#/"]'); if (!a || a.target) return;
   const to = a.getAttribute("href").slice(1), cur = location.hash.replace(/^#/, "") || "/";
   if (isEditPath(cur) && !isEditPath(to) && cur.split("?")[0] !== to.split("?")[0]) { e.preventDefault(); leaveEdit(to); }
+});
+document.addEventListener("menu-changed", () => {   // o servidor liberou/escondeu algo: a barra da igreja acompanha
+  const nav = document.querySelector(".bottomnav");
+  if (nav && nav.dataset.key !== navKey()) { renderShell(); render(); }
 });
 document.addEventListener("org-changed", () => {
   if (!document.getElementById("view")) return;

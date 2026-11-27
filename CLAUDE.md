@@ -8,5 +8,5 @@
 - Mantenha o comportamento do Ministério de Louvor intacto.
 
 ## Navegação (sem repetição)
-- Barra de baixo: no máximo 5 botões, iguais em todos os times (Início, Chat, Time, Igreja, Ajustes). Recurso próprio de um tipo de time (Pedidos, Visitantes, Crianças) é atalho do Início, nunca botão da barra.
+- Barra de baixo: no máximo 5 botões, iguais em todos os times (Início, Chat, Time, Igreja, Ajustes; na visão da igreja: Início, Escalas, Cuidado, Chat, Ajustes). O que já é seção do Início (Agenda, Times) não vai para a barra. Recurso próprio de um tipo de time (Pedidos, Visitantes, Crianças) é atalho do Início, nunca botão da barra.
 - Atalhos do Início ficam em `app/lib/shortcuts.js`. O menu lateral (`openMenu` em `app/main.js`) filtra sozinho tudo o que já está na barra ou nesses atalhos; ao criar um atalho novo, basta incluí-lo lá.

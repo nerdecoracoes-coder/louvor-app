@@ -20,6 +20,15 @@ export const teamShortcuts = (t) => [
   ["play", "Tutoriais", "#/ajuda"],
 ].filter(Boolean);
 
+// Barra de baixo da igreja: só o que NÃO está como seção na página inicial (Agenda e Times já estão lá, por isso saíram da barra).
+export const churchNav = (settingsHref) => [
+  ["inicio", "home", "Início", "#/"],
+  menuShow("scales") ? ["escalas", "calendar", "Escalas", "#/calendario/meu"] : state.menu?.events === true ? ["eventos", "star", "Eventos", "#/eventos"] : null,
+  ["cuidado", "heart", "Cuidado", "#/cuidado"],
+  ["chat", "chat", "Chat", "#/chat"],
+  ["config", "settings", "Ajustes", settingsHref],
+].filter(Boolean);
+
 export const churchShortcuts = () => [
   ["megaphone", "Avisos", "#/avisos"],
   menuShow("scales") && ["calendar", "Minhas escalas", "#/calendario/meu"],
@@ -27,7 +36,7 @@ export const churchShortcuts = () => [
   ["gift", "Aniversários", "#/aniversariantes"],
   hasRepertoire() && !state.myTeams.length && ["music", "Músicas", "#/musicas"],   // antes era um botão da barra de baixo
   hasTutorials() && ["play", "Tutoriais", "#/ajuda"],
-].filter(Boolean);
+].filter(Boolean).filter((x) => !churchNav("").some((n) => n[3] === x[2]));   // o que está na barra não repete nos atalhos
 
 // Endereços que já aparecem fora do menu lateral no contexto atual (além da barra de baixo): o menu não os repete.
 export const alsoOnScreen = (t) => t
