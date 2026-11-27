@@ -1,7 +1,7 @@
 /* Somos — service worker: torna o app instalável e abre mesmo com internet instável.
    Os arquivos do app usam "rede primeiro" (sempre a versão mais nova quando há conexão).
    Os áudios do player ficam em um cache separado gerenciado pelo próprio player. */
-const SHELL = "somos-shell-v166";
+const SHELL = "somos-shell-v167";
 const FILES = ["./", "index.html", "config.js", "manifest.json", "icon.svg", "app/styles.css", "app/main.js", "app/core.js", "app/sb.js",
   "app/views/home.js", "app/views/jornadas.js", "app/views/contatos.js", "app/lib/pdf.js", "app/views/relatorios-pessoas.js", "app/views/segmentacao.js", "app/views/carteira.js", "app/views/celulas.js", "app/views/programacoes.js", "app/views/escalas.js", "app/lib/mod-ui.js", "app/lib/cards.js", "app/views/destaques.js", "app/views/inscricoes.js", "app/views/financeiro.js", "app/views/comunicacao.js", "app/views/cuidado.js", "app/views/digital.js", "app/views/instituicao.js", "app/views/integracoes.js", "app/lib/push.js", "app/views/servico.js", "app/views/teams.js", "app/views/schedules.js", "app/views/songs.js", "app/views/chat.js", "app/views/account.js", "app/views/multimidia.js", "app/views/ministerios.js", "app/views/letras.js", "app/views/ajuda.js", "app/views/igreja.js", "app/views/estudio.js", "app/views/ferramentas.js", "app/views/eventos.js", "app/lib/pptx.js", "app/lib/videoz.js", "app/views/timepage.js", "app/views/palco.js", "app/views/palco-art.js", "app/assets/palco/drums.webp", "app/assets/palco/keys.webp", "app/assets/palco/eguitar.webp", "app/assets/palco/bass.webp", "app/assets/palco/acoustic.webp", "app/assets/palco/mic.webp", "app/views/extras.js", "app/views/chamados.js", "app/views/pessoas.js", "app/views/acolher.js", "app/views/acolhimento.js", "app/views/meu-cadastro.js", "app/views/novos-convertidos.js", "app/lib/xlsx.js", "app/lib/qr.js", "app/lib/pessoas-import.js",
   "app/player/engine.js", "app/player/pitch-worklet.js", "app/lib/keys.js", "app/lib/repeat.js", "app/player/view.js", "app/player/warm.js", "app/player/ogg.js", "app/player/opus-decoder.min.js", "app/fonts/sora.woff"];
@@ -22,7 +22,7 @@ self.addEventListener("fetch", (e) => {
 // Aviso no celular (push): chega com o app fechado. O envio é feito pela Edge Function push-send.
 self.addEventListener("push", (e) => {
   let d = {}; try { d = e.data ? e.data.json() : {}; } catch { d = { title: "Somos", body: e.data ? e.data.text() : "" }; }
-  e.waitUntil(self.registration.showNotification(d.title || "Somos", { body: d.body || "", icon: "icon.svg", badge: "icon.svg", data: { link: d.link || "#/" } }));
+  e.waitUntil(self.registration.showNotification(d.title || "Somos", { body: d.body || "", icon: "icon-192.png", badge: "icon-192.png", vibrate: [120, 60, 120], tag: d.tag || undefined, data: { link: d.link || "#/" } }));
 });
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();

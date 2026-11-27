@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
     const payload = JSON.stringify({ title: it.title, body: it.body ?? "", link: it.link ?? "#/" });
     let ok = it.subs.length === 0; // sem aparelhos: nada a fazer
     for (const s of it.subs) {
-      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400 }); ok = true; sent++; }
+      try { await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, urgency: "high" }); ok = true; sent++; }
       catch (e) { const code = (e as { statusCode?: number }).statusCode; if (code === 404 || code === 410) dead.push(s.endpoint); else failed++; }
     }
     if (ok || it.subs.every((s) => dead.includes(s.endpoint))) done.push(it.id);
