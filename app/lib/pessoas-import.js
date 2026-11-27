@@ -147,3 +147,5 @@ Object.assign(ERRORS, {
   care_schedule_required: "Para agendar, informe o responsável e a data e hora.", care_referral_required: "Para encaminhar, descreva o encaminhamento.", care_date_required: "Informe a data e hora do atendimento.", care_future_date: "A data do atendimento não pode estar no futuro.",
   care_invalid_person: "Pessoa inválida.", care_invalid_member: "Só integrantes da igreja podem entrar no grupo.",
 });
+
+Object.assign(ERRORS, { decision_unavailable: "Este registro é para visitantes e frequentadores que ainda não registraram uma decisão. Para oração ou acompanhamento, use Cuidado com Pessoas.", decision_rule_fixed: "Esta opção segue a classificação e o histórico da pessoa e não pode ser liberada manualmente." });

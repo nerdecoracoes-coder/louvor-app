@@ -145,6 +145,14 @@ Arquivos: `supabase/migrations/20261209000002_cuidado.sql` (cópia em `supabase/
 
 **Limites reais:** (1) quem tem `care_pastoral`/`care_prayer` vê o conteúdo que a função permite, então a concessão deve ser criteriosa; (2) administrador também fica na lista de autorizados; (3) não há exportação nem vínculo automático do registro à ficha da pessoa além do `person_id` opcional; (4) sem lembrete automático de retorno agendado.
 
+## 4.7 Correção — "Decidi seguir a Jesus"
+
+Arquivos: `supabase/migrations/20261210000001_decisao_elegibilidade.sql` (cópia em `supabase/setup/atualizacao-2026-12-10-decisao-elegibilidade.sql`), `tests/decisao-regra.test.ts`.
+
+**Regra única** (`decision_eligible`), usada pelo menu (`my_menu`), pelo card da Home (`home_discover`) e pelo backend do formulário (`convert_self_get/submit` recusam com `decision_unavailable`): a ficha da conta precisa ser **visitante ou frequentador**, nenhuma ficha da conta pode ser membro e **não pode haver decisão registrada** (não anulada). Líder, voluntário, administrador e integrante de time não entram na regra: membro nunca vê, mesmo sem decisão. Decisão anulada volta a permitir; quem muda de classificação é reavaliado na hora.
+**Atalho manual removido:** o botão da ficha que liberava a opção a membros saiu; `person_menu_decision_set` recusa e as marcas antigas foram zeradas. O histórico de decisões não é alterado nem apagado.
+**Consequência a conhecer:** conta **sem ficha** não tem classificação e, pela regra, não vê a opção nem envia o formulário (antes ficava "aguardando associação"). O canal "Solicitar contato" continua aberto a todos, e oração/acompanhamento seguem em Cuidado com Pessoas.
+
 ## 5. Como aplicar no Supabase
 
-Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` e `atualizacao-2026-12-08-financeiro.sql`, `atualizacao-2026-12-09-comunicacao.sql` e `atualizacao-2026-12-09-cuidado.sql` (nesta ordem) no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.
+Rode `supabase/setup/atualizacao-2026-12-05-celulas-programacoes-escalas.sql` depois `atualizacao-2026-12-05-menu-por-publico.sql` `atualizacao-2026-12-06-menu-inteligente.sql` e `atualizacao-2026-12-07-eventos.sql` e `atualizacao-2026-12-08-financeiro.sql`, `atualizacao-2026-12-09-comunicacao.sql` e `atualizacao-2026-12-09-cuidado.sql` e `atualizacao-2026-12-10-decisao-elegibilidade.sql` (nesta ordem) no SQL Editor. A última linha comentada ("verificação") deve retornar `true`. Reversão documentada no fim do arquivo.

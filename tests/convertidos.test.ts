@@ -194,20 +194,22 @@ describe("histórico, acompanhamento e permissões", () => {
 });
 
 describe("formulários, notificações e integridade", () => {
-  test("17. formulário no app: confirma identidade, vincula à ficha, sem duplicar e sem conta nova", async () => {
-    expect(msg(await integrante.api.rpc("convert_self_submit", { p_org: org, p: { origin: "culto", decided_on: "2026-11-20", consent: "authorized", phone: "11955554444" } }))).toContain("confirm_identity");
-    const info = (await integrante.api.rpc("convert_self_get", { p_org: org })).data;
-    expect(info.person.id).toBe(pInt);
-    const r = await integrante.api.rpc("convert_self_submit", { p_org: org, p: { origin: "culto", decided_on: "2026-11-20", consent: "authorized", phone: "11955554444", confirm_identity: true, wants_followup: true } });
+  test("17. formulário no app: só visitante/frequentador sem decisão; confirma identidade, vincula à ficha, sem duplicar e sem conta nova", async () => {
+    const novo = await newUser("NovoVisitante"); await joinChurch(admin.api, org, novo);
+    const k = await serviceKey(); const h = { Authorization: `Bearer ${k}`, apikey: k, "Content-Type": "application/json", Prefer: "return=representation" };
+    const pNovo = (await (await fetch(`${REST}/people`, { method: "POST", headers: h, body: JSON.stringify({ org_id: org, full_name: "Novo Visitante", classification: "visitor", status: "active", user_id: novo.id }) })).json())[0].id;
+    expect(msg(await novo.api.rpc("convert_self_submit", { p_org: org, p: { origin: "culto", decided_on: "2026-11-20", consent: "authorized", phone: "11955554444" } }))).toContain("confirm_identity");
+    const info = (await novo.api.rpc("convert_self_get", { p_org: org })).data;
+    expect(info.person.id).toBe(pNovo);
+    const r = await novo.api.rpc("convert_self_submit", { p_org: org, p: { origin: "culto", decided_on: "2026-11-20", consent: "authorized", phone: "11955554444", confirm_identity: true, wants_followup: true } });
     expect(r.data.ok).toBe(true);
-    const again = await integrante.api.rpc("convert_self_submit", { p_org: org, p: { origin: "culto", decided_on: "2026-11-20", confirm_identity: true } });
-    expect(again.data.repeated).toBe(true);
+    // já tem decisão registrada: não registra outra como "primeira decisão"
+    expect(msg(await novo.api.rpc("convert_self_submit", { p_org: org, p: { origin: "culto", decided_on: "2026-11-20", confirm_identity: true } }))).toBe("decision_unavailable");
     const d = (await get(secretaria, r.data.id)).data;
-    expect(d.source).toBe("app"); expect(d.person.id).toBe(pInt); expect(d.fu_status).toBe("offered");
-    // sem ficha: aguarda associação, não cria ficha nem vincula sozinho
-    const s = await semFicha.api.rpc("convert_self_submit", { p_org: org, p: { origin: "outro", decided_on: "2026-11-21" } });
-    expect(s.data.ok).toBe(true);
-    expect((await get(secretaria, s.data.id)).data.awaiting_link).toBe(true);
+    expect(d.source).toBe("app"); expect(d.person.id).toBe(pNovo); expect(d.fu_status).toBe("offered");
+    // membro (integrante) e conta sem ficha: sem classificação de visitante/frequentador, o backend recusa
+    expect(msg(await integrante.api.rpc("convert_self_get", { p_org: org }))).toBe("decision_unavailable");
+    expect(msg(await semFicha.api.rpc("convert_self_submit", { p_org: org, p: { origin: "outro", decided_on: "2026-11-21" } }))).toBe("decision_unavailable");
     expect(msg(await fora.api.rpc("convert_self_submit", { p_org: org, p: { origin: "culto" } }))).toContain("forbidden");
   });
   test("18. formulário público: só ativo com token, não devolve nada, honeypot, sem duplicar, aguarda associação", async () => {

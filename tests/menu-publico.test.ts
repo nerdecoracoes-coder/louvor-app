@@ -18,21 +18,15 @@ beforeAll(async () => {
 });
 
 describe("menu por público", () => {
-  test("Decidi seguir a Jesus: visitante, congregado e sem ficha veem; membro não", async () => {
+  test("Decidi seguir a Jesus: visitante e congregado sem decisão veem; membro e conta sem ficha não", async () => {
     expect((await menu(vis)).decision).toBe(true);
     expect((await menu(cong)).decision).toBe(true);
-    expect((await menu(semFicha)).decision).toBe(true);
+    expect((await menu(semFicha)).decision).toBe(false);
     expect((await menu(mem)).decision).toBe(false);
   });
-  test("a liderança libera e retira o atalho de um membro; quem não tem permissão não consegue", async () => {
-    expect(msg(await mem.api.rpc("person_menu_decision_set", { p_person: P.mem, p_on: true }))).toBe("forbidden");
-    expect(msg(await vis.api.rpc("person_menu_decision_set", { p_person: P.mem, p_on: true }))).toBe("forbidden");
-    expect(msg(await outro.api.rpc("person_menu_decision_set", { p_person: P.mem, p_on: true }))).toBe("forbidden");
-    expect((await admin.api.rpc("person_menu_decision_set", { p_person: P.mem, p_on: true })).ok).toBe(true);
-    expect((await menu(mem)).decision).toBe(true);
-    expect((await admin.api.rpc("person_menu_decision_set", { p_person: P.mem, p_on: false })).ok).toBe(true);
+  test("o atalho manual para membro foi removido: ninguém consegue liberar a opção para um membro", async () => {
+    for (const u of [admin, mem, vis]) expect(msg(await u.api.rpc("person_menu_decision_set", { p_person: P.mem, p_on: true }))).toMatch(/decision_rule_fixed|forbidden/);
     expect((await menu(mem)).decision).toBe(false);
-    expect((await rows(`mod_audit?org_id=eq.${org}&entity_id=eq.${P.mem}&select=action`)).map((a) => a.action)).toEqual(expect.arrayContaining(["menu_decision_on", "menu_decision_off"]));
   });
   test("quem não pertence à igreja não consulta o menu", async () => {
     expect(msg(await outro.api.rpc("my_menu", { p_org: org }))).toBe("forbidden");

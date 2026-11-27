@@ -1225,11 +1225,9 @@ with sync_playwright() as pw:
     ana.locator("#flt").click(); ana.locator(".sheet #clr").click(); expect(ana.locator("#list")).to_contain_text("Convertido Um E2E", timeout=10000)
     shot(ana, "52-novos-convertidos")
     # formulário no app (a própria pessoa) e por link público
-    ana.goto(BASE + "/#/decisao"); expect(ana.locator("#view")).to_contain_text("Decidi seguir a Jesus", timeout=10000)
-    ana.wait_for_timeout(600)
-    if ana.locator("#f [name=confirm_identity]").count(): ana.locator("#f [name=confirm_identity]").check()
-    ana.locator("#f [name=consent][value=authorized]").check(); ana.locator("#f #ok").click()
-    expect(ana.locator("#view")).to_contain_text("Recebemos o seu registro", timeout=10000)
+    n_err = len(errors); ana.goto(BASE + "/#/decisao"); ana.reload(); expect(ana.locator("#view")).to_contain_text("para visitantes e frequentadores", timeout=10000)   # administrador/líder que é membro: o backend recusa o formulário
+    errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]
+    ana.locator(".menubtn").click(); expect(ana.locator(".drawer")).to_be_visible(timeout=10000); assert ana.locator('.drawer a[href="#/decisao"]').count() == 0; ana.keyboard.press("Escape")   # e a opção não aparece no menu
     ana.goto(BASE + "/#/novos-convertidos"); ana.locator("#cfg").click(); ana.locator(".sheet #act").check(); ana.locator(".sheet #ok").click(); expect(ana.locator(".sheet")).to_contain_text("#/decidi/", timeout=10000)
     link = ana.locator(".sheet .mc-note").first.inner_text().strip(); ana.locator(".sheet-wrap").click(position={"x": 5, "y": 5})
     cpub, pub = ctx(br); pub.goto(link); expect(pub.locator("h1")).to_contain_text("Decidi seguir a Jesus", timeout=10000)

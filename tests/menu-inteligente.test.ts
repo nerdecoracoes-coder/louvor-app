@@ -48,10 +48,10 @@ describe("menu: Decidi seguir a Jesus (consulta o histórico permanente)", () =>
     expect((await menu(freqCom)).decision).toBe(false);
     expect((await menu(visCom)).has_decision).toBe(true);
   });
-  test("novo convertido com decisão e membro não recebem o convite; sem ficha recebe", async () => {
+  test("novo convertido com decisão, membro e conta sem classificação não recebem o convite", async () => {
     expect((await menu(conv)).decision).toBe(false);
     expect((await menu(membro)).decision).toBe(false);
-    expect((await menu(semFicha)).decision).toBe(true);
+    expect((await menu(semFicha)).decision).toBe(false); // sem ficha não há classificação de visitante/frequentador
   });
   test("atualiza na hora: depois de registrar a decisão, o convite some; decisão anulada volta a mostrar", async () => {
     const id = await pid(visSem);
