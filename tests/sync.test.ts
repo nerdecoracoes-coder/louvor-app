@@ -198,6 +198,13 @@ describe("importação do Drive", () => {
     const g = await song("Grande É o Senhor");
     expect(g).toMatchObject({ status: "waiting_files", title: "Grande É o Senhor", artist: "Morada", current_project_id: null }); // artista vem da pasta do grupo; nome fora do padrão = sem player
     expect(g.status_message).toContain("Música - Cantor - 140 BPM (Tom)");
+    // continua esperando pelo mesmo motivo: a rodada seguinte não repete o mesmo aviso no registro
+    const waitEvents = async () => (await db.select("sync_events", `org_id=eq.${org}&song_id=eq.${g.id}&message=ilike.*Cantor*`)).length;
+    const antes = await waitEvents();
+    expect(antes).toBeGreaterThan(0);
+    await syncOrg(deps(), org, "manual");
+    expect((await song("Grande É o Senhor")).status).toBe("waiting_files");
+    expect(await waitEvents()).toBe(antes);
     expect((await song("Emaús - Morada")).status).toBe("ready");                                 // música solta continua
     expect((await db.select("songs", `org_id=eq.${org}&drive_folder_id=eq.${drive.idOf(grp)}`))).toHaveLength(0);
     // o player pode ler os áudios das músicas dentro do grupo

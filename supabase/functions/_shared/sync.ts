@@ -339,7 +339,8 @@ async function processFolder(deps: SyncDeps, orgId: string, runId: string, folde
   if (!readiness.ready) {
     await db.updateQuiet("songs", `id=eq.${song.id}`, { status: "waiting_files", status_message: readiness.reason, drive_folder_name: folder.name,
       current_project_id: null, drive_signature: signature, retry_count: 0, next_retry_at: null });
-    await event("info", `"${folder.name}": ${readiness.reason}`, base);
+    // só registra quando o motivo mudou: a música continua esperando e seria o mesmo aviso a cada rodada
+    if (!(song.status === "waiting_files" && song.status_message === readiness.reason)) await event("info", `"${folder.name}": ${readiness.reason}`, base);
     return "waiting";
   }
   const rootFirst = (f: FolderFile) => (f.relPath.includes("/") ? 1 : 0);
