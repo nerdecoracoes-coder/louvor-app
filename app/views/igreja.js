@@ -147,7 +147,6 @@ export async function churchHome(el, alive) {
   el.innerHTML = `
   <section class="hero"><div class="grow"><p class="hello">Igreja</p><h1>${esc(o.name)}</h1>${o.subtitle ? `<p class="roles">${esc(o.subtitle)}</p>` : ""}</div></section>
   ${quickRow(churchShortcuts())}
-  <a class="psearch-link" href="#/busca" aria-label="Buscar no SOMOS" style="display:flex;align-items:center;gap:8px;padding:11px 14px;margin:0 0 12px;border-radius:14px;background:rgba(var(--w),.06);color:var(--muted)">${icon("search")} <span>Buscar eventos, pregações, conteúdos…</span></a>
   <div id="dsc"></div>
   <div id="disc"></div>
 

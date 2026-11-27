@@ -429,7 +429,7 @@ with sync_playwright() as pw:
     ana.goto(BASE + "/#/times"); ana.reload()
     # barra da igreja: Agenda e Times são seções do Início, então não repetem na barra
     expect(ana.locator(".bottomnav")).to_be_visible(timeout=10000)
-    assert ana.locator('.bottomnav a[href="#/agenda"], .bottomnav a[href="#/times"]').count() == 0 and ana.locator(".bottomnav a").count() <= 5
+    assert ana.locator('.bottomnav a[href="#/agenda"], .bottomnav a[href="#/times"]').count() == 0 and ana.locator(".bottomnav a").count() == 5
     expect(ana.locator('.bottomnav [data-nav="cuidado"]')).to_be_visible()
     assert ana.locator('.bottomnav [data-nav="chat"]').count() == 0   # a visão da igreja não tem chat
     jovens_id = ana.locator(".teamcard a", has_text="Jovens").get_attribute("href").split("/")[-1]
@@ -615,7 +615,7 @@ with sync_playwright() as pw:
             expect(ana.locator(".li", has_text="Paulo Lima")).to_contain_text("Novo", timeout=10000); shot(ana, "21d-visitantes")
     # barra de baixo igual em todo time (no máximo 5); o recurso principal do time é atalho do Início, não botão da barra
     ana.evaluate("t => document.dispatchEvent(new CustomEvent('somos:switch-team', { detail: { team: t, path: '/' } }))", tid); expect(ana.locator(".quick")).to_contain_text("Visitantes", timeout=10000)
-    assert ana.locator(".bottomnav a").count() <= 5 and ana.locator('.bottomnav [data-nav="visitantes"]').count() == 0
+    assert ana.locator(".bottomnav a").count() == 5 and ana.locator('.bottomnav [data-nav="visitantes"]').count() == 0
     ana.locator(".menubtn").click(); expect(ana.locator(".drawer .dprofile")).to_be_visible()
     assert ana.locator('.drawer a[href="#/"], .drawer a[href="#/bloqueios"]').count() == 0; ana.keyboard.press("Escape")
     ok("Infantil: cadastro, entrada com código e saída; Diáconos: registro de visitantes")
@@ -733,7 +733,7 @@ with sync_playwright() as pw:
     expect(carla.locator(".quick")).to_contain_text("Bloqueios")
     assert carla.locator(".drawer").get_by_text("Indisponibilidades", exact=True).count() == 0
     assert carla.locator('.drawer a[href="#/bloqueios"], .drawer a[href="#/aniversariantes"], .drawer a[href="#/ajuda"], .drawer a[href="#/"]').count() == 0
-    assert carla.locator(".bottomnav a").count() <= 5
+    assert carla.locator(".bottomnav a").count() == 5
     assert carla.locator(".drawer").get_by_text("Panorama de escalas", exact=True).count() == 0   # panorama é só do líder
     for t in ["Visão geral da igreja", "Configurações"]:   # foram para a barra de navegação
         assert carla.locator(".drawer").get_by_text(t, exact=True).count() == 0

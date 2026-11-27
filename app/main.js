@@ -64,7 +64,7 @@ function navItems() {
     ["inicio", "home", "Início", "#/"],
     ["chat", "chat", "Chat", `#/chat/${t.id}`],
     ["time", "users", "Time", `#/times/${t.id}`],
-    ...(teamOnly() ? [] : [["igreja", "church", "Igreja", "#/igreja"]]),
+    teamOnly() ? ["escalas", "calendar", "Escalas", `#/times/${t.id}/escalas`] : ["igreja", "church", "Igreja", "#/igreja"],   // sem acesso à igreja, Escalas completa os 5
     ["config", "settings", "Ajustes", settingsHref()],
   ];
   return churchNav(settingsHref());
@@ -88,6 +88,8 @@ function navActive(path) {
   }
   if (path.startsWith("/calendario")) return "escalas";
   if (path.startsWith("/cuidado")) return "cuidado";
+  if (path.startsWith("/busca")) return "busca";
+  if (path.startsWith("/avisos")) return "avisos";
   if (path.startsWith("/eventos")) return "eventos";
   if (path.startsWith("/pregacoes")) return "pregacoes";
   if (path.startsWith("/conteudos")) return "conteudos";

@@ -18,10 +18,10 @@ export const teamShortcuts = (t) => [
   teamHas(t, "estudio") && ["layers", "Estúdio", `#/times/${t.id}/estudio`],
   !teamOnly() && ["gift", "Aniversários", "#/aniversariantes"],
   ["play", "Tutoriais", "#/ajuda"],
-].filter(Boolean);
+].filter(Boolean).filter((x) => !(teamOnly() && x[2] === `#/times/${t.id}/escalas`));   // no modo restrito Escalas está na barra
 
-// Barra de baixo da igreja: sem chat (a conversa com a liderança é por outros caminhos) e só com o que NÃO é seção do Início
-// (Agenda e Times já estão lá). Início, Cuidado e Ajustes são fixos; entram até 2 destes, na ordem, se a pessoa tiver o recurso.
+// Barra de baixo da igreja: SEMPRE 5 botões, sem chat (a conversa com a liderança é por outros caminhos) e sem o que já é seção
+// do Início (Agenda, Times). Fixos: Início, Cuidado, Buscar e Ajustes. O 5º é o primeiro destes que a pessoa tiver; Avisos garante que nunca falte.
 export const churchNav = (settingsHref) => {
   const m = state.menu || {};
   const extra = [
@@ -29,8 +29,9 @@ export const churchNav = (settingsHref) => {
     m.events === true && ["eventos", "star", "Eventos", "#/eventos"],
     m.sermons === true && ["pregacoes", "mic", "Pregações", "#/pregacoes"],
     m.contents === true && ["conteudos", "play", "Conteúdos", "#/conteudos"],
-  ].filter(Boolean).slice(0, 2);
-  return [["inicio", "home", "Início", "#/"], ...extra, ["cuidado", "heart", "Cuidado", "#/cuidado"], ["config", "settings", "Ajustes", settingsHref]];
+    ["avisos", "megaphone", "Avisos", "#/avisos"],
+  ].find(Boolean);
+  return [["inicio", "home", "Início", "#/"], extra, ["cuidado", "heart", "Cuidado", "#/cuidado"], ["busca", "search", "Buscar", "#/busca"], ["config", "settings", "Ajustes", settingsHref]];
 };
 
 export const churchShortcuts = () => [
@@ -45,4 +46,4 @@ export const churchShortcuts = () => [
 // Endereços que já aparecem fora do menu lateral no contexto atual (além da barra de baixo): o menu não os repete.
 export const alsoOnScreen = (t) => t
   ? [`#/times/${t.id}/estudio`, `#/times/${t.id}/letras`]        // ferramentas do time ficam na página "Time"
-  : ["#/busca"];                                                 // a igreja tem o campo de busca no Início
+  : [];
