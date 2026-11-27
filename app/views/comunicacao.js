@@ -126,7 +126,7 @@ async function manage(el, alive) {
   }
   async function info(body) {
     body.innerHTML = `<div class="card"><h3 style="margin-top:0">Notificações no app</h3><p class="small">Comunicados publicados avisam só quem faz parte do público e respeitam a preferência de cada pessoa. Cada pessoa recebe no máximo 5 avisos novos por dia; o restante continua no mural.</p></div>
-      <div class="card mt"><h3 style="margin-top:0">Notificação no celular (push) e e-mail</h3><p class="small">Não configurados. Dependem de chaves de envio e de um serviço externo, que ainda não foram conectados. Nada é enviado fora do app.</p></div>
+      <div class="card mt"><h3 style="margin-top:0">Notificação no celular (push) e e-mail</h3><p class="small">O código do aviso no celular já está pronto: cada pessoa ativa em Preferências de notificação. O envio só começa depois que a administração técnica configurar as chaves (veja a documentação). E-mail não está configurado. Nada é enviado fora do app sem essa configuração.</p></div>
       <div class="card mt"><h3 style="margin-top:0">Comunicados agendados</h3><p class="small">Aparecem no mural na hora marcada. O aviso de notificação sai pelo envio automático do servidor (a cada 10 minutos), quando ele está ativo no seu Supabase.</p></div>`;
   }
   draw();
@@ -190,6 +190,20 @@ async function sermons(el, alive) {
 }
 
 // ---------------------------------------------------------------- preferências de notificação
+async function paintPush(box, alive) {
+  const { pushState, pushActive, pushEnable, pushDisable } = await import("../lib/push.js"); if (!alive()) return;
+  const st = pushState(), msg = box.querySelector("#pushmsg");
+  const TXT = { sem_suporte: "Este aparelho ou navegador não permite aviso com o app fechado. Instale o app na tela inicial para ativar.", sem_chave: "Ainda não ativado pela igreja. Quando a administração configurar o envio, a opção aparece aqui.", bloqueado: "As notificações estão bloqueadas neste aparelho. Libere nas configurações do navegador ou do app para ativar." };
+  if (st !== "ok") { msg.textContent = TXT[st]; return; }
+  const on = await pushActive(); if (!alive()) return;
+  msg.textContent = "Receba os avisos (respeitando as preferências acima) no celular, mesmo com o app fechado.";
+  box.insertAdjacentHTML("beforeend", `<label class="li" style="margin-top:8px"><span class="grow"><span class="t">Avisar neste aparelho</span></span><input type="checkbox" id="pushon" ${on ? "checked" : ""} aria-label="Avisar neste aparelho"></label>`);
+  const c = box.querySelector("#pushon");
+  c.onchange = async () => {
+    if (c.checked) { const r = await pushEnable(); if (!r.ok) { c.checked = false; return toast(r.reason === "bloqueado" ? "Permissão negada neste aparelho." : "Não foi possível ativar agora."); } toast("Aviso no celular ativado."); }
+    else { await pushDisable(); toast("Aviso no celular desligado."); }
+  };
+}
 async function prefs(el, alive) {
   const org = state.org?.id; el.innerHTML = `${head("Preferências de notificação")}${spinner()}`;
   const x = await sb.rpc("notif_prefs_get", { p_org: org }); if (!alive()) return;
@@ -197,6 +211,7 @@ async function prefs(el, alive) {
   const d = x.data;
   el.innerHTML = `${head("Preferências de notificação")}<p class="small muted">Escolha o que você quer receber no app. O conteúdo continua disponível mesmo com o aviso desligado.</p>
     <div class="list">${d.groups.map((g) => `<label class="li"><span class="grow"><span class="t">${esc(g.label)}</span><span class="s">${esc(g.hint)}</span></span><input type="checkbox" data-g="${g.key}" ${g.enabled ? "checked" : ""} aria-label="${attr(g.label)}"></label>`).join("")}</div>
-    <p class="small muted mt">${esc(d.note)}</p><div class="card small mt">Notificação no celular (push): ${d.push.configured ? "ativa" : "ainda não configurada pela igreja."}</div>`;
+    <p class="small muted mt">${esc(d.note)}</p><div class="card mt" id="pushbox"><h3 style="margin-top:0">Aviso no celular</h3><p class="small muted" id="pushmsg">Verificando…</p></div>`;
+  paintPush(el.querySelector("#pushbox"), alive);
   el.querySelectorAll("[data-g]").forEach((c) => (c.onchange = async () => { const r = await sb.rpc("notif_prefs_set", { p_org: org, p_grp: c.dataset.g, p_enabled: c.checked }); if (r.error) { c.checked = !c.checked; return toast(errText(r.error)); } toast(c.checked ? "Ligado." : "Desligado."); }));
 }

@@ -1471,6 +1471,17 @@ with sync_playwright() as pw:
     carla.goto(BASE + "/#/busca"); carla.reload(); carla.fill("#q", "bíblia"); expect(carla.locator("#res")).to_contain_text("Conhecendo a Bíblia", timeout=10000); ovf(carla, "busca"); carla.wait_for_timeout(500); shot(carla, "89-busca")
     carla.goto(BASE + "/#/"); carla.reload(); expect(carla.locator("#dsc .quick")).to_contain_text("Nossos cultos", timeout=10000); expect(carla.locator('a[href="#/busca"]').first).to_be_visible(); ovf(carla, "home com atalhos")
     carla.locator(".menubtn").click(); expect(carla.locator('.drawer a[href="#/conteudos"]')).to_be_visible(timeout=10000); expect(carla.locator('.drawer a[href="#/planos"]')).to_be_visible(); carla.keyboard.press("Escape")
+    # melhorias: busca sem acento / com erro de digitação, anotação privada, lembrete diário, transmissão ao vivo, aviso no celular
+    carla.goto(BASE + "/#/busca"); carla.reload(); carla.fill("#q", "biblia"); expect(carla.locator("#res")).to_contain_text("Conhecendo a Bíblia", timeout=10000)
+    carla.fill("#q", "bibila"); expect(carla.locator("#res")).to_contain_text("Conhecendo a Bíblia", timeout=10000)
+    carla.goto(BASE + "/#/planos"); carla.reload(); carla.locator("#view a.li", has_text="João em 3 dias").click(); expect(carla.locator("[data-n='2']")).to_be_visible(timeout=10000)
+    carla.locator("[data-n='2']").click(); carla.fill(".sheet #nb", "Minha reflexão privada"); carla.locator(".sheet #ok").click(); toast_has(carla, "Anotação salva"); expect(carla.locator("#view")).to_contain_text("Minha reflexão privada", timeout=10000)
+    carla.locator("#rt").fill("06:30"); carla.locator("#rm").check(); toast_has(carla, "Lembrete salvo"); ovf(carla, "plano com anotação e lembrete"); carla.wait_for_timeout(500); shot(carla, "90-plano-anotacao")
+    ana.goto(BASE + "/#/digital-gestao"); ana.reload(); ana.locator('[data-t="liv"]').click(); ana.locator("#new").click(); ana.fill(".sheet #t", "Culto de domingo ao vivo"); ana.fill(".sheet #u", "https://youtube.com/live/exemplo")
+    ini = ana.evaluate("()=>{const d=new Date(Date.now()-5*60000);const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate())+'T'+p(d.getHours())+':'+p(d.getMinutes())}")
+    ana.fill(".sheet #s", ini); ana.locator(".sheet #ok").click(); toast_has(ana, "Transmissão salva"); expect(ana.locator("#body")).to_contain_text("Ao vivo agora", timeout=10000); ovf(ana, "gestão ao vivo"); shot(ana, "91-ao-vivo-gestao")
+    carla.goto(BASE + "/#/"); carla.reload(); expect(carla.locator("#disc")).to_contain_text("Culto de domingo ao vivo", timeout=10000); expect(carla.locator("#disc a", has_text="Assistir ao vivo").first).to_have_attribute("href", "https://youtube.com/live/exemplo"); ovf(carla, "home ao vivo"); carla.wait_for_timeout(600); shot(carla, "92-home-ao-vivo")
+    carla.goto(BASE + "/#/notificacoes/preferencias"); carla.reload(); expect(carla.locator("#pushbox")).to_contain_text("Aviso no celular", timeout=10000); expect(carla.locator("#pushmsg")).not_to_have_text("Verificando…", timeout=10000); ovf(carla, "preferências push"); shot(carla, "93-prefs-push")
     n_err = len(errors); carla.goto(BASE + "/#/digital-gestao"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Você não tem acesso", timeout=10000); carla.wait_for_timeout(500)
     errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]
     ok("experiência digital: conteúdo publicado, plano de leitura com progresso, atalho na Home, busca integrada, itens no menu e acesso negado à gestão sem permissão")

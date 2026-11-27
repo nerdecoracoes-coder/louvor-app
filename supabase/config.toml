@@ -7,3 +7,7 @@ verify_jwt = false
 
 [functions.drive-media]
 verify_jwt = false
+
+[functions.push-send]
+# Protegida pelo segredo do agendamento (x-cron-secret); não usa login de usuário.
+verify_jwt = false

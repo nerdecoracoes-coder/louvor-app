@@ -2,7 +2,7 @@
 // Toda regra (quem vê o quê, publicado ou rascunho) está no banco; aqui só se escolhe como mostrar.
 import { sb, state, esc, attr, icon, sheet, toast, busy, empty, spinner, confirmDialog, pickFile, uploadPublic, safeUrl } from "../core.js";
 import { errText } from "../lib/pessoas-import.js";
-import { head, fail } from "../lib/mod-ui.js";
+import { head, fail, toLocalInput } from "../lib/mod-ui.js";
 
 export function register(route) {
   route("/conteudos", (p, el, a) => contents(el, a));
@@ -76,10 +76,20 @@ async function planOpen(el, alive, id) {
     ${p.enrolled ? `<div class="card"><div class="bar" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div><p class="small muted">${done} de ${p.days.length} dias${pct >= 100 ? " · Plano concluído!" : ""}</p></div>`
       : `<button class="btn primary mb" id="go">Começar este plano</button>`}
     <div class="list">${p.days.map((d) => `<div class="li" style="align-items:flex-start">${p.enrolled ? `<input type="checkbox" data-d="${d.day_no}" ${d.done ? "checked" : ""} aria-label="Marcar dia ${d.day_no} como lido">` : ""}
-      <span class="grow"><span class="t">Dia ${d.day_no}${d.title && !/^dia\s*\d+$/i.test(d.title) ? " · " + esc(d.title) : ""}</span><span class="s">${esc(d.passage)}</span>${d.note ? `<span class="small muted" style="white-space:pre-wrap">${esc(d.note)}</span>` : ""}
-      ${safeUrl(d.url) ? `<a class="link small" href="${attr(safeUrl(d.url))}" target="_blank" rel="noopener noreferrer">Abrir leitura</a>` : ""}</span></div>`).join("")}</div>`;
+      <span class="grow" style="display:flex;flex-direction:column;gap:4px;align-items:flex-start"><span class="t">Dia ${d.day_no}${d.title && !/^dia\s*\d+$/i.test(d.title) ? " · " + esc(d.title) : ""}</span><span class="s">${esc(d.passage)}</span>${d.note ? `<span class="small muted" style="white-space:pre-wrap">${esc(d.note)}</span>` : ""}
+      ${safeUrl(d.url) ? `<a class="link small" href="${attr(safeUrl(d.url))}" target="_blank" rel="noopener noreferrer">Abrir leitura</a>` : ""}
+      ${p.enrolled ? `${d.my_note ? `<span class="small" style="white-space:pre-wrap;border-left:3px solid var(--accent);padding-left:8px">${esc(d.my_note)}</span>` : ""}<button class="link small" data-n="${d.day_no}" style="align-self:flex-start">${d.my_note ? "Editar minha anotação" : "Anotar"}</button>` : ""}</span></div>`).join("")}</div>
+    ${p.enrolled ? `<div class="card mt"><h3 style="margin-top:0">Lembrete diário</h3><p class="small muted">Um aviso por dia, no horário que você escolher, enquanto o plano não terminar. Só você vê suas anotações.</p>
+      <label class="check"><input type="checkbox" id="rm" ${p.remind?.on ? "checked" : ""}> Quero ser lembrado</label><label class="fld" style="display:flex;flex-direction:column;gap:4px;align-items:flex-start">Horário<input type="time" id="rt" value="${attr(p.remind?.time || "07:00")}"></label></div>` : ""}`;
   const go = el.querySelector("#go");
   if (go) go.onclick = async () => { busy(go); const x = await sb.rpc("plan_enroll", { p_id: id }); if (x.error) { busy(go, false); return toast(errText(x.error)); } toast("Plano iniciado."); planOpen(el, alive, id); };
+  const saveRemind = async () => { const x = await sb.rpc("plan_remind_set", { p_id: id, p_on: el.querySelector("#rm").checked, p_time: el.querySelector("#rt").value || "07:00" }); toast(x.error ? errText(x.error) : "Lembrete salvo."); };
+  if (el.querySelector("#rm")) { el.querySelector("#rm").onchange = saveRemind; el.querySelector("#rt").onchange = saveRemind; }
+  el.querySelectorAll("[data-n]").forEach((b) => (b.onclick = () => {
+    const day = Number(b.dataset.n), cur = p.days.find((d) => d.day_no === day)?.my_note || "";
+    const sh = sheet(`<h3>Minha anotação · Dia ${day}</h3><p class="small muted">Privada: só você consegue ler.</p><label class="fld"><textarea id="nb" rows="6" maxlength="2000">${esc(cur)}</textarea></label><div class="row gap-s mt"><button class="btn grow" id="ok">Salvar</button></div>`);
+    sh.el.querySelector("#ok").onclick = async (ev) => { busy(ev.currentTarget); const x = await sb.rpc("plan_note_set", { p_id: id, p_day: day, p_body: sh.el.querySelector("#nb").value }); if (x.error) { busy(ev.currentTarget, false); return toast(errText(x.error)); } sh.close(); toast("Anotação salva."); planOpen(el, alive, id); };
+  }));
   el.querySelectorAll("[data-d]").forEach((c) => (c.onchange = async () => {
     const x = await sb.rpc("plan_mark", { p_id: id, p_day: Number(c.dataset.d), p_done: c.checked });
     if (x.error) { c.checked = !c.checked; return toast(errText(x.error)); } planOpen(el, alive, id);
@@ -111,9 +121,9 @@ async function manage(el, alive) {
   if (first.error) return fail(el, "Experiência digital", first.error, back);
   let tab = "con", data = first.data;
   const draw = async () => {
-    el.innerHTML = `${head("Experiência digital", back)}<nav class="tabs">${[["con", "Conteúdos"], ["pla", "Planos de leitura"], ["ata", "Atalhos da Home"]].map((t) => `<button class="${tab === t[0] ? "on" : ""}" data-t="${t[0]}">${t[1]}</button>`).join("")}</nav><div id="body">${spinner()}</div>`;
+    el.innerHTML = `${head("Experiência digital", back)}<nav class="tabs">${[["con", "Conteúdos"], ["pla", "Planos de leitura"], ["liv", "Ao vivo"], ["ata", "Atalhos da Home"]].map((t) => `<button class="${tab === t[0] ? "on" : ""}" data-t="${t[0]}">${t[1]}</button>`).join("")}</nav><div id="body">${spinner()}</div>`;
     el.querySelectorAll("[data-t]").forEach((b) => (b.onclick = () => { tab = b.dataset.t; draw(); }));
-    const body = el.querySelector("#body"); await ({ con: conTab, pla: plaTab, ata: ataTab }[tab])(body);
+    const body = el.querySelector("#body"); await ({ con: conTab, pla: plaTab, liv: livTab, ata: ataTab }[tab])(body);
   };
   const err = (body, e) => (body.innerHTML = `<div class="card small">${esc(errText(e))}</div>`);
 
@@ -175,6 +185,26 @@ async function manage(el, alive) {
     if (q("#st")) q("#st").onclick = async (ev) => { busy(ev.currentTarget); const r = await sb.rpc("plan_set_status", { p_id: p.id, p_status: p.status === "published" ? "draft" : "published" }); if (r.error) { busy(ev.currentTarget, false); return toast(errText(r.error)); } s.close(); toast(p.status === "published" ? "Plano despublicado." : "Plano publicado."); draw(); };
   }
 
+  const LSTATE = { live: ["Ao vivo agora", "st-approved"], scheduled: ["Agendada", "none"], past: ["Encerrada", "none"], off: ["Desativada", "none"] };
+  async function livTab(body) {
+    const x = await sb.rpc("live_list", { p_org: org() }); if (!alive()) return; if (x.error) return err(body, x.error);
+    body.innerHTML = `<p class="small muted">Cadastre o link da transmissão (YouTube ou outro). O card aparece na Home dos membros 15 minutos antes do início e some quando termina. O vídeo abre no endereço informado.</p><button class="btn primary sm mb" id="new">${icon("plus")} Nova transmissão</button>
+      <div class="list">${x.data.map((l) => `<button class="li col stack" data-id="${l.id}" style="align-items:stretch"><div class="row between"><b>${esc(l.title)}</b>${tag(...LSTATE[l.state])}</div><span class="small muted">${new Date(l.starts_at).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" })} · ${AUD[l.audience]}</span></button>`).join("") || empty("play", "Nenhuma transmissão cadastrada")}</div>`;
+    body.querySelector("#new").onclick = () => livForm(null);
+    body.querySelectorAll("[data-id]").forEach((b) => (b.onclick = () => livForm(x.data.find((l) => l.id === b.dataset.id))));
+  }
+  function livForm(l) {
+    const v = l || { audience: "all", active: true }; const loc = (t) => (t ? toLocalInput(t) : "");
+    const s = sheet(`<h3>${l ? "Editar transmissão" : "Nova transmissão"}</h3><label class="fld">Título<input id="t" maxlength="120" value="${attr(v.title || "")}"></label>
+      <label class="fld">Link da transmissão (https://…)<input id="u" inputmode="url" placeholder="https://youtube.com/live/…" value="${attr(v.url || "")}"></label>
+      <label class="fld">Endereço da imagem (opcional)<input id="im" inputmode="url" value="${attr(v.image_url || "")}"></label>
+      <label class="fld">Início<input id="s" type="datetime-local" value="${loc(v.starts_at)}"></label><label class="fld">Fim (opcional; sem fim = 3 horas)<input id="e" type="datetime-local" value="${loc(v.ends_at)}"></label>
+      <label class="fld">Quem vê<select id="a">${Object.entries(AUD).map(([k, t]) => `<option value="${k}" ${k === v.audience ? "selected" : ""}>${t}</option>`).join("")}</select></label><label class="check"><input type="checkbox" id="on" ${v.active ? "checked" : ""}> Ativa</label>
+      <div class="row gap-s mt" style="flex-wrap:wrap"><button class="btn grow" id="ok">Salvar</button>${l ? `<button class="btn ghost danger grow" id="del">Excluir</button>` : ""}</div>`);
+    const q = (k) => s.el.querySelector(k);
+    q("#ok").onclick = async (ev) => { busy(ev.currentTarget); const r = await sb.rpc("live_save", { p_org: org(), p_id: l?.id || null, p: { title: q("#t").value, url: q("#u").value.trim(), image_url: q("#im").value.trim(), starts_at: q("#s").value ? new Date(q("#s").value).toISOString() : "", ends_at: q("#e").value ? new Date(q("#e").value).toISOString() : "", audience: q("#a").value, active: q("#on").checked } }); if (r.error) { busy(ev.currentTarget, false); return toast(errText(r.error)); } s.close(); toast("Transmissão salva."); draw(); };
+    if (q("#del")) q("#del").onclick = async (ev) => { if (!(await confirmDialog("Excluir esta transmissão?", "Excluir", true))) return; busy(ev.currentTarget); const r = await sb.rpc("live_delete", { p_id: l.id }); if (r.error) { busy(ev.currentTarget, false); return toast(errText(r.error)); } s.close(); toast("Transmissão excluída."); draw(); };
+  }
   async function ataTab(body) {
     const x = await sb.rpc("shortcut_list", { p_org: org() }); if (!alive()) return; if (x.error) return err(body, x.error);
     body.innerHTML = `<p class="small muted">Atalhos redondos no topo da Home. No máximo 8 ativos, para não sobrecarregar a tela.</p><button class="btn primary sm mb" id="new">${icon("plus")} Novo atalho</button>

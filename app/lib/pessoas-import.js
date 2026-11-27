@@ -156,3 +156,4 @@ Object.assign(ERRORS, {
   dig_plan_in_use: "Há pessoas lendo este plano: só é possível acrescentar ou ajustar dias, não remover.", dig_passage_required: "Cada dia precisa de uma passagem ou leitura.", dig_plan_empty: "Adicione ao menos um dia antes de publicar.",
   dig_not_enrolled: "Comece o plano antes de marcar os dias.", dig_label_required: "Informe o nome do atalho (até 24 letras).", dig_too_many_shortcuts: "Já há 8 atalhos ativos. Desative um antes de ativar outro.",
 });
+Object.assign(ERRORS, { dig_start_required: "Informe a data e a hora de início.", dig_bad_period: "O fim precisa ser depois do início.", dig_note_long: "A anotação passa de 2000 letras.", dig_bad_time: "Horário inválido.", push_invalid: "Não foi possível registrar este aparelho." });
