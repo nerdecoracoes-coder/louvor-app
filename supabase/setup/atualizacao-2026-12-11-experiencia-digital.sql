@@ -1,11 +1,11 @@
 -- =====================================================================
--- SOMOS — Fase 5: Experiência Digital.
---  * Conteúdos digitais: vídeos, áudios, estudos, materiais para download e conteúdos institucionais, com séries, público e rascunho/publicado.
---  * Planos de leitura: dias com passagem e anotação, inscrição e progresso por pessoa (cada um só vê o próprio progresso; a gestão vê apenas contagens).
---  * Atalhos institucionais configuráveis na Home (rótulo, ícone, destino, público, ordem; no máximo 8).
---  * Busca integrada (eventos, programações, agenda da igreja, pregações, conteúdos, planos, comunicados, informações da igreja) que respeita permissões e público.
---  * Pregações continuam em sermons (Fase 4); nada é duplicado. Home e menu passam a conhecer conteúdos e planos.
---  * Permissão nova: dig_manage (administrador ou concessão; liderança de time e desenvolvedor não ganham acesso).
+-- SOMOS  Fase 5: Experiencia Digital.
+--  * Conteudos digitais: videos, audios, estudos, materiais para download e conteudos institucionais, com series, publico e rascunho/publicado.
+--  * Planos de leitura: dias com passagem e anotacao, inscricao e progresso por pessoa (cada um so ve o proprio progresso; a gestao ve apenas contagens).
+--  * Atalhos institucionais configuraveis na Home (rotulo, icone, destino, publico, ordem; no maximo 8).
+--  * Busca integrada (eventos, programacoes, agenda da igreja, pregacoes, conteudos, planos, comunicados, informacoes da igreja) que respeita permissoes e publico.
+--  * Pregacoes continuam em sermons (Fase 4); nada e duplicado. Home e menu passam a conhecer conteudos e planos.
+--  * Permissao nova: dig_manage (administrador ou concessao; lideranca de time e desenvolvedor nao ganham acesso).
 -- =====================================================================
 create or replace function public.module_actions() returns text[] language sql immutable as $$
   select array['cells_view','cells_manage','cells_members','cells_meetings','cells_supervision','cells_reports',
@@ -139,7 +139,7 @@ begin
 end $$;
 revoke execute on function public.dig_staff(uuid), public.dig_need(uuid), public.dig_member(uuid), public.dig_aud_ok(text, public.people), public.dig_me(uuid), public.dig_has_contents(uuid), public.dig_has_plans(uuid) from public, anon, authenticated;
 
--- ---------------------------------------------------------------- conteúdos: gestão
+-- ---------------------------------------------------------------- conteudos: gestao
 create or replace function public.dig_content_list(p_org uuid) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 begin
@@ -200,7 +200,7 @@ begin
   return jsonb_build_object('ok', true, 'id', v_id);
 end $$;
 
--- ---------------------------------------------------------------- conteúdos: leitura pelo membro (só publicados e do seu público)
+-- ---------------------------------------------------------------- conteudos: leitura pelo membro (so publicados e do seu publico)
 create or replace function public.content_list(p_org uuid, p_filter jsonb default '{}'::jsonb) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare pe people; v_q text := nullif(trim(coalesce(p_filter->>'q', '')), ''); v_kind text := nullif(p_filter->>'kind', ''); v_series uuid := nullif(p_filter->>'series_id', '')::uuid;
@@ -241,7 +241,7 @@ begin
   if p_id is null then insert into reading_plans (org_id, title, description, image_url, audience, created_by) values (p_org, v_title, nullif(trim(coalesce(p->>'description', '')), ''), nullif(p->>'image_url', ''), v_aud, auth.uid()) returning id into v_id;
   else update reading_plans set title = v_title, description = nullif(trim(coalesce(p->>'description', '')), ''), image_url = nullif(p->>'image_url', ''), audience = v_aud, updated_at = now() where id = p_id and org_id = p_org; if not found then raise exception 'not_found'; end if; end if;
   if v_days is not null then
-    -- só é possível acrescentar ou alterar dias; remover dia de plano com progresso apagaria o histórico das pessoas
+    -- so e possivel acrescentar ou alterar dias; remover dia de plano com progresso apagaria o historico das pessoas
     if exists (select 1 from reading_plan_progress g where g.plan_id = v_id) and jsonb_array_length(v_days) < (select count(*) from reading_plan_days where plan_id = v_id) then raise exception 'dig_plan_in_use'; end if;
     delete from reading_plan_days where plan_id = v_id;
     for d in select * from jsonb_array_elements(v_days) loop
@@ -364,7 +364,7 @@ begin
     from home_shortcuts s where s.org_id = p_org and s.active and public.dig_aud_ok(s.audience, pe)), '[]'::jsonb);
 end $$;
 
--- ---------------------------------------------------------------- busca integrada (só o que a pessoa pode abrir)
+-- ---------------------------------------------------------------- busca integrada (so o que a pessoa pode abrir)
 create or replace function public.search_all(p_org uuid, p_q text) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare pe people; v_q text := trim(coalesce(p_q, '')); v_like text; v_member boolean; v_leader boolean; v_mgr boolean; v_guest boolean;
@@ -378,22 +378,22 @@ begin
   return jsonb_build_object('q', v_q, 'groups', (select coalesce(jsonb_agg(g) filter (where jsonb_array_length(g->'items') > 0), '[]'::jsonb) from (values
     (jsonb_build_object('key', 'events', 'label', 'Eventos', 'items', coalesce((select jsonb_agg(jsonb_build_object('title', e.title, 'sub', to_char(e.starts_at at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI'), 'route', '#/eventos') order by e.starts_at) from (
         select * from ev_events e where e.org_id = p_org and e.status = 'published' and e.starts_at >= now() - interval '1 day' and public.ev_eligible(e, pe) and (e.title ilike v_like or e.description ilike v_like or e.location ilike v_like) order by e.starts_at limit 6) e), '[]'::jsonb))),
-    (jsonb_build_object('key', 'agenda', 'label', 'Agenda e programações', 'items', coalesce((select jsonb_agg(x) from (
+    (jsonb_build_object('key', 'agenda', 'label', E'Agenda e programa\u00e7\u00f5es', 'items', coalesce((select jsonb_agg(x) from (
         select jsonb_build_object('title', p.name, 'sub', coalesce(p.location, initcap(p.category)), 'route', '#/agenda') x from prog_items p where p.org_id = p_org
           and (v_mgr or (p.status = 'published' and (p.visibility = 'public' or (p.visibility = 'members' and v_member) or (p.visibility = 'leaders' and v_leader)))) and p.status <> 'cancelled' and (p.name ilike v_like or p.description ilike v_like or p.location ilike v_like) order by p.name limit 6) a), '[]'::jsonb)
       || coalesce((select jsonb_agg(jsonb_build_object('title', c.title, 'sub', to_char(c.starts_at at time zone 'America/Sao_Paulo', 'DD/MM HH24:MI'), 'route', '#/agenda')) from (
         select * from church_events c where c.org_id = p_org and c.starts_at >= now() - interval '1 day' and (c.title ilike v_like or c.description ilike v_like) order by c.starts_at limit 4) c), '[]'::jsonb))),
-    (jsonb_build_object('key', 'sermons', 'label', 'Pregações', 'items', coalesce((select jsonb_agg(jsonb_build_object('title', s.title, 'sub', coalesce(s.preacher, ''), 'route', '#/pregacoes?q=' || replace(s.title, ' ', '%20')) order by s.preached_on desc nulls last) from (
+    (jsonb_build_object('key', 'sermons', 'label', E'Prega\u00e7\u00f5es', 'items', coalesce((select jsonb_agg(jsonb_build_object('title', s.title, 'sub', coalesce(s.preacher, ''), 'route', '#/pregacoes?q=' || replace(s.title, ' ', '%20')) order by s.preached_on desc nulls last) from (
         select * from sermons s where s.org_id = p_org and s.status = 'published' and (s.audience = 'all' or (pe.id is not null and pe.classification = s.audience))
           and (s.title ilike v_like or s.preacher ilike v_like or s.scripture ilike v_like or s.description ilike v_like) order by s.preached_on desc nulls last limit 6) s), '[]'::jsonb))),
-    (jsonb_build_object('key', 'contents', 'label', 'Conteúdos', 'items', coalesce((select jsonb_agg(jsonb_build_object('title', c.title, 'sub', case c.kind when 'video' then 'Vídeo' when 'audio' then 'Áudio' when 'study' then 'Estudo' when 'download' then 'Material' else 'Institucional' end, 'route', '#/conteudos/' || c.id) order by c.published_at desc) from (
+    (jsonb_build_object('key', 'contents', 'label', E'Conte\u00fados', 'items', coalesce((select jsonb_agg(jsonb_build_object('title', c.title, 'sub', case c.kind when 'video' then E'V\u00eddeo' when 'audio' then E'\u00c1udio' when 'study' then 'Estudo' when 'download' then 'Material' else 'Institucional' end, 'route', '#/conteudos/' || c.id) order by c.published_at desc) from (
         select * from content_items c left join lateral (select 1) z on true where c.org_id = p_org and c.status = 'published' and public.dig_aud_ok(c.audience, pe)
           and (c.title ilike v_like or c.description ilike v_like or c.category ilike v_like or exists (select 1 from content_series s where s.id = c.series_id and s.name ilike v_like)) order by c.published_at desc limit 6) c), '[]'::jsonb)
       || coalesce((select jsonb_agg(jsonb_build_object('title', p.title, 'sub', 'Plano de leitura', 'route', '#/planos/' || p.id)) from (
         select * from reading_plans p where p.org_id = p_org and p.status = 'published' and public.dig_aud_ok(p.audience, pe) and (p.title ilike v_like or p.description ilike v_like) and exists (select 1 from reading_plan_days d where d.plan_id = p.id) limit 4) p), '[]'::jsonb))),
     (jsonb_build_object('key', 'notices', 'label', 'Comunicados', 'items', coalesce((select jsonb_agg(jsonb_build_object('title', a.title, 'sub', to_char(a.created_at at time zone 'America/Sao_Paulo', 'DD/MM'), 'route', '#/avisos') order by a.created_at desc) from (
         select * from announcements a where a.org_id = p_org and a.team_id is null and public.comm_ann_ok(a) and (a.title ilike v_like or a.body ilike v_like) order by a.created_at desc limit 6) a), '[]'::jsonb))),
-    (jsonb_build_object('key', 'church', 'label', 'Informações da igreja', 'items', coalesce((select jsonb_agg(jsonb_build_object('title', o.name, 'sub', coalesce(o.subtitle, ''), 'route', '#/igreja')) from organizations o where o.id = p_org and (o.name ilike v_like or o.subtitle ilike v_like)), '[]'::jsonb)))
+    (jsonb_build_object('key', 'church', 'label', E'Informa\u00e7\u00f5es da igreja', 'items', coalesce((select jsonb_agg(jsonb_build_object('title', o.name, 'sub', coalesce(o.subtitle, ''), 'route', '#/igreja')) from organizations o where o.id = p_org and (o.name ilike v_like or o.subtitle ilike v_like)), '[]'::jsonb)))
   ) as t(g)));
 end $$;
 
@@ -404,7 +404,7 @@ grant execute on function public.dig_content_list(uuid), public.dig_content_save
   public.content_list(uuid, jsonb), public.content_get(uuid), public.plan_save(uuid, uuid, jsonb), public.plan_set_status(uuid, text), public.plan_admin_list(uuid), public.plans_for_me(uuid), public.plan_get(uuid),
   public.plan_enroll(uuid), public.plan_mark(uuid, int, boolean), public.shortcut_list(uuid), public.shortcut_save(uuid, uuid, jsonb), public.shortcut_delete(uuid), public.shortcuts_for_me(uuid), public.search_all(uuid, text) to authenticated;
 
--- ---------------------------------------------------------------- menu e Home passam a conhecer conteúdos e planos
+-- ---------------------------------------------------------------- menu e Home passam a conhecer conteudos e planos
 create or replace function public.my_menu(p_org uuid) returns jsonb
 language plpgsql stable security definer set search_path = public as $$
 declare pe people; v_ids uuid[]; v_dec boolean; v_scales boolean; v_welcome boolean; v_ev boolean; v_tk boolean; v_sm boolean; v_ic boolean;
@@ -413,7 +413,7 @@ begin
   if not exists (select 1 from org_members where org_id = p_org and user_id = auth.uid()) then raise exception 'forbidden'; end if;
   select * into pe from people where org_id = p_org and user_id = auth.uid() and status in ('active','inactive','pending') order by created_at limit 1;
   v_ids := array(select id from people where org_id = p_org and user_id = auth.uid());
-  -- a decisão é consultada na estrutura permanente (registros não anulados), nunca só pela classificação
+  -- a decisao e consultada na estrutura permanente (registros nao anulados), nunca so pela classificacao
   v_dec := exists (select 1 from faith_decisions d where d.org_id = p_org and d.voided_at is null and (d.person_id = any (v_ids) or d.self_user = auth.uid()));
   v_scales := exists (select 1 from team_members m where m.org_id = p_org and m.user_id = auth.uid())
     or exists (select 1 from roster_assignments a join rosters r on r.id = a.roster_id where a.person_id = any (v_ids) and a.status in ('invited','confirmed','declined','sub_requested')
@@ -465,67 +465,67 @@ begin
    where pt.person_id = any (v_ids) and pt.status = 'active' and j.status = 'active'
      and (select coalesce(sum(req_total - req_done), 0) from public.jr_steps(pt.id)) > 0 order by pt.updated_at desc limit 1;
   if r.pid is not null then
-    v_cards := v_cards || jsonb_build_object('key', 'continue', 'kind', 'progress', 'label', 'Sua jornada', 'title', 'Continue de onde você parou.', 'body', r.name || coalesce(' · ' || r.step, ''),
+    v_cards := v_cards || jsonb_build_object('key', 'continue', 'kind', 'progress', 'label', 'Sua jornada', 'title', E'Continue de onde voc\u00ea parou.', 'body', r.name || coalesce(E' \u00b7 ' || r.step, ''),
       'action', 'Continuar', 'route', '#/jornadas/' || r.pid, 'icon', 'route', 'image', r.image_url, 'pct', r.pct, 'tier', 1);
   end if;
 
-  -- 2. destaques e conteúdos cadastrados (campanhas, estudos, pregações)
+  -- 2. destaques e conteudos cadastrados (campanhas, estudos, pregacoes)
   for it in select * from discover_items i where i.org_id = p_org and i.archived_at is null and i.active order by i.urgent desc, i.priority desc, coalesce(i.starts_at, i.created_at) desc loop
     if not public.disc_visible(it, pe, v_ids) then continue; end if;
     k := case it.kind when 'campaign' then 'campaign' when 'study' then 'study' else 'sermon' end;
     if k <> 'campaign' and exists (select 1 from unnest(v_cards) c where c->>'key' = k) then continue; end if;
     if k = 'campaign' and (select count(*) from unnest(v_cards) c where c->>'key' = 'campaign') >= 3 then continue; end if;
     v_cards := v_cards || jsonb_build_object('key', k, 'kind', case when k = 'campaign' then 'feature' else 'content' end, 'urgent', it.urgent, 'item_id', it.id,
-      'label', case k when 'campaign' then case when it.urgent then 'Comunicado importante' else 'Destaque' end when 'study' then 'Estudo' else 'Última pregação' end,
+      'label', case k when 'campaign' then case when it.urgent then 'Comunicado importante' else 'Destaque' end when 'study' then 'Estudo' else E'\u00daltima prega\u00e7\u00e3o' end,
       'title', it.title, 'body', it.body, 'action', coalesce(it.action_label, case k when 'study' then 'Assistir agora' when 'sermon' then 'Assistir' else 'Saiba mais' end),
       'route', case when it.url ~ '^#/' then it.url end, 'url', case when it.url ~* '^https?://' then it.url end, 'image', it.image_url, 'icon', case k when 'campaign' then 'megaphone' else 'play' end, 'tier', 1);
   end loop;
 
-  -- 3. próximos eventos: eventos com inscrição (publicados e do público da pessoa) e, na falta deles, a agenda simples da igreja
+  -- 3. proximos eventos: eventos com inscricao (publicados e do publico da pessoa) e, na falta deles, a agenda simples da igreja
   select count(*) n, (array_agg(e.title order by e.starts_at))[1] t, min(e.starts_at) d, bool_or(public.ev_reg_state(e) in ('open','full')) opn into r
     from ev_events e where e.org_id = p_org and e.status = 'published' and coalesce(e.ends_at, e.starts_at + interval '3 hours') >= now() and e.starts_at <= now() + interval '90 days' and public.ev_eligible(e, pe);
   if r.n > 0 then
-    v_cards := v_cards || jsonb_build_object('key', 'events', 'kind', 'event', 'label', case when r.opn then 'Inscrições abertas' else 'Eventos' end, 'title', 'Tem algo especial chegando.', 'body', r.t || ' · ' || to_char(r.d at time zone 'America/Sao_Paulo', 'DD/MM "às" HH24:MI'),
+    v_cards := v_cards || jsonb_build_object('key', 'events', 'kind', 'event', 'label', case when r.opn then E'Inscri\u00e7\u00f5es abertas' else 'Eventos' end, 'title', 'Tem algo especial chegando.', 'body', r.t || E' \u00b7 ' || to_char(r.d at time zone 'America/Sao_Paulo', E'DD/MM "\u00e0s" HH24:MI'),
       'action', case when r.opn then 'Inscrever-se' else 'Ver eventos' end, 'route', '#/eventos', 'icon', 'calendar', 'count', r.n, 'tier', 1);
   else
     select count(*) n, (array_agg(e.title order by e.starts_at))[1] t, min(e.starts_at) d into r from church_events e where e.org_id = p_org and e.starts_at >= now() - interval '3 hours' and e.starts_at <= now() + interval '45 days';
     if r.n > 0 then
-      v_cards := v_cards || jsonb_build_object('key', 'events', 'kind', 'event', 'label', 'Agenda', 'title', 'Tem algo especial chegando.', 'body', r.t || ' · ' || to_char(r.d at time zone 'America/Sao_Paulo', 'DD/MM "às" HH24:MI'),
+      v_cards := v_cards || jsonb_build_object('key', 'events', 'kind', 'event', 'label', 'Agenda', 'title', 'Tem algo especial chegando.', 'body', r.t || E' \u00b7 ' || to_char(r.d at time zone 'America/Sao_Paulo', E'DD/MM "\u00e0s" HH24:MI'),
         'action', 'Ver eventos', 'route', '#/agenda', 'icon', 'calendar', 'count', r.n, 'tier', 1);
     end if;
   end if;
 
-  -- 4. comunicados reais publicados nas últimas semanas
+  -- 4. comunicados reais publicados nas ultimas semanas
   select a.title, a.image_url into r from announcements a where a.org_id = p_org and a.team_id is null and a.created_at > now() - interval '30 days' order by a.created_at desc limit 1;
   if r.title is not null then
     v_cards := v_cards || jsonb_build_object('key', 'notices', 'kind', 'notice', 'label', 'Comunicado', 'title', 'Fique por dentro.', 'body', r.title, 'action', 'Ver comunicado', 'route', '#/avisos', 'icon', 'megaphone', 'image', r.image_url, 'tier', 1);
   end if;
 
-  -- 5. convite para uma jornada aberta ao público desta pessoa
+  -- 5. convite para uma jornada aberta ao publico desta pessoa
   select count(*) n, (array_agg(j.name order by j.created_at desc))[1] nm, (array_agg(j.image_url order by j.created_at desc))[1] im into r
     from journeys j where j.org_id = p_org and j.status = 'active' and j.visibility = 'public' and j.enroll_voluntary and pe.id is not null
      and (j.eligible_classes is null or pe.classification = any (j.eligible_classes))
      and not exists (select 1 from journey_participants x where x.journey_id = j.id and x.person_id = any (v_ids) and x.status <> 'cancelled');
   if r.n > 0 then
-    v_cards := v_cards || jsonb_build_object('key', 'journeys', 'kind', 'journey', 'label', 'Jornadas', 'title', 'Existe uma jornada esperando por você.',
-      'body', case when r.n = 1 then r.nm else r.n || ' jornadas abertas para inscrição' end, 'action', 'Explorar jornadas', 'route', '#/jornadas', 'icon', 'route', 'image', case when r.n = 1 then r.im end, 'tier', 2);
+    v_cards := v_cards || jsonb_build_object('key', 'journeys', 'kind', 'journey', 'label', 'Jornadas', 'title', E'Existe uma jornada esperando por voc\u00ea.',
+      'body', case when r.n = 1 then r.nm else r.n || E' jornadas abertas para inscri\u00e7\u00e3o' end, 'action', 'Explorar jornadas', 'route', '#/jornadas', 'icon', 'route', 'image', case when r.n = 1 then r.im end, 'tier', 2);
   end if;
 
-  -- 6. convite à decisão: só para quem ainda não tem decisão registrada e não é membro
+  -- 6. convite a decisao: so para quem ainda nao tem decisao registrada e nao e membro
   if public.decision_eligible(p_org) then
     v_cards := v_cards || jsonb_build_object('key', 'decision', 'kind', 'horizontal', 'label', 'Um passo importante', 'title', 'Quer dar um passo importante na sua caminhada?',
-      'body', 'Registre sua decisão ou converse com nossa equipe.', 'action', 'Saiba mais', 'route', '#/decisao', 'icon', 'heart', 'tier', 1);
+      'body', E'Registre sua decis\u00e3o ou converse com nossa equipe.', 'action', 'Saiba mais', 'route', '#/decisao', 'icon', 'heart', 'tier', 1);
   end if;
 
-  -- 7. carteira digital: só membro elegível com carteira ativa
+  -- 7. carteira digital: so membro elegivel com carteira ativa
   if pe.id is not null and v_member and pe.status = 'active' then
     select * into w from wallets where org_id = p_org and person_id = pe.id; wc := public.wl_cfg(p_org);
     if w.id is not null and public.wl_effective(w, pe, wc) = 'active' then
-      v_cards := v_cards || jsonb_build_object('key', 'wallet', 'kind', 'compact', 'label', 'Carteira', 'title', 'Sua identificação está aqui.', 'body', 'Acesse sua Carteira Digital de Membro.', 'action', 'Ver carteira', 'route', '#/carteira', 'icon', 'badge', 'tier', 2);
+      v_cards := v_cards || jsonb_build_object('key', 'wallet', 'kind', 'compact', 'label', 'Carteira', 'title', E'Sua identifica\u00e7\u00e3o est\u00e1 aqui.', 'body', 'Acesse sua Carteira Digital de Membro.', 'action', 'Ver carteira', 'route', '#/carteira', 'icon', 'badge', 'tier', 2);
     end if;
   end if;
 
-  -- 7b. plano de leitura em andamento ou aberto para começar; conteúdo novo publicado para o público da pessoa (só o que existe e a pessoa pode abrir)
+  -- 7b. plano de leitura em andamento ou aberto para comecar; conteudo novo publicado para o publico da pessoa (so o que existe e a pessoa pode abrir)
   select p.id pid, p.title, p.image_url, e.user_id is not null enrolled,
          (select count(*) from reading_plan_progress g where g.plan_id = p.id and g.user_id = auth.uid()) done,
          (select count(*) from reading_plan_days d where d.plan_id = p.id) total into r
@@ -536,37 +536,37 @@ begin
    order by (e.user_id is not null) desc, p.created_at desc limit 1;
   if r.pid is not null then
     v_cards := v_cards || jsonb_build_object('key', 'plan', 'kind', case when r.enrolled then 'progress' else 'horizontal' end, 'label', 'Plano de leitura',
-      'title', case when r.enrolled then 'Continue o seu plano de leitura.' else 'Que tal começar um plano de leitura?' end, 'body', r.title, 'action', case when r.enrolled then 'Continuar' else 'Conhecer' end,
+      'title', case when r.enrolled then 'Continue o seu plano de leitura.' else E'Que tal come\u00e7ar um plano de leitura?' end, 'body', r.title, 'action', case when r.enrolled then 'Continuar' else 'Conhecer' end,
       'route', '#/planos/' || r.pid, 'icon', 'book', 'image', r.image_url, 'pct', case when r.enrolled and r.total > 0 then (r.done * 100 / r.total)::int end, 'tier', case when r.enrolled then 1 else 2 end);
   end if;
   select c.id cid, c.title, c.kind, c.image_url, c.description into r
     from content_items c where c.org_id = p_org and c.status = 'published' and public.dig_aud_ok(c.audience, pe) and c.kind <> 'institutional'
    order by c.published_at desc limit 1;
   if r.cid is not null then
-    v_cards := v_cards || jsonb_build_object('key', 'contents', 'kind', 'content', 'label', case r.kind when 'video' then 'Vídeo' when 'audio' then 'Áudio' when 'study' then 'Estudo' else 'Material' end,
+    v_cards := v_cards || jsonb_build_object('key', 'contents', 'kind', 'content', 'label', case r.kind when 'video' then E'V\u00eddeo' when 'audio' then E'\u00c1udio' when 'study' then 'Estudo' else 'Material' end,
       'title', r.title, 'body', left(coalesce(r.description, ''), 140), 'action', case r.kind when 'video' then 'Assistir' when 'audio' then 'Ouvir' when 'download' then 'Baixar' else 'Abrir' end,
       'route', '#/conteudos/' || r.cid, 'icon', case r.kind when 'audio' then 'music' when 'video' then 'play' else 'book' end, 'image', r.image_url, 'tier', 2);
   end if;
 
-  -- 8. ministérios e oportunidades de participação (só se houver time)
+  -- 8. ministerios e oportunidades de participacao (so se houver time)
   if exists (select 1 from teams t where t.org_id = p_org) then
     v_cards := v_cards || jsonb_build_object('key', 'ministries', 'kind', 'horizontal', 'label', 'Participe',
-      'title', case when v_member then 'Há um lugar para você servir.' else 'Faça parte da nossa comunidade.' end,
-      'body', 'Conheça os ministérios, as atividades e as oportunidades de participação.', 'action', 'Conhecer', 'route', '#/times', 'icon', 'users', 'tier', 2);
+      'title', case when v_member then E'H\u00e1 um lugar para voc\u00ea servir.' else E'Fa\u00e7a parte da nossa comunidade.' end,
+      'body', E'Conhe\u00e7a os minist\u00e9rios, as atividades e as oportunidades de participa\u00e7\u00e3o.', 'action', 'Conhecer', 'route', '#/times', 'icon', 'users', 'tier', 2);
   end if;
 
-  -- 9. contato com a igreja (quem ainda não é membro)
+  -- 9. contato com a igreja (quem ainda nao e membro)
   if pe.id is null or v_cls <> 'member' then
-    v_cards := v_cards || jsonb_build_object('key', 'contact', 'kind', 'compact', 'label', 'Fale com a igreja', 'title', 'Quer conversar com a igreja?', 'body', 'Peça para a nossa equipe entrar em contato com você.', 'action', 'Solicitar contato', 'route', '#/contato', 'icon', 'chat', 'tier', 2);
+    v_cards := v_cards || jsonb_build_object('key', 'contact', 'kind', 'compact', 'label', 'Fale com a igreja', 'title', 'Quer conversar com a igreja?', 'body', E'Pe\u00e7a para a nossa equipe entrar em contato com voc\u00ea.', 'action', 'Solicitar contato', 'route', '#/contato', 'icon', 'chat', 'tier', 2);
   end if;
 
-  -- 10. atualização cadastral: ficha sem alteração há mais de 180 dias e sem pedido em andamento
+  -- 10. atualizacao cadastral: ficha sem alteracao ha mais de 180 dias e sem pedido em andamento
   if pe.id is not null and pe.status = 'active' and coalesce(pe.updated_at, pe.created_at) < now() - interval '180 days'
      and not exists (select 1 from person_update_requests q where q.person_id = pe.id and q.status in ('draft','pending','in_review')) then
-    v_cards := v_cards || jsonb_build_object('key', 'cadastro', 'kind', 'compact', 'label', 'Cadastro', 'title', 'Seus dados estão atualizados?', 'body', 'Mantenha suas informações atualizadas para facilitar nossa comunicação.', 'action', 'Atualizar cadastro', 'route', '#/meu-cadastro', 'icon', 'user', 'tier', 2);
+    v_cards := v_cards || jsonb_build_object('key', 'cadastro', 'kind', 'compact', 'label', 'Cadastro', 'title', E'Seus dados est\u00e3o atualizados?', 'body', E'Mantenha suas informa\u00e7\u00f5es atualizadas para facilitar nossa comunica\u00e7\u00e3o.', 'action', 'Atualizar cadastro', 'route', '#/meu-cadastro', 'icon', 'user', 'tier', 2);
   end if;
 
-  -- ordem escolhida pela administração; urgentes sempre na frente
+  -- ordem escolhida pela administracao; urgentes sempre na frente
   foreach k in array v_order loop
     for i in 1 .. coalesce(cardinality(v_cards), 0) loop
       if v_cards[i]->>'key' = k and coalesce((v_cards[i]->>'urgent')::boolean, false) then v_sorted := v_sorted || v_cards[i]; end if;
@@ -577,7 +577,7 @@ begin
       if v_cards[i]->>'key' = k and not coalesce((v_cards[i]->>'urgent')::boolean, false) then v_sorted := v_sorted || v_cards[i]; end if;
     end loop;
   end loop;
-  -- variedade: os convites institucionais (tier 2) giram de lugar a cada dia, sem esconder avisos nem conteúdos
+  -- variedade: os convites institucionais (tier 2) giram de lugar a cada dia, sem esconder avisos nem conteudos
   v_idx := '{}'; v_pool := '{}';
   for i in 1 .. coalesce(cardinality(v_sorted), 0) loop
     if (v_sorted[i]->>'tier')::int = 2 then v_idx := v_idx || i; v_pool := v_pool || v_sorted[i]; end if;
@@ -593,9 +593,9 @@ end $$;
 grant execute on function public.my_menu(uuid), public.home_discover(uuid) to authenticated;
 
 -- ---------------------------------------------------------------------
--- Para desfazer: reaplicar my_menu e home_discover da migração 20261210000001 e dropar as funções dig_*, content_*, plan_*, shortcut*, search_all e as tabelas content_*, reading_plan*, home_shortcuts (apaga o conteúdo e o progresso!).
+-- Para desfazer: reaplicar my_menu e home_discover da migracao 20261210000001 e dropar as funcoes dig_*, content_*, plan_*, shortcut*, search_all e as tabelas content_*, reading_plan*, home_shortcuts (apaga o conteudo e o progresso!).
 -- ---------------------------------------------------------------------
--- Verificação (deve retornar true):
+-- Verificacao (deve retornar true):
 select 'dig_manage' = any (public.module_actions()) and to_regclass('public.content_items') is not null and to_regclass('public.reading_plans') is not null
    and exists (select 1 from pg_proc where proname = 'search_all') and pg_get_functiondef('public.my_menu(uuid)'::regprocedure) like '%dig_has_contents%'
    and pg_get_functiondef('public.home_discover(uuid)'::regprocedure) like '%reading_plan_progress%' as experiencia_digital_ok;

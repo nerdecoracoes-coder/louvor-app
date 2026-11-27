@@ -1,12 +1,12 @@
 -- =====================================================================
--- SOMOS — Fase 6B: Integrações e Recursos Técnicos (SOMOS Chamados → Integrações)
---  * Permissão nova: integ_manage (administrador ou concessão; desenvolvedor NÃO tem acesso implícito).
---  * API pública v1 (somente leitura, dados já públicos da igreja): chaves com escopo, validade e limite por minuto.
---    A chave aparece uma única vez; no banco fica só o hash (sha256). O servidor HTTP é a Edge Function "api".
---  * Webhooks: URL https (sem endereços internos), eventos escolhidos, segredo de assinatura (HMAC-SHA256), situação,
---    histórico de entregas e reenvio. O envio é feito pela Edge Function "webhook-dispatch" (reenvio automático com espera crescente).
---  * Eventos nunca levam CPF, e-mail, telefone ou dados de doador. "Contribuição registrada" só pode ser assinada por quem tem fin_manage e não leva pessoa.
---  * Logs e monitoramento sem segredos: o que é gravado passa por limpeza; falhas, pendências e "última execução" dos envios ficam visíveis.
+-- SOMOS  Fase 6B: Integracoes e Recursos Tecnicos (SOMOS Chamados  Integracoes)
+--  * Permissao nova: integ_manage (administrador ou concessao; desenvolvedor NAO tem acesso implicito).
+--  * API publica v1 (somente leitura, dados ja publicos da igreja): chaves com escopo, validade e limite por minuto.
+--    A chave aparece uma unica vez; no banco fica so o hash (sha256). O servidor HTTP e a Edge Function "api".
+--  * Webhooks: URL https (sem enderecos internos), eventos escolhidos, segredo de assinatura (HMAC-SHA256), situacao,
+--    historico de entregas e reenvio. O envio e feito pela Edge Function "webhook-dispatch" (reenvio automatico com espera crescente).
+--  * Eventos nunca levam CPF, e-mail, telefone ou dados de doador. "Contribuicao registrada" so pode ser assinada por quem tem fin_manage e nao leva pessoa.
+--  * Logs e monitoramento sem segredos: o que e gravado passa por limpeza; falhas, pendencias e "ultima execucao" dos envios ficam visiveis.
 -- =====================================================================
 
 create or replace function public.module_actions() returns text[] language sql immutable as $$
@@ -146,7 +146,7 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
--- uso exclusivo da Edge Function "api" (chave de serviço): confere a chave, o escopo e o limite por minuto
+-- uso exclusivo da Edge Function "api" (chave de servico): confere a chave, o escopo e o limite por minuto
 create or replace function public.api_authenticate(p_hash text, p_scope text default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare k api_keys; v_n int; v_bucket timestamptz := date_trunc('minute', now());
@@ -166,7 +166,7 @@ create or replace function public.api_log(p_org uuid, p_key uuid, p_method text,
     jsonb_build_object('status', p_status, 'ms', p_ms, 'key_id', p_key))
 $$;
 
--- recursos da API v1: só o que a igreja já publica para todos (nada de pessoas, financeiro ou conteúdo restrito)
+-- recursos da API v1: so o que a igreja ja publica para todos (nada de pessoas, financeiro ou conteudo restrito)
 create or replace function public.api_v1_events(p_org uuid, p_limit int default 50, p_offset int default 0) returns jsonb language sql stable security definer set search_path = public as $$
   with r as (select e.* from ev_events e where e.org_id = p_org and e.status = 'published' and e.audience = 'all' order by e.starts_at desc limit least(greatest(coalesce(p_limit, 50), 1), 100) + 1 offset greatest(coalesce(p_offset, 0), 0))
   select jsonb_build_object('data', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'title', x.title, 'description', x.description, 'location', x.location, 'starts_at', x.starts_at, 'ends_at', x.ends_at, 'image_url', x.image_url, 'registration', x.registration) order by x.starts_at desc)
@@ -197,7 +197,7 @@ $$;
 create or replace function public.wh_event_types() returns text[] language sql immutable as $$
   select array['person.created', 'person.updated', 'event.created', 'registration.created', 'attendance.recorded', 'contribution.recorded', 'program.published']::text[]
 $$;
--- só https, sem usuário na URL, sem endereço IP, sem nomes internos (localhost, .local, .internal ...)
+-- so https, sem usuario na URL, sem endereco IP, sem nomes internos (localhost, .local, .internal ...)
 create or replace function public.integ_url_ok(u text) returns boolean language sql immutable as $$
   select coalesce(u ~* '^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{2,5})?(/[^[:space:]]*)?$' and length(u) <= 500
     and h ~ '\.' and h !~ '^[0-9.]+$' and h !~* '(^|\.)(localhost|local|internal|localdomain|lan|home|corp|intranet)$', false)
@@ -213,7 +213,7 @@ begin
 end $$;
 revoke execute on function public.wh_emit(uuid, text, jsonb) from public, anon, authenticated;
 
--- Gatilhos: nunca atrapalham a operação principal (qualquer erro é ignorado) e só levam dados mínimos.
+-- Gatilhos: nunca atrapalham a operacao principal (qualquer erro e ignorado) e so levam dados minimos.
 create or replace function public.wh_trg_people() returns trigger language plpgsql security definer set search_path = public as $$
 begin
   begin
@@ -242,7 +242,7 @@ begin
   exception when others then null; end;
   return new;
 end $$;
--- contribuição: só valor, data, categoria, campanha e forma; nunca a pessoa nem o nome do doador
+-- contribuicao: so valor, data, categoria, campanha e forma; nunca a pessoa nem o nome do doador
 create or replace function public.wh_trg_fin() returns trigger language plpgsql security definer set search_path = public as $$
 begin
   begin
@@ -252,7 +252,7 @@ begin
   exception when others then null; end;
   return new;
 end $$;
--- programação: só as de visibilidade pública (as internas não saem do SOMOS)
+-- programacao: so as de visibilidade publica (as internas nao saem do SOMOS)
 create or replace function public.wh_trg_programs() returns trigger language plpgsql security definer set search_path = public as $$
 begin
   begin
@@ -296,7 +296,7 @@ end $$;
 create or replace function public.wh_list(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
 begin
   perform public.integ_need(p_org);
-  return coalesce((select jsonb_agg(jsonb_build_object('id', e.id, 'name', e.name, 'url', e.url, 'events', e.events, 'active', e.active, 'disabled_reason', e.disabled_reason, 'secret_hint', '…' || right(e.secret, 4), 'created_at', e.created_at,
+  return coalesce((select jsonb_agg(jsonb_build_object('id', e.id, 'name', e.name, 'url', e.url, 'events', e.events, 'active', e.active, 'disabled_reason', e.disabled_reason, 'secret_hint', E'\u2026' || right(e.secret, 4), 'created_at', e.created_at,
       'pending', (select count(*) from webhook_deliveries d where d.endpoint_id = e.id and d.status in ('pending', 'failed')),
       'dead', (select count(*) from webhook_deliveries d where d.endpoint_id = e.id and d.status = 'dead'),
       'last', (select jsonb_build_object('status', d.status, 'at', coalesce(d.delivered_at, d.last_attempt_at, d.created_at), 'response_status', d.response_status) from webhook_deliveries d where d.endpoint_id = e.id order by d.id desc limit 1)) order by e.created_at desc)
@@ -335,7 +335,7 @@ declare e webhook_endpoints; v_ev bigint;
 begin
   select * into e from webhook_endpoints where id = p_id; if e.id is null then raise exception 'not_found'; end if;
   perform public.integ_need(e.org_id);
-  insert into webhook_events (org_id, event_type, payload) values (e.org_id, 'webhook.test', jsonb_build_object('message', 'Teste de conexão do SOMOS')) returning id into v_ev;
+  insert into webhook_events (org_id, event_type, payload) values (e.org_id, 'webhook.test', jsonb_build_object('message', E'Teste de conex\u00e3o do SOMOS')) returning id into v_ev;
   insert into webhook_deliveries (endpoint_id, event_id) values (p_id, v_ev);
   return jsonb_build_object('ok', true);
 end $$;
@@ -347,7 +347,7 @@ begin
     from (select d.*, e.name as ename, v.event_type from webhook_deliveries d join webhook_endpoints e on e.id = d.endpoint_id join webhook_events v on v.id = d.event_id
            where e.org_id = p_org and (p_endpoint is null or d.endpoint_id = p_endpoint) and (p_status is null or d.status = p_status) order by d.id desc limit least(greatest(coalesce(p_limit, 50), 1), 200)) x), '[]'::jsonb);
 end $$;
--- reenvio manual: só entrega que falhou ou foi abandonada. O destino recebe o mesmo identificador (X-Somos-Delivery), então pode ignorar repetições.
+-- reenvio manual: so entrega que falhou ou foi abandonada. O destino recebe o mesmo identificador (X-Somos-Delivery), entao pode ignorar repeticoes.
 create or replace function public.wh_retry(p_delivery bigint) returns jsonb language plpgsql security definer set search_path = public as $$
 declare d webhook_deliveries; e webhook_endpoints;
 begin
@@ -360,7 +360,7 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
--- uso exclusivo da Edge Function "webhook-dispatch" (chave de serviço)
+-- uso exclusivo da Edge Function "webhook-dispatch" (chave de servico)
 create or replace function public.wh_claim(p_limit int default 50) returns jsonb language sql security definer set search_path = public as $$
   with c as (select d.id from webhook_deliveries d join webhook_endpoints e on e.id = d.endpoint_id
               where d.status in ('pending', 'failed') and d.next_attempt_at <= now() and e.active order by d.id limit least(greatest(coalesce(p_limit, 50), 1), 200) for update of d skip locked),
@@ -377,12 +377,12 @@ begin
     if coalesce(r.ok, false) then
       update webhook_deliveries set status = 'success', response_status = r.status, error = null, delivered_at = now(), next_attempt_at = null where id = d.id;
       update webhook_endpoints set failure_streak = 0 where id = d.endpoint_id;
-      perform public.integ_log(v_org, 'webhook', 'info', 'entrega concluída', jsonb_build_object('delivery', d.id, 'endpoint', d.endpoint_id, 'status', r.status, 'attempt', d.attempts));
+      perform public.integ_log(v_org, 'webhook', 'info', E'entrega conclu\u00edda', jsonb_build_object('delivery', d.id, 'endpoint', d.endpoint_id, 'status', r.status, 'attempt', d.attempts));
     else
       update webhook_deliveries set status = case when d.attempts >= 6 then 'dead' else 'failed' end, response_status = r.status, error = public.integ_clean_text(r.error),
         next_attempt_at = case when d.attempts >= 6 then null else now() + case d.attempts when 1 then interval '1 minute' when 2 then interval '5 minutes' when 3 then interval '30 minutes' when 4 then interval '2 hours' else interval '12 hours' end end where id = d.id;
       update webhook_endpoints set failure_streak = failure_streak + 1 where id = d.endpoint_id returning failure_streak into v_streak;
-      if v_streak >= 30 then update webhook_endpoints set active = false, disabled_reason = 'Desativado automaticamente após 30 falhas seguidas' where id = d.endpoint_id and active; end if;
+      if v_streak >= 30 then update webhook_endpoints set active = false, disabled_reason = E'Desativado automaticamente ap\u00f3s 30 falhas seguidas' where id = d.endpoint_id and active; end if;
       perform public.integ_log(v_org, 'webhook', case when d.attempts >= 6 then 'error' else 'warn' end, case when d.attempts >= 6 then 'entrega abandonada' else 'entrega falhou, nova tentativa agendada' end,
         jsonb_build_object('delivery', d.id, 'endpoint', d.endpoint_id, 'status', r.status, 'attempt', d.attempts, 'error', r.error));
     end if;
@@ -422,7 +422,7 @@ begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
   return jsonb_build_object('manage', public.mod_perm(p_org, 'integ_manage'), 'fin', public.mod_perm(p_org, 'fin_manage'));
 end $$;
--- limpeza periódica: logs 90 dias, contadores de limite 2 dias, eventos entregues 30 dias (as entregas pendentes seguram o evento)
+-- limpeza periodica: logs 90 dias, contadores de limite 2 dias, eventos entregues 30 dias (as entregas pendentes seguram o evento)
 create or replace function public.integ_purge() returns jsonb language plpgsql security definer set search_path = public as $$
 declare a int; b int; c int;
 begin
@@ -435,15 +435,15 @@ do $$ begin
   create extension if not exists pg_cron;
   perform cron.unschedule(jobid) from cron.job where jobname = 'somos-integracoes-limpeza';
   perform cron.schedule('somos-integracoes-limpeza', '17 3 * * *', 'select public.integ_purge()');
-exception when others then raise notice 'pg_cron indisponível: %', sqlerrm;
+exception when others then raise notice E'pg_cron indispon\u00edvel: %', sqlerrm;
 end $$;
 
--- ---------------------------------------------------------------- permissões de execução
+-- ---------------------------------------------------------------- permissoes de execucao
 revoke execute on function public.api_key_create(uuid, text, text[], int, int), public.api_key_list(uuid), public.api_key_revoke(uuid), public.wh_save(uuid, uuid, jsonb), public.wh_list(uuid), public.wh_rotate_secret(uuid),
   public.wh_set_active(uuid, boolean), public.wh_delete(uuid), public.wh_test(uuid), public.wh_deliveries(uuid, uuid, text, int), public.wh_retry(bigint), public.integ_status(uuid), public.integ_log_list(uuid, text, text, int), public.integ_access(uuid) from public, anon;
 grant execute on function public.api_key_create(uuid, text, text[], int, int), public.api_key_list(uuid), public.api_key_revoke(uuid), public.wh_save(uuid, uuid, jsonb), public.wh_list(uuid), public.wh_rotate_secret(uuid),
   public.wh_set_active(uuid, boolean), public.wh_delete(uuid), public.wh_test(uuid), public.wh_deliveries(uuid, uuid, text, int), public.wh_retry(bigint), public.integ_status(uuid), public.integ_log_list(uuid, text, text, int), public.integ_access(uuid) to authenticated;
--- só a chave de serviço (Edge Functions) executa estas:
+-- so a chave de servico (Edge Functions) executa estas:
 revoke execute on function public.api_authenticate(text, text), public.api_log(uuid, uuid, text, text, int, int), public.api_v1_events(uuid, int, int), public.api_v1_programs(uuid, int, int), public.api_v1_sermons(uuid, int, int), public.api_v1_contents(uuid, int, int),
   public.wh_claim(int), public.wh_report(jsonb), public.integ_heartbeat(text, boolean, jsonb), public.integ_purge() from public, anon, authenticated;
 grant execute on function public.api_authenticate(text, text), public.api_log(uuid, uuid, text, text, int, int), public.api_v1_events(uuid, int, int), public.api_v1_programs(uuid, int, int), public.api_v1_sermons(uuid, int, int), public.api_v1_contents(uuid, int, int),
@@ -452,10 +452,10 @@ revoke execute on function public.integ_clean(jsonb), public.integ_clean_text(te
 grant execute on function public.integ_clean(jsonb), public.integ_clean_text(text), public.wh_event_types(), public.integ_url_ok(text) to authenticated, service_role;
 
 -- ---------------------------------------------------------------------
--- Para desfazer: dropar os gatilhos wh_*_trg, as funções api_*, wh_*, integ_* e as tabelas api_keys, api_rate, webhook_*, integration_* (apaga chaves, endpoints e históricos de entrega);
--- reaplicar module_actions() sem 'integ_manage'. Nenhum dado de pessoas, eventos ou financeiro é tocado.
+-- Para desfazer: dropar os gatilhos wh_*_trg, as funcoes api_*, wh_*, integ_* e as tabelas api_keys, api_rate, webhook_*, integration_* (apaga chaves, endpoints e historicos de entrega);
+-- reaplicar module_actions() sem 'integ_manage'. Nenhum dado de pessoas, eventos ou financeiro e tocado.
 -- ---------------------------------------------------------------------
--- Verificação (deve retornar true):
+-- Verificacao (deve retornar true):
 select 'integ_manage' = any (public.module_actions())
    and to_regclass('public.api_keys') is not null and to_regclass('public.webhook_endpoints') is not null and to_regclass('public.webhook_deliveries') is not null
    and (select count(*) from pg_trigger where tgname in ('wh_people_trg', 'wh_events_trg', 'wh_regs_trg', 'wh_fin_trg', 'wh_prog_trg')) = 5

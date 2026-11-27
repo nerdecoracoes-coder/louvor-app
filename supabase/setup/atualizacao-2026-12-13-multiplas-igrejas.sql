@@ -1,20 +1,20 @@
 -- =====================================================================
--- SOMOS — Fase 6A: Gestão de Múltiplas Igrejas (Administração Institucional)
---  * Cada igreja/unidade JÁ é uma organização isolada (todas as tabelas têm org_id e RLS). Nada é movido nem apagado:
---    a igreja atual continua como está e passa a poder ser agrupada em uma estrutura configurável.
+-- SOMOS  Fase 6A: Gestao de Multiplas Igrejas (Administracao Institucional)
+--  * Cada igreja/unidade JA e uma organizacao isolada (todas as tabelas tem org_id e RLS). Nada e movido nem apagado:
+--    a igreja atual continua como esta e passa a poder ser agrupada em uma estrutura configuravel.
 --  * Estrutura sem hierarquia fixa: cada unidade tem um "pai" opcional e um nome de tipo livre
---    (Organização principal, Regional, Igreja, Congregação, Unidade ou o que a denominação usar). Máximo de 8 níveis abaixo da raiz.
+--    (Organizacao principal, Regional, Igreja, Congregacao, Unidade ou o que a denominacao usar). Maximo de 8 niveis abaixo da raiz.
 --  * Vincular uma igreja existente a um pai exige o consentimento dos dois lados (administrador da igreja + quem estrutura o pai).
---  * Acesso global só por concessão explícita (org_scope_grants) ou por ser administrador do nó. Desenvolvedor NÃO tem acesso implícito.
---  * O consolidado devolve só números agregados (sem nomes de pessoas). Indicadores financeiros exigem concessão própria e ficam auditados.
---  * Quem tem acesso a um nó NÃO ganha acesso aos dados internos das unidades abaixo: pessoas, financeiro etc. continuam isolados por RLS.
+--  * Acesso global so por concessao explicita (org_scope_grants) ou por ser administrador do no. Desenvolvedor NAO tem acesso implicito.
+--  * O consolidado devolve so numeros agregados (sem nomes de pessoas). Indicadores financeiros exigem concessao propria e ficam auditados.
+--  * Quem tem acesso a um no NAO ganha acesso aos dados internos das unidades abaixo: pessoas, financeiro etc. continuam isolados por RLS.
 -- =====================================================================
 
 alter table public.organizations add column if not exists parent_id uuid references public.organizations(id) on delete set null;
 alter table public.organizations add column if not exists unit_kind text check (unit_kind is null or length(unit_kind) between 1 and 40);
 create index if not exists organizations_parent on public.organizations (parent_id) where parent_id is not null;
 
--- ---------------------------------------------------------------- concessões de escopo (acesso regional/global)
+-- ---------------------------------------------------------------- concessoes de escopo (acesso regional/global)
 create table if not exists public.org_scope_grants (
   id uuid primary key default gen_random_uuid(),
   org_id uuid not null references public.organizations(id) on delete cascade,
@@ -28,8 +28,8 @@ create table if not exists public.org_scope_grants (
 alter table public.org_scope_grants enable row level security;
 revoke all on public.org_scope_grants from anon, authenticated;
 
--- ---------------------------------------------------------------- árvore
--- nós abaixo de p_org (inclui o próprio, depth 0)
+-- ---------------------------------------------------------------- arvore
+-- nos abaixo de p_org (inclui o proprio, depth 0)
 create or replace function public.org_subtree(p_org uuid) returns table (id uuid, parent_id uuid, depth int)
 language sql stable security definer set search_path = public as $$
   with recursive t as (
@@ -49,7 +49,7 @@ language sql stable security definer set search_path = public as $$
 $$;
 revoke execute on function public.org_subtree(uuid), public.org_ancestors(uuid) from public, anon, authenticated;
 
--- só mexe em parent_id quem passa pelas funções abaixo (que conferem consentimento, ciclo e profundidade)
+-- so mexe em parent_id quem passa pelas funcoes abaixo (que conferem consentimento, ciclo e profundidade)
 create or replace function public.org_parent_guard() returns trigger language plpgsql security definer set search_path = public as $$
 declare v_id uuid; v_n int := 0; v_h int;
 begin
@@ -62,7 +62,7 @@ begin
     v_n := v_n + 1; if v_n > 8 then raise exception 'org_too_deep'; end if;
     select o.parent_id into v_id from organizations o where o.id = v_id;
   end loop;
-  -- a unidade que está entrando leva consigo as filhas: a altura delas também conta (máximo de 8 níveis abaixo da raiz)
+  -- a unidade que esta entrando leva consigo as filhas: a altura delas tambem conta (maximo de 8 niveis abaixo da raiz)
   select coalesce(max(depth), 0) into v_h from public.org_subtree(new.id);
   if tg_op = 'UPDATE' and new.parent_id is not null and (v_n + v_h) > 8 then raise exception 'org_too_deep'; end if;
   return new;
@@ -70,11 +70,11 @@ end $$;
 drop trigger if exists org_parent_guard_trg on public.organizations;
 create trigger org_parent_guard_trg before insert or update of parent_id on public.organizations for each row execute function public.org_parent_guard();
 
--- administrador (papel) da própria unidade — o desenvolvedor não entra aqui
+-- administrador (papel) da propria unidade  o desenvolvedor nao entra aqui
 create or replace function public.inst_is_admin(p_org uuid) returns boolean language sql stable security definer set search_path = public as $$
   select auth.uid() is not null and exists (select 1 from org_members where org_id = p_org and user_id = auth.uid() and role = 'admin')
 $$;
--- 'structure' | 'consolidated' | 'consolidated_fin' sobre p_org: administrador do nó ou de um pai (structure/consolidated), ou concessão no nó ou em um pai
+-- 'structure' | 'consolidated' | 'consolidated_fin' sobre p_org: administrador do no ou de um pai (structure/consolidated), ou concessao no no ou em um pai
 create or replace function public.org_scope_has(p_org uuid, p_action text) returns boolean language sql stable security definer set search_path = public as $$
   select auth.uid() is not null and exists (
     select 1 from public.org_ancestors(p_org) a
@@ -84,7 +84,7 @@ $$;
 revoke execute on function public.inst_is_admin(uuid), public.org_scope_has(uuid, text) from public, anon;
 grant execute on function public.inst_is_admin(uuid), public.org_scope_has(uuid, text) to authenticated;
 
--- o que a pessoa pode fazer na Administração Institucional a partir da igreja atual
+-- o que a pessoa pode fazer na Administracao Institucional a partir da igreja atual
 create or replace function public.inst_access(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
 begin
   if auth.uid() is null then raise exception 'not_authenticated'; end if;
@@ -126,7 +126,7 @@ begin
   return jsonb_build_object('ok', true, 'id', v_id);
 end $$;
 
--- vincular uma igreja que já existe: precisa ser administrador dela E ter 'structure' no pai
+-- vincular uma igreja que ja existe: precisa ser administrador dela E ter 'structure' no pai
 create or replace function public.org_unit_link(p_child uuid, p_parent uuid, p_kind text default null) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v_kind text := nullif(trim(coalesce(p_kind, '')), '');
@@ -144,8 +144,8 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
--- convite: quem estrutura o pai gera um código de uso único (7 dias); o administrador da igreja que quer entrar o aceita.
--- O código só aparece uma vez (guardamos apenas o hash).
+-- convite: quem estrutura o pai gera um codigo de uso unico (7 dias); o administrador da igreja que quer entrar o aceita.
+-- O codigo so aparece uma vez (guardamos apenas o hash).
 create table if not exists public.org_invites (
   id uuid primary key default gen_random_uuid(),
   parent_org_id uuid not null references public.organizations(id) on delete cascade,
@@ -210,7 +210,7 @@ begin
   return jsonb_build_object('ok', true, 'parent_id', v.parent_org_id);
 end $$;
 
--- desvincular não apaga nem move nada: só tira a unidade da estrutura. Pode o administrador da unidade ou quem estrutura o pai.
+-- desvincular nao apaga nem move nada: so tira a unidade da estrutura. Pode o administrador da unidade ou quem estrutura o pai.
 create or replace function public.org_unit_unlink(p_child uuid) returns jsonb
 language plpgsql security definer set search_path = public as $$
 declare v_parent uuid;
@@ -238,7 +238,7 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
--- ---------------------------------------------------------------- concessões (só administrador do nó concede; ninguém repassa)
+-- ---------------------------------------------------------------- concessoes (so administrador do no concede; ninguem repassa)
 create or replace function public.org_scope_list(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
 begin
   if not public.inst_is_admin(p_org) then raise exception 'forbidden'; end if;
@@ -269,7 +269,7 @@ begin
   return jsonb_build_object('ok', true);
 end $$;
 
--- ---------------------------------------------------------------- consolidado (somente números)
+-- ---------------------------------------------------------------- consolidado (somente numeros)
 create or replace function public.org_consolidated(p_org uuid) returns jsonb language plpgsql security definer set search_path = public as $$
 declare v_fin boolean; v_from date := date_trunc('month', (now() at time zone 'America/Sao_Paulo'))::date; v_units jsonb;
 begin
@@ -300,7 +300,7 @@ begin
       from jsonb_array_elements(v_units) x));
 end $$;
 
--- histórico das mudanças de estrutura e de acesso (quem vê: quem estrutura a unidade)
+-- historico das mudancas de estrutura e de acesso (quem ve: quem estrutura a unidade)
 create or replace function public.org_inst_history(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
 begin
   if not public.org_scope_has(p_org, 'structure') then raise exception 'forbidden'; end if;
@@ -316,10 +316,10 @@ grant execute on function public.inst_access(uuid), public.org_tree(uuid), publi
   public.org_invite_create(uuid, text), public.org_invite_list(uuid), public.org_invite_revoke(uuid), public.org_invite_accept(uuid, text) to authenticated;
 
 -- ---------------------------------------------------------------------
--- Para desfazer: dropar as funções org_*/inst_*, o gatilho org_parent_guard_trg, as tabelas org_scope_grants e org_invites e as colunas parent_id/unit_kind
--- (as igrejas e todos os seus dados permanecem; só a estrutura é perdida).
+-- Para desfazer: dropar as funcoes org_*/inst_*, o gatilho org_parent_guard_trg, as tabelas org_scope_grants e org_invites e as colunas parent_id/unit_kind
+-- (as igrejas e todos os seus dados permanecem; so a estrutura e perdida).
 -- ---------------------------------------------------------------------
--- Verificação (deve retornar true):
+-- Verificacao (deve retornar true):
 select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'organizations' and column_name = 'parent_id')
    and to_regclass('public.org_scope_grants') is not null
    and exists (select 1 from pg_trigger where tgname = 'org_parent_guard_trg')
