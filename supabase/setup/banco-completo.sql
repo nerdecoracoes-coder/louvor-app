@@ -14111,7 +14111,11 @@ $$;
 revoke execute on function public.decision_eligible(uuid) from public, anon;
 grant execute on function public.decision_eligible(uuid) to authenticated;
 
-update public.people set menu_decision = false where menu_decision;
+do $$ begin
+  if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'people' and column_name = 'menu_decision') then
+    execute 'update public.people set menu_decision = false where menu_decision';
+  end if;
+end $$;
 create or replace function public.person_menu_decision_set(p_person uuid, p_on boolean) returns void
 language plpgsql security definer set search_path = public as $$
 begin
