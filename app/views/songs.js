@@ -27,7 +27,7 @@ export function songRow(s, { selectable = false, selected = false } = {}) {
       <div class="t ellipsis">${esc(s.title)}</div>
       <div class="s">${s.artist ? `<span>${esc(s.artist)}</span>` : ""}${s.song_key ? `<span>Tom ${esc(s.song_key)}</span>` : ""}${s.bpm ? `<span>${Number(s.bpm)} BPM</span>` : ""}${s.duration_sec ? `<span>${fDur(s.duration_sec)}</span>` : ""}</div>
       <div class="ind">${vs ? `<span class="tag soft">VS</span>` : ""}${s.youtube_url ? `<span class="tag gray">YouTube</span>` : ""}${s.chords_url ? `<span class="tag gray">Cifra</span>` : ""}
-        ${s.lyrics?.blocks?.length ? `<span class="tag gray">Letra</span>` : ""}${s.files_count ? `<span class="tag gray">${s.files_count} arquivo(s)</span>` : ""}${(s.links || []).length ? `<span class="tag gray">Links</span>` : ""}
+        ${s.lyr0 != null || s.lyrics?.blocks?.length ? `<span class="tag gray">Letra</span>` : ""}${s.files_count ? `<span class="tag gray">${s.files_count} arquivo(s)</span>` : ""}${(s.links || []).length ? `<span class="tag gray">Links</span>` : ""}
         ${st ? `<span class="tag ${st[1]}">${st[0]}</span>` : ""}${s.duplicate_of ? `<span class="tag warn">Possível duplicada</span>` : ""}</div></a>
     ${playable ? `<a class="playbtn" href="#/player/${s.id}" aria-label="Tocar ${attr(s.title)}">${icon("play")}</a>`
       : s.youtube_url && safeUrl(s.youtube_url) ? `<a class="playbtn" href="${attr(s.youtube_url)}" target="_blank" rel="noopener" aria-label="YouTube">${icon("youtube")}</a>` : `<span class="playbtn dis">${icon("play")}</span>`}
@@ -37,7 +37,7 @@ export function songRow(s, { selectable = false, selected = false } = {}) {
 async function library(_, el, alive) {
   el.innerHTML = spinner();
   const [rows, files] = await Promise.all([
-    must(sb.from("songs").select("id,title,artist,song_key,bpm,duration_sec,cover_url,youtube_url,chords_url,links,lyrics,source,status,current_project_id,duplicate_of").eq("org_id", state.org.id).order("title")),
+    must(sb.from("songs").select("id,title,artist,song_key,bpm,duration_sec,cover_url,youtube_url,chords_url,links,lyr0:lyrics->blocks->0->>text,source,status,current_project_id,duplicate_of").eq("org_id", state.org.id).order("title")),
     must(sb.from("song_files").select("song_id").eq("org_id", state.org.id)),
   ]);
   if (!alive()) return;

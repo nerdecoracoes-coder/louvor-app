@@ -33,6 +33,8 @@ export interface SyncDeps {
 }
 // muda quando a leitura dos nomes ganha uma regra nova: todas as músicas são relidas uma vez
 const NAMING_V = "naming3-pronta\n";
+// Colunas lidas das músicas a cada rodada (a cada 5 min). Sem letras e links: são pesados e a sincronização não os usa; pedir tudo gastava tráfego à toa.
+const SONG_COLS = "id,org_id,title,artist,song_key,bpm,duration_sec,cover_url,source,status,status_message,drive_folder_id,drive_folder_name,drive_signature,drive_modified_at,current_project_id,duplicate_of,retry_count,next_retry_at,last_synced_at,created_at,updated_at";
 export interface SyncStats { busy?: boolean; processed?: number; editing?: number; folders: number; created: number; updated: number; unchanged: number; removed: number; waiting: number; errors: number; deferred: number }
 
 const IGNORE = /(\.rpp-bak|\.reapeaks|\.rpp-undo|\.reapindex|\.ds_store|desktop\.ini|thumbs\.db)$/i;
@@ -171,7 +173,7 @@ export async function syncOrg(deps: SyncDeps, orgId: string, trigger: string): P
     stats.folders = folders.length;
     stats.editing = unmarkedIds.size;
 
-    const songs: any[] = await db.select("songs", `org_id=eq.${orgId}&source=eq.drive&select=*`);
+    const songs: any[] = await db.select("songs", `org_id=eq.${orgId}&source=eq.drive&select=${SONG_COLS}`);
     const byFolder = new Map(songs.map((s) => [s.drive_folder_id, s]));
     // Troca de pasta: se a pasta antiga sumiu e aparece uma nova com o mesmo nome, a música (e as escalas) continuam as mesmas.
     const fold = (x: unknown) => String(x ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
