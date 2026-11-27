@@ -682,6 +682,7 @@ with sync_playwright() as pw:
     bruno.goto(BASE + "/#/igreja"); bruno.reload(); expect(bruno.locator(".notice", has_text="Ensaio Geral")).to_be_visible(timeout=10000)  # avisos gerais ficam na área da igreja
     expect(bruno.locator(".leaders .leader")).to_have_count(1); expect(bruno.locator(".leader")).to_contain_text("Pastor presidente")
     assert bruno.evaluate("""() => { const h = document.querySelector('.hero').getBoundingClientRect(), l = document.querySelector('.leaders').getBoundingClientRect(), n = document.querySelector('.notice').getBoundingClientRect(); const a = document.querySelector('.leader .av').getBoundingClientRect(); return l.top >= h.bottom - 1 && l.top < n.top && a.width >= 80 && Math.abs(a.width - a.height) < 1 && getComputedStyle(document.querySelector('.leader .av')).borderRadius !== '0px'; }""")
+    expect(bruno.locator(".sec h2", has_text="Nossa liderança")).to_be_visible()
     assert bruno.locator("#addlead").count() == 0 and bruno.locator("[data-lead]").count() == 0   # membro só vê; não edita
     assert bruno.evaluate("() => { const l = document.querySelector('.leaders').getBoundingClientRect(), q = document.querySelector('.quick').getBoundingClientRect(); return l.top < q.top; }")   # liderança vem antes dos atalhos
     shot(bruno, "17b-igreja-lideranca"); ok("início da igreja: liderança logo abaixo do nome, fotos redondas grandes")

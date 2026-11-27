@@ -221,7 +221,7 @@ function leadersBlock(leaders) {
   const card = (p, main) => `<${adm ? "button" : "div"} class="leader${main ? " main" : ""}"${adm ? ` data-lead="${p.id}"` : ""}>${avatar(p, main ? 128 : 100, main)}<b class="ellipsis">${esc(p.display_name)}</b><span class="ellipsis">${esc(p.church_title)}</span></${adm ? "button" : "div"}>`;
   const [first, ...rest] = leaders;
   const add = adm ? `<button class="leader add" id="addlead" aria-label="Adicionar líder à liderança"><span class="plus" style="--s:100px">${icon("plus")}</span></button>` : "";
-  return `<section class="leaders" aria-label="Liderança">${first ? `<div class="lead-main">${card(first, true)}</div>` : ""}<div class="lead-rest">${rest.map((p) => card(p, false)).join("")}${add}</div></section>`;
+  return `<div class="sec"><h2>Nossa liderança</h2></div><section class="leaders" aria-label="Nossa liderança">${first ? `<div class="lead-main">${card(first, true)}</div>` : ""}<div class="lead-rest">${rest.map((p) => card(p, false)).join("")}${add}</div></section>`;
 }
 
 // Grava cargo e posição de quem está na liderança (ordem = posição na lista). Sem a atualização do banco, grava só o cargo.
