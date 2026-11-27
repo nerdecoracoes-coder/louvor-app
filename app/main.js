@@ -35,6 +35,8 @@ import * as financeiro from "./views/financeiro.js";
 import * as comunicacao from "./views/comunicacao.js";
 import * as cuidado from "./views/cuidado.js";
 import * as digital from "./views/digital.js";
+import * as instituicao from "./views/instituicao.js";
+import * as integracoes from "./views/integracoes.js";
 import * as carteira from "./views/carteira.js";
 import * as chamados from "./views/chamados.js";
 import * as extras from "./views/extras.js";
@@ -48,7 +50,7 @@ const WAVES = `<div class="backdrop" aria-hidden="true">
   <svg class="w2" viewBox="0 0 1200 300" preserveAspectRatio="none"><path d="M0 280 C 420 270, 760 210, 1200 40" stroke="url(#g1)" stroke-width="2" fill="none"/><path d="M0 300 C 440 290, 800 240, 1200 90" stroke="url(#g1)" stroke-width="1" fill="none" opacity=".5"/></svg></div>`;
 
 // ---------------------------------------------------------------- rotas
-home.register(route); servico.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); chamados.register(route); pessoas.register(route); acolher.register(route); acolhimento.register(route); meuCadastro.register(route); novosConvertidos.register(route); jornadas.register(route); contatos.register(route); relatoriosPessoas.register(route); segmentacao.register(route); carteira.register(route); celulas.register(route); programacoes.register(route); escalas.register(route); destaques.register(route); inscricoes.register(route); financeiro.register(route); comunicacao.register(route); cuidado.register(route); digital.register(route); extras.register(route);
+home.register(route); servico.register(route); multimidia.register(route); ministerios.register(route); letras.register(route); ferramentas.register(route); eventos.register(route); estudio.register(route); ajuda.register(route); igreja.register(route); schedules.register(route); teams.register(route); songs.register(route); chat.register(route); account.register(route); chamados.register(route); pessoas.register(route); acolher.register(route); acolhimento.register(route); meuCadastro.register(route); novosConvertidos.register(route); jornadas.register(route); contatos.register(route); relatoriosPessoas.register(route); segmentacao.register(route); carteira.register(route); celulas.register(route); programacoes.register(route); escalas.register(route); destaques.register(route); inscricoes.register(route); financeiro.register(route); comunicacao.register(route); cuidado.register(route); digital.register(route); instituicao.register(route); integracoes.register(route); extras.register(route);
 route("/convidar-membro", async (p, el) => { const { orgInviteSheet } = await import("./views/account.js"); history.replaceState(null, "", "#/org"); location.hash = "/org"; setTimeout(orgInviteSheet, 300); });
 route("/player/:id", async ({ id }) => { const q = new URLSearchParams(location.hash.split("?")[1] || ""); await openPlayer(id, q.get("tom"), { lista: q.get("lista"), auto: q.get("auto") === "1" }); }, { overlay: true });
 

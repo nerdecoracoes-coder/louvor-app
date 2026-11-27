@@ -157,3 +157,13 @@ Object.assign(ERRORS, {
   dig_not_enrolled: "Comece o plano antes de marcar os dias.", dig_label_required: "Informe o nome do atalho (até 24 letras).", dig_too_many_shortcuts: "Já há 8 atalhos ativos. Desative um antes de ativar outro.",
 });
 Object.assign(ERRORS, { dig_start_required: "Informe a data e a hora de início.", dig_bad_period: "O fim precisa ser depois do início.", dig_note_long: "A anotação passa de 2000 letras.", dig_bad_time: "Horário inválido.", push_invalid: "Não foi possível registrar este aparelho." });
+Object.assign(ERRORS, {
+  org_need_name: "Informe o nome da unidade (2 a 80 letras).", org_kind_long: "O texto passa do limite (40 letras para o tipo, 60 para a função).", org_too_deep: "A estrutura aceita até 8 níveis abaixo da principal.", org_cycle: "Uma unidade não pode ficar abaixo dela mesma ou de uma unidade dela.",
+  org_parent_locked: "A estrutura só muda em Administração institucional.", org_has_parent: "Esta igreja já faz parte de uma estrutura. Saia dela antes de entrar em outra.", org_invite_invalid: "Código inválido, já usado ou vencido. Peça um novo convite.",
+  org_member_required: "A pessoa precisa fazer parte desta igreja.", org_invalid_actions: "Escolha ao menos uma permissão válida.",
+});
+Object.assign(ERRORS, {
+  integ_need_name: "Informe o nome (2 a 60 letras).", integ_invalid_scopes: "Escolha ao menos um recurso para a chave.", integ_invalid_rate: "O limite por minuto deve ficar entre 10 e 600.", integ_invalid_days: "A validade deve ser de 1 a 730 dias.",
+  integ_limit_reached: "Limite atingido: no máximo 20 chaves ativas e 10 endereços de webhook por igreja.", integ_bad_url: "Endereço inválido. Use https:// com um nome público (sem IP, localhost ou rede interna).", integ_invalid_events: "Escolha ao menos um evento válido.",
+  integ_fin_denied: "Contribuição registrada só pode ser assinada por quem tem permissão financeira de gestão.", integ_not_retryable: "Só é possível reenviar entregas que falharam ou foram abandonadas.",
+});

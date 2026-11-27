@@ -11,3 +11,11 @@ verify_jwt = false
 [functions.push-send]
 # Protegida pelo segredo do agendamento (x-cron-secret); não usa login de usuário.
 verify_jwt = false
+
+[functions.api]
+# API pública: a chave de API é conferida pela própria função (hash + escopo + limite por minuto).
+verify_jwt = false
+
+[functions.webhook-dispatch]
+# Protegida pelo segredo do agendamento (x-cron-secret).
+verify_jwt = false

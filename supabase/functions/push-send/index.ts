@@ -19,7 +19,8 @@ async function rpc(name: string, args: Record<string, unknown>) {
 
 Deno.serve(async (req) => {
   if (!cronSecret || req.headers.get("x-cron-secret") !== cronSecret) return json({ error: "unauthorized" }, 401);
-  if (!pub || !priv) return json({ ok: false, error: "not_configured", detail: "Faltam VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY." }, 200);
+  const beat = (ok: boolean, configured: boolean, detail: Record<string, unknown> = {}) => rpc("integ_heartbeat", { p_source: "push", p_ok: ok, p_detail: { configured, ...detail } }).catch(() => {});
+  if (!pub || !priv) { await beat(false, false); return json({ ok: false, error: "not_configured", detail: "Faltam VAPID_PUBLIC_KEY e VAPID_PRIVATE_KEY." }, 200); }
   webpush.setVapidDetails(subject, pub, priv);
   const items: { id: number; title: string; body?: string; link?: string; subs: { endpoint: string; p256dh: string; auth: string }[] }[] = await rpc("push_claim", { p_limit: 100 });
   const done: number[] = [], dead: string[] = []; let sent = 0, failed = 0;
@@ -33,5 +34,6 @@ Deno.serve(async (req) => {
     if (ok || it.subs.every((s) => dead.includes(s.endpoint))) done.push(it.id);
   }
   await rpc("push_report", { p_done: done, p_dead: dead, p_error: failed ? `${failed} falhas temporárias` : null });
+  await beat(true, true, { claimed: items.length, sent, failed });
   return json({ ok: true, claimed: items.length, sent, failed, removed_devices: dead.length });
 });

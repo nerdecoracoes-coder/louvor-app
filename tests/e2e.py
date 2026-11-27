@@ -1485,6 +1485,40 @@ with sync_playwright() as pw:
     n_err = len(errors); carla.goto(BASE + "/#/digital-gestao"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Você não tem acesso", timeout=10000); carla.wait_for_timeout(500)
     errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]
     ok("experiência digital: conteúdo publicado, plano de leitura com progresso, atalho na Home, busca integrada, itens no menu e acesso negado à gestão sem permissão")
+    # múltiplas igrejas: estrutura, convite, consolidado, acesso; membro sem permissão é barrado
+    ana.goto(BASE + "/#/chamados"); ana.reload(); expect(ana.locator('a[href="#/instituicao"]')).to_be_visible(timeout=10000); ana.locator('a[href="#/instituicao"]').click()
+    expect(ana.locator("#view h1")).to_contain_text("Administração institucional", timeout=10000)
+    ana.locator("#nu").click(); ana.fill(".sheet #nm", "Congregação Norte"); ana.fill(".sheet #kd", "Congregação"); ana.locator(".sheet #ok").click(); toast_has(ana, "Unidade criada")
+    expect(ana.locator("#body")).to_contain_text("Congregação Norte", timeout=10000); ovf(ana, "instituição estrutura"); ana.wait_for_timeout(500); shot(ana, "94-instituicao-estrutura")
+    ana.locator("#gi").click(); ana.locator(".sheet #ok").click(); expect(ana.locator(".sheet #cd")).to_contain_text("IGR-", timeout=10000); ana.locator(".sheet #fx").click()
+    expect(ana.locator("#body")).to_contain_text("Aberto", timeout=10000)
+    ana.locator('[data-t="con"]').click(); expect(ana.locator("#body")).to_contain_text("2", timeout=10000); expect(ana.locator("#body")).to_contain_text("Por unidade"); ovf(ana, "instituição consolidado"); ana.wait_for_timeout(500); shot(ana, "95-instituicao-consolidado")
+    ana.locator('[data-t="ace"]').click(); ana.locator("#new").click(); ana.locator(".sheet #u").evaluate("e => { const o=[...e.options].find(x => /carla/i.test(x.textContent)); if (o) e.value = o.value; }"); ana.fill(".sheet #lv", "Liderança regional"); ana.locator(".sheet #ok").click(); toast_has(ana, "Acesso concedido")
+    expect(ana.locator("#body")).to_contain_text("Liderança regional", timeout=10000); ovf(ana, "instituição acessos")
+    ana.locator('[data-t="his"]').click(); expect(ana.locator("#body")).to_contain_text("Concedeu acesso", timeout=10000)
+    # quem recebeu só "números consolidados" vê os números, mas não estrutura nem concede nada
+    carla.goto(BASE + "/#/instituicao"); carla.reload(); expect(carla.locator("#view h1")).to_contain_text("Administração institucional", timeout=10000)
+    expect(carla.locator("#body")).to_contain_text("Congregação Norte", timeout=10000); expect(carla.locator("#nu")).to_have_count(0); expect(carla.locator('[data-t="ace"]')).to_have_count(0); ovf(carla, "instituição regional")
+    carla.locator('[data-t="con"]').click(); expect(carla.locator("#body")).to_contain_text("Por unidade", timeout=10000); expect(carla.locator("#body")).to_contain_text("exigem uma permissão própria")
+    # acesso retirado vale na hora
+    ana.locator('[data-t="ace"]').click(); ana.locator("[data-rm]").first.click(); ana.locator("[data-ok]").click(); toast_has(ana, "Acesso retirado")
+    n_err = len(errors); carla.goto(BASE + "/#/instituicao"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Você não tem acesso", timeout=10000); carla.wait_for_timeout(400)
+    errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]
+    ok("múltiplas igrejas: unidade criada abaixo da igreja, convite com código único, consolidado só com números, acesso regional concedido e registrado, e acesso negado a quem não tem permissão")
+    # integrações: chave de API, webhook (segredo visto uma vez), teste, entregas, logs e visão geral; sem permissão = acesso negado
+    ana.goto(BASE + "/#/chamados"); ana.reload(); expect(ana.locator('a[href="#/integracoes"]')).to_be_visible(timeout=10000); ana.locator('a[href="#/integracoes"]').click()
+    expect(ana.locator("#view h1")).to_contain_text("Integrações", timeout=10000); expect(ana.locator("#body")).to_contain_text("Como usar a API", timeout=10000); expect(ana.locator("#body")).to_contain_text("Pagamento"); ovf(ana, "integrações visão geral"); ana.wait_for_timeout(500); shot(ana, "96-integracoes-geral")
+    ana.locator('[data-t="api"]').click(); ana.locator("#new").click(); ana.fill(".sheet #nm", "Site da igreja"); ana.locator(".sheet #ok").click(); expect(ana.locator(".sheet #sc")).to_contain_text("somos_live_", timeout=10000); ana.locator(".sheet #fx").click()
+    expect(ana.locator("#body")).to_contain_text("Site da igreja", timeout=10000); expect(ana.locator("#body")).not_to_contain_text("somos_live_" + "a" * 40); ovf(ana, "integrações chaves"); ana.wait_for_timeout(400); shot(ana, "97-integracoes-chaves")
+    ana.locator('[data-t="whk"]').click(); ana.locator("#new").click(); ana.fill(".sheet #nm", "Contabilidade"); n_bad = len(errors); ana.fill(".sheet #ur", "http://inseguro.exemplo.com/hook"); ana.locator(".sheet #ok").click(); toast_has(ana, "Endereço inválido"); errors[n_bad:] = [e for e in errors[n_bad:] if "400" not in e]
+    ana.fill(".sheet #ur", "https://contab.exemplo.com.br/hook"); ana.locator(".sheet #ok").click(); expect(ana.locator(".sheet #sc")).to_contain_text("whsec_", timeout=10000); ana.locator(".sheet #fx").click()
+    expect(ana.locator("#body")).to_contain_text("Contabilidade", timeout=10000); expect(ana.locator("#body")).not_to_contain_text("whsec_" + "0" * 10); ovf(ana, "integrações webhooks"); ana.wait_for_timeout(400); shot(ana, "98-integracoes-webhooks")
+    ana.locator("[data-ts]").first.click(); toast_has(ana, "Teste na fila")
+    ana.locator('[data-t="ent"]').click(); expect(ana.locator("#body")).to_contain_text("Teste de conexão", timeout=10000); expect(ana.locator("#body")).to_contain_text("Na fila"); ovf(ana, "integrações entregas")
+    ana.locator('[data-t="log"]').click(); expect(ana.locator("#body")).to_contain_text("Chaves e segredos nunca são gravados", timeout=10000); ovf(ana, "integrações logs")
+    n_err = len(errors); carla.goto(BASE + "/#/integracoes"); carla.reload(); expect(carla.locator("#view")).to_contain_text("Você não tem acesso", timeout=10000); carla.wait_for_timeout(400)
+    errors[n_err:] = [e for e in errors[n_err:] if "400" not in e]
+    ok("integrações: chave de API e endereço de webhook criados com segredo mostrado uma vez, endereço inseguro recusado, teste na fila, entregas e logs, e acesso negado a quem não tem permissão")
 
     # sem rolagem horizontal no celular
     for p_, n in [(ana, "ana"), (bruno, "bruno"), (carla, "carla")]:

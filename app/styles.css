@@ -1531,6 +1531,7 @@ label.li input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--a
 .rq > summary::-webkit-details-marker { display: none; }
 .ptag.st-pending, .ptag.st-in_review, .ptag.st-draft { background: rgba(var(--w), .1); color: var(--text); }
 .ptag.st-approved { background: var(--accent); color: var(--accent-ink); }
+:root[data-theme="light"] .ptag.st-approved { color: #fff; }
 .ptag.st-partial { background: rgba(var(--w), .16); color: var(--text); }
 .ptag.st-refused, .ptag.st-cancelled { background: rgba(var(--w), .06); color: var(--muted); }
 

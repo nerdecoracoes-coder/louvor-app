@@ -15416,3 +15416,795 @@ grant execute on function public.home_discover(uuid) to authenticated;
 select public.dig_match('Conhecendo a Bíblia', 'biblia') and public.dig_match('Conhecendo a Bíblia', 'bibila') and not public.dig_match('Culto de Jovens', 'batismo')
    and to_regclass('public.live_streams') is not null and to_regclass('public.reading_plan_notes') is not null and to_regclass('public.push_subscriptions') is not null
    and pg_get_functiondef('public.home_discover(uuid)'::regprocedure) like '%live_streams%' as digital_melhorias_ok;
+
+-- >>> supabase/migrations/20261213000001_multiplas_igrejas.sql
+-- =====================================================================
+-- SOMOS — Fase 6A: Gestão de Múltiplas Igrejas (Administração Institucional)
+--  * Cada igreja/unidade JÁ é uma organização isolada (todas as tabelas têm org_id e RLS). Nada é movido nem apagado:
+--    a igreja atual continua como está e passa a poder ser agrupada em uma estrutura configurável.
+--  * Estrutura sem hierarquia fixa: cada unidade tem um "pai" opcional e um nome de tipo livre
+--    (Organização principal, Regional, Igreja, Congregação, Unidade ou o que a denominação usar). Máximo de 8 níveis abaixo da raiz.
+--  * Vincular uma igreja existente a um pai exige o consentimento dos dois lados (administrador da igreja + quem estrutura o pai).
+--  * Acesso global só por concessão explícita (org_scope_grants) ou por ser administrador do nó. Desenvolvedor NÃO tem acesso implícito.
+--  * O consolidado devolve só números agregados (sem nomes de pessoas). Indicadores financeiros exigem concessão própria e ficam auditados.
+--  * Quem tem acesso a um nó NÃO ganha acesso aos dados internos das unidades abaixo: pessoas, financeiro etc. continuam isolados por RLS.
+-- =====================================================================
+
+alter table public.organizations add column if not exists parent_id uuid references public.organizations(id) on delete set null;
+alter table public.organizations add column if not exists unit_kind text check (unit_kind is null or length(unit_kind) between 1 and 40);
+create index if not exists organizations_parent on public.organizations (parent_id) where parent_id is not null;
+
+-- ---------------------------------------------------------------- concessões de escopo (acesso regional/global)
+create table if not exists public.org_scope_grants (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  level text check (level is null or length(level) <= 60),
+  actions text[] not null check (cardinality(actions) between 1 and 3 and actions <@ array['structure','consolidated','consolidated_fin']),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  unique (org_id, user_id)
+);
+alter table public.org_scope_grants enable row level security;
+revoke all on public.org_scope_grants from anon, authenticated;
+
+-- ---------------------------------------------------------------- árvore
+-- nós abaixo de p_org (inclui o próprio, depth 0)
+create or replace function public.org_subtree(p_org uuid) returns table (id uuid, parent_id uuid, depth int)
+language sql stable security definer set search_path = public as $$
+  with recursive t as (
+    select o.id, o.parent_id, 0 as depth from organizations o where o.id = p_org
+    union all
+    select c.id, c.parent_id, t.depth + 1 from organizations c join t on c.parent_id = t.id where t.depth < 8)
+  select t.id, t.parent_id, t.depth from t
+$$;
+-- p_org e todos os pais acima dele
+create or replace function public.org_ancestors(p_org uuid) returns table (id uuid)
+language sql stable security definer set search_path = public as $$
+  with recursive a as (
+    select o.id, o.parent_id, 0 as n from organizations o where o.id = p_org
+    union all
+    select p.id, p.parent_id, a.n + 1 from organizations p join a on p.id = a.parent_id where a.n < 8)
+  select a.id from a
+$$;
+revoke execute on function public.org_subtree(uuid), public.org_ancestors(uuid) from public, anon, authenticated;
+
+-- só mexe em parent_id quem passa pelas funções abaixo (que conferem consentimento, ciclo e profundidade)
+create or replace function public.org_parent_guard() returns trigger language plpgsql security definer set search_path = public as $$
+declare v_id uuid; v_n int := 0; v_h int;
+begin
+  if tg_op = 'INSERT' and new.parent_id is null then return new; end if;
+  if tg_op = 'UPDATE' and new.parent_id is not distinct from old.parent_id then return new; end if;
+  if coalesce(current_setting('somos.org_tree', true), '') <> 'on' and auth.uid() is not null then raise exception 'org_parent_locked'; end if;
+  v_id := new.parent_id;
+  while v_id is not null loop
+    if v_id = new.id then raise exception 'org_cycle'; end if;
+    v_n := v_n + 1; if v_n > 8 then raise exception 'org_too_deep'; end if;
+    select o.parent_id into v_id from organizations o where o.id = v_id;
+  end loop;
+  -- a unidade que está entrando leva consigo as filhas: a altura delas também conta (máximo de 8 níveis abaixo da raiz)
+  select coalesce(max(depth), 0) into v_h from public.org_subtree(new.id);
+  if tg_op = 'UPDATE' and new.parent_id is not null and (v_n + v_h) > 8 then raise exception 'org_too_deep'; end if;
+  return new;
+end $$;
+drop trigger if exists org_parent_guard_trg on public.organizations;
+create trigger org_parent_guard_trg before insert or update of parent_id on public.organizations for each row execute function public.org_parent_guard();
+
+-- administrador (papel) da própria unidade — o desenvolvedor não entra aqui
+create or replace function public.inst_is_admin(p_org uuid) returns boolean language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and exists (select 1 from org_members where org_id = p_org and user_id = auth.uid() and role = 'admin')
+$$;
+-- 'structure' | 'consolidated' | 'consolidated_fin' sobre p_org: administrador do nó ou de um pai (structure/consolidated), ou concessão no nó ou em um pai
+create or replace function public.org_scope_has(p_org uuid, p_action text) returns boolean language sql stable security definer set search_path = public as $$
+  select auth.uid() is not null and exists (
+    select 1 from public.org_ancestors(p_org) a
+    where (p_action in ('structure', 'consolidated') and exists (select 1 from org_members m where m.org_id = a.id and m.user_id = auth.uid() and m.role = 'admin'))
+       or exists (select 1 from org_scope_grants g where g.org_id = a.id and g.user_id = auth.uid() and p_action = any (g.actions)))
+$$;
+revoke execute on function public.inst_is_admin(uuid), public.org_scope_has(uuid, text) from public, anon;
+grant execute on function public.inst_is_admin(uuid), public.org_scope_has(uuid, text) to authenticated;
+
+-- o que a pessoa pode fazer na Administração Institucional a partir da igreja atual
+create or replace function public.inst_access(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  return jsonb_build_object('admin', public.inst_is_admin(p_org), 'structure', public.org_scope_has(p_org, 'structure'),
+    'consolidated', public.org_scope_has(p_org, 'consolidated'), 'fin', public.org_scope_has(p_org, 'consolidated_fin'),
+    'has_parent', exists (select 1 from organizations where id = p_org and parent_id is not null),
+    'has_children', exists (select 1 from organizations where parent_id = p_org));
+end $$;
+
+-- ---------------------------------------------------------------- estrutura
+create or replace function public.org_tree(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not (public.org_scope_has(p_org, 'structure') or public.org_scope_has(p_org, 'consolidated')) then raise exception 'forbidden'; end if;
+  return jsonb_build_object(
+    'org_id', p_org,
+    'parent', (select jsonb_build_object('id', p.id, 'name', p.name, 'kind', p.unit_kind) from organizations o join organizations p on p.id = o.parent_id where o.id = p_org
+                 and (public.inst_is_admin(p.id) or public.org_scope_has(p.id, 'structure'))),
+    'units', coalesce((select jsonb_agg(jsonb_build_object('id', o.id, 'name', o.name, 'kind', o.unit_kind, 'parent_id', t.parent_id, 'depth', t.depth,
+        'i_admin', public.inst_is_admin(o.id), 'members', (select count(*) from org_members m where m.org_id = o.id)) order by t.depth, o.name)
+      from public.org_subtree(p_org) t join organizations o on o.id = t.id), '[]'::jsonb));
+end $$;
+
+create or replace function public.org_unit_create(p_parent uuid, p_name text, p_kind text default null, p_accent text default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_name text := trim(coalesce(p_name, '')); v_kind text := nullif(trim(coalesce(p_kind, '')), ''); v_id uuid; v_depth int;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not public.org_scope_has(p_parent, 'structure') then raise exception 'forbidden'; end if;
+  if length(v_name) not between 2 and 80 then raise exception 'org_need_name'; end if;
+  if v_kind is not null and length(v_kind) > 40 then raise exception 'org_kind_long'; end if;
+  select max(n) into v_depth from (select count(*) n from public.org_ancestors(p_parent)) x;
+  if v_depth > 8 then raise exception 'org_too_deep'; end if;
+  v_id := public.create_organization(v_name, coalesce(nullif(p_accent, ''), '#1EA7FF'), null);
+  perform set_config('somos.org_tree', 'on', true);
+  update organizations set parent_id = p_parent, unit_kind = v_kind where id = v_id;
+  perform set_config('somos.org_tree', 'off', true);
+  perform public.mod_log(p_parent, 'institucional', 'unit', v_id, 'create', null, jsonb_build_object('name', v_name, 'kind', v_kind));
+  perform public.mod_log(v_id, 'institucional', 'unit', v_id, 'create', null, jsonb_build_object('parent', p_parent));
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+
+-- vincular uma igreja que já existe: precisa ser administrador dela E ter 'structure' no pai
+create or replace function public.org_unit_link(p_child uuid, p_parent uuid, p_kind text default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_kind text := nullif(trim(coalesce(p_kind, '')), '');
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if p_child = p_parent then raise exception 'org_cycle'; end if;
+  if not (public.inst_is_admin(p_child) and public.org_scope_has(p_parent, 'structure')) then raise exception 'forbidden'; end if;
+  if exists (select 1 from organizations where id = p_child and parent_id is not null) then raise exception 'org_has_parent'; end if;
+  if v_kind is not null and length(v_kind) > 40 then raise exception 'org_kind_long'; end if;
+  perform set_config('somos.org_tree', 'on', true);
+  update organizations set parent_id = p_parent, unit_kind = coalesce(v_kind, unit_kind) where id = p_child;
+  perform set_config('somos.org_tree', 'off', true);
+  perform public.mod_log(p_parent, 'institucional', 'unit', p_child, 'link', null, null);
+  perform public.mod_log(p_child, 'institucional', 'unit', p_child, 'link', null, jsonb_build_object('parent', p_parent));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- convite: quem estrutura o pai gera um código de uso único (7 dias); o administrador da igreja que quer entrar o aceita.
+-- O código só aparece uma vez (guardamos apenas o hash).
+create table if not exists public.org_invites (
+  id uuid primary key default gen_random_uuid(),
+  parent_org_id uuid not null references public.organizations(id) on delete cascade,
+  code_hash text not null unique,
+  unit_kind text check (unit_kind is null or length(unit_kind) between 1 and 40),
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now(),
+  expires_at timestamptz not null default now() + interval '7 days',
+  used_at timestamptz,
+  used_by_org uuid references public.organizations(id) on delete set null
+);
+alter table public.org_invites enable row level security;
+revoke all on public.org_invites from anon, authenticated;
+
+create or replace function public.org_invite_create(p_parent uuid, p_kind text default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_code text; v_kind text := nullif(trim(coalesce(p_kind, '')), '');
+begin
+  if not public.org_scope_has(p_parent, 'structure') then raise exception 'forbidden'; end if;
+  if v_kind is not null and length(v_kind) > 40 then raise exception 'org_kind_long'; end if;
+  v_code := 'IGR-' || upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 12));
+  insert into org_invites (parent_org_id, code_hash, unit_kind, created_by) values (p_parent, encode(sha256(convert_to(v_code, 'utf8')), 'hex'), v_kind, auth.uid());
+  perform public.mod_log(p_parent, 'institucional', 'invite', null, 'create', null, jsonb_build_object('kind', v_kind));
+  return jsonb_build_object('ok', true, 'code', v_code, 'expires_in_days', 7);
+end $$;
+create or replace function public.org_invite_list(p_parent uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.org_scope_has(p_parent, 'structure') then raise exception 'forbidden'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id', i.id, 'unit_kind', i.unit_kind, 'created_at', i.created_at, 'expires_at', i.expires_at,
+      'state', case when i.used_at is not null then 'used' when i.expires_at < now() then 'expired' else 'open' end, 'used_by', o.name) order by i.created_at desc)
+    from (select * from org_invites where parent_org_id = p_parent order by created_at desc limit 30) i left join organizations o on o.id = i.used_by_org), '[]'::jsonb);
+end $$;
+create or replace function public.org_invite_revoke(p_id uuid) returns jsonb language plpgsql security definer set search_path = public as $$
+declare v org_invites;
+begin
+  select * into v from org_invites where id = p_id; if v.id is null then raise exception 'not_found'; end if;
+  if not public.org_scope_has(v.parent_org_id, 'structure') then raise exception 'forbidden'; end if;
+  delete from org_invites where id = p_id and used_at is null;
+  perform public.mod_log(v.parent_org_id, 'institucional', 'invite', p_id, 'revoke', null, null);
+  return jsonb_build_object('ok', true);
+end $$;
+create or replace function public.org_invite_accept(p_child uuid, p_code text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v org_invites;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  if not public.inst_is_admin(p_child) then raise exception 'forbidden'; end if;
+  select * into v from org_invites where code_hash = encode(sha256(convert_to(upper(trim(coalesce(p_code, ''))), 'utf8')), 'hex') and used_at is null and expires_at >= now();
+  if v.id is null then raise exception 'org_invite_invalid'; end if;
+  -- quem criou o convite ainda precisa poder estruturar o pai
+  if not exists (select 1 from public.org_ancestors(v.parent_org_id) a where
+       exists (select 1 from org_members m where m.org_id = a.id and m.user_id = v.created_by and m.role = 'admin')
+       or exists (select 1 from org_scope_grants g where g.org_id = a.id and g.user_id = v.created_by and 'structure' = any (g.actions))) then raise exception 'org_invite_invalid'; end if;
+  if v.parent_org_id = p_child then raise exception 'org_cycle'; end if;
+  if exists (select 1 from organizations where id = p_child and parent_id is not null) then raise exception 'org_has_parent'; end if;
+  perform set_config('somos.org_tree', 'on', true);
+  update organizations set parent_id = v.parent_org_id, unit_kind = coalesce(v.unit_kind, unit_kind) where id = p_child;
+  perform set_config('somos.org_tree', 'off', true);
+  update org_invites set used_at = now(), used_by_org = p_child where id = v.id;
+  perform public.mod_log(v.parent_org_id, 'institucional', 'unit', p_child, 'link', null, null);
+  perform public.mod_log(p_child, 'institucional', 'unit', p_child, 'link', null, jsonb_build_object('parent', v.parent_org_id));
+  return jsonb_build_object('ok', true, 'parent_id', v.parent_org_id);
+end $$;
+
+-- desvincular não apaga nem move nada: só tira a unidade da estrutura. Pode o administrador da unidade ou quem estrutura o pai.
+create or replace function public.org_unit_unlink(p_child uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_parent uuid;
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  select parent_id into v_parent from organizations where id = p_child;
+  if v_parent is null then raise exception 'not_found'; end if;
+  if not (public.inst_is_admin(p_child) or public.org_scope_has(v_parent, 'structure')) then raise exception 'forbidden'; end if;
+  perform set_config('somos.org_tree', 'on', true);
+  update organizations set parent_id = null where id = p_child;
+  perform set_config('somos.org_tree', 'off', true);
+  perform public.mod_log(v_parent, 'institucional', 'unit', p_child, 'unlink', null, null);
+  perform public.mod_log(p_child, 'institucional', 'unit', p_child, 'unlink', null, jsonb_build_object('parent', v_parent));
+  return jsonb_build_object('ok', true);
+end $$;
+
+create or replace function public.org_unit_set_kind(p_org uuid, p_kind text) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_kind text := nullif(trim(coalesce(p_kind, '')), '');
+begin
+  if not public.org_scope_has(p_org, 'structure') then raise exception 'forbidden'; end if;
+  if v_kind is not null and length(v_kind) > 40 then raise exception 'org_kind_long'; end if;
+  update organizations set unit_kind = v_kind where id = p_org;
+  perform public.mod_log(p_org, 'institucional', 'unit', p_org, 'kind', null, jsonb_build_object('kind', v_kind));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- concessões (só administrador do nó concede; ninguém repassa)
+create or replace function public.org_scope_list(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.inst_is_admin(p_org) then raise exception 'forbidden'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('id', g.id, 'user_id', g.user_id, 'name', coalesce(m.display_name, 'Sem nome'), 'level', g.level, 'actions', g.actions, 'created_at', g.created_at) order by g.created_at)
+    from org_scope_grants g left join org_members m on m.org_id = g.org_id and m.user_id = g.user_id where g.org_id = p_org), '[]'::jsonb);
+end $$;
+create or replace function public.org_scope_set(p_org uuid, p_user uuid, p_level text, p_actions text[]) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_level text := nullif(trim(coalesce(p_level, '')), ''); v_id uuid;
+begin
+  if not public.inst_is_admin(p_org) then raise exception 'forbidden'; end if;
+  if not exists (select 1 from org_members where org_id = p_org and user_id = p_user) then raise exception 'org_member_required'; end if;
+  if p_actions is null or cardinality(p_actions) = 0 or not (p_actions <@ array['structure','consolidated','consolidated_fin']) then raise exception 'org_invalid_actions'; end if;
+  if v_level is not null and length(v_level) > 60 then raise exception 'org_kind_long'; end if;
+  insert into org_scope_grants (org_id, user_id, level, actions, created_by) values (p_org, p_user, v_level, p_actions, auth.uid())
+    on conflict (org_id, user_id) do update set level = excluded.level, actions = excluded.actions returning id into v_id;
+  perform public.mod_log(p_org, 'institucional', 'scope', v_id, 'grant', null, jsonb_build_object('user', p_user, 'actions', p_actions, 'level', v_level));
+  return jsonb_build_object('ok', true, 'id', v_id);
+end $$;
+create or replace function public.org_scope_remove(p_id uuid) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare g org_scope_grants;
+begin
+  select * into g from org_scope_grants where id = p_id; if g.id is null then raise exception 'not_found'; end if;
+  if not public.inst_is_admin(g.org_id) then raise exception 'forbidden'; end if;
+  delete from org_scope_grants where id = p_id;
+  perform public.mod_log(g.org_id, 'institucional', 'scope', p_id, 'revoke', null, jsonb_build_object('user', g.user_id, 'actions', g.actions));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- ---------------------------------------------------------------- consolidado (somente números)
+create or replace function public.org_consolidated(p_org uuid) returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_fin boolean; v_from date := date_trunc('month', (now() at time zone 'America/Sao_Paulo'))::date; v_units jsonb;
+begin
+  if not public.org_scope_has(p_org, 'consolidated') then raise exception 'forbidden'; end if;
+  v_fin := public.org_scope_has(p_org, 'consolidated_fin');
+  select coalesce(jsonb_agg(u order by (u->>'depth')::int, u->>'name'), '[]'::jsonb) into v_units from (
+    select jsonb_build_object('id', o.id, 'name', o.name, 'kind', o.unit_kind, 'depth', t.depth, 'parent_id', t.parent_id,
+      'people', (select count(*) from people x where x.org_id = o.id and x.status = 'active'),
+      'members', (select count(*) from people x where x.org_id = o.id and x.status = 'active' and x.classification = 'member'),
+      'cells', (select count(*) from cells c where c.org_id = o.id and c.status = 'active'),
+      'events_upcoming', (select count(*) from ev_events e where e.org_id = o.id and e.status = 'published' and e.starts_at >= now()),
+      'events_30d', (select count(*) from ev_events e where e.org_id = o.id and e.status in ('published', 'finished') and e.starts_at between now() - interval '30 days' and now()),
+      'programs', (select count(*) from prog_items p where p.org_id = o.id and p.status = 'published'),
+      'rosters_upcoming', (select count(*) from schedules s where s.org_id = o.id and s.status not in ('draft', 'cancelled') and s.starts_at >= now()),
+      'users', (select count(*) from org_members m where m.org_id = o.id),
+      'fin', case when v_fin then jsonb_build_object(
+          'income', coalesce((select sum(f.amount) from fin_entries f where f.org_id = o.id and f.kind = 'income' and f.status = 'settled' and f.paid_at >= v_from), 0),
+          'expense', coalesce((select sum(f.amount) from fin_entries f where f.org_id = o.id and f.kind = 'expense' and f.status = 'settled' and f.paid_at >= v_from), 0),
+          'open_expense', coalesce((select sum(f.amount) from fin_entries f where f.org_id = o.id and f.kind = 'expense' and f.status = 'open'), 0)) else null end) u
+    from public.org_subtree(p_org) t join organizations o on o.id = t.id) q;
+  if v_fin then perform public.mod_log(p_org, 'institucional', 'consolidated', p_org, 'view_fin', null, null); end if;
+  return jsonb_build_object('org_id', p_org, 'fin_allowed', v_fin, 'month_from', v_from, 'generated_at', now(), 'units', v_units,
+    'totals', (select jsonb_build_object('units', jsonb_array_length(v_units),
+        'people', coalesce(sum((x->>'people')::int), 0), 'members', coalesce(sum((x->>'members')::int), 0), 'cells', coalesce(sum((x->>'cells')::int), 0),
+        'events_upcoming', coalesce(sum((x->>'events_upcoming')::int), 0), 'events_30d', coalesce(sum((x->>'events_30d')::int), 0), 'programs', coalesce(sum((x->>'programs')::int), 0),
+        'rosters_upcoming', coalesce(sum((x->>'rosters_upcoming')::int), 0), 'users', coalesce(sum((x->>'users')::int), 0),
+        'income', case when v_fin then coalesce(sum((x#>>'{fin,income}')::numeric), 0) end, 'expense', case when v_fin then coalesce(sum((x#>>'{fin,expense}')::numeric), 0) end)
+      from jsonb_array_elements(v_units) x));
+end $$;
+
+-- histórico das mudanças de estrutura e de acesso (quem vê: quem estrutura a unidade)
+create or replace function public.org_inst_history(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if not public.org_scope_has(p_org, 'structure') then raise exception 'forbidden'; end if;
+  return coalesce((select jsonb_agg(jsonb_build_object('at', a.created_at, 'entity', a.entity, 'action', a.action, 'detail', a.detail) order by a.created_at desc)
+    from (select * from mod_audit where org_id = p_org and module = 'institucional' order by created_at desc limit 100) a), '[]'::jsonb);
+end $$;
+
+revoke execute on function public.inst_access(uuid), public.org_tree(uuid), public.org_unit_create(uuid, text, text, text), public.org_unit_link(uuid, uuid, text), public.org_unit_unlink(uuid),
+  public.org_unit_set_kind(uuid, text), public.org_scope_list(uuid), public.org_scope_set(uuid, uuid, text, text[]), public.org_scope_remove(uuid), public.org_consolidated(uuid), public.org_inst_history(uuid),
+  public.org_invite_create(uuid, text), public.org_invite_list(uuid), public.org_invite_revoke(uuid), public.org_invite_accept(uuid, text) from public, anon;
+grant execute on function public.inst_access(uuid), public.org_tree(uuid), public.org_unit_create(uuid, text, text, text), public.org_unit_link(uuid, uuid, text), public.org_unit_unlink(uuid),
+  public.org_unit_set_kind(uuid, text), public.org_scope_list(uuid), public.org_scope_set(uuid, uuid, text, text[]), public.org_scope_remove(uuid), public.org_consolidated(uuid), public.org_inst_history(uuid),
+  public.org_invite_create(uuid, text), public.org_invite_list(uuid), public.org_invite_revoke(uuid), public.org_invite_accept(uuid, text) to authenticated;
+
+-- ---------------------------------------------------------------------
+-- Para desfazer: dropar as funções org_*/inst_*, o gatilho org_parent_guard_trg, as tabelas org_scope_grants e org_invites e as colunas parent_id/unit_kind
+-- (as igrejas e todos os seus dados permanecem; só a estrutura é perdida).
+-- ---------------------------------------------------------------------
+-- Verificação (deve retornar true):
+select exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'organizations' and column_name = 'parent_id')
+   and to_regclass('public.org_scope_grants') is not null
+   and exists (select 1 from pg_trigger where tgname = 'org_parent_guard_trg')
+   and (select count(*) from public.organizations where parent_id is not null) >= 0 as multiplas_igrejas_ok;
+
+-- >>> supabase/migrations/20261214000001_integracoes.sql
+-- =====================================================================
+-- SOMOS — Fase 6B: Integrações e Recursos Técnicos (SOMOS Chamados → Integrações)
+--  * Permissão nova: integ_manage (administrador ou concessão; desenvolvedor NÃO tem acesso implícito).
+--  * API pública v1 (somente leitura, dados já públicos da igreja): chaves com escopo, validade e limite por minuto.
+--    A chave aparece uma única vez; no banco fica só o hash (sha256). O servidor HTTP é a Edge Function "api".
+--  * Webhooks: URL https (sem endereços internos), eventos escolhidos, segredo de assinatura (HMAC-SHA256), situação,
+--    histórico de entregas e reenvio. O envio é feito pela Edge Function "webhook-dispatch" (reenvio automático com espera crescente).
+--  * Eventos nunca levam CPF, e-mail, telefone ou dados de doador. "Contribuição registrada" só pode ser assinada por quem tem fin_manage e não leva pessoa.
+--  * Logs e monitoramento sem segredos: o que é gravado passa por limpeza; falhas, pendências e "última execução" dos envios ficam visíveis.
+-- =====================================================================
+
+create or replace function public.module_actions() returns text[] language sql immutable as $$
+  select array['cells_view','cells_manage','cells_members','cells_meetings','cells_supervision','cells_reports',
+               'prog_view','prog_manage','prog_publish','prog_run','roster_view','roster_manage','roster_approve',
+               'media_request','discover_manage','ev_view','ev_manage','ev_publish','ev_checkin',
+               'fin_view','fin_entry','fin_approve','fin_manage','fin_donors',
+               'comm_manage','comm_publish','comm_sermons','care_prayer','care_pastoral','care_manage','dig_manage','integ_manage']::text[]
+$$;
+
+create or replace function public.integ_need(p_org uuid) returns void language plpgsql stable security definer set search_path = public as $$
+begin if not public.mod_perm(p_org, 'integ_manage') then raise exception 'forbidden'; end if; end $$;
+
+-- ---------------------------------------------------------------- limpeza de segredos nos logs
+create or replace function public.integ_clean_text(t text) returns text language sql immutable as $$
+  select left(regexp_replace(coalesce(t, ''), '(whsec_|somos_live_)[A-Za-z0-9]+', '[oculto]', 'g'), 200)
+$$;
+create or replace function public.integ_clean(j jsonb) returns jsonb language sql immutable as $$
+  select coalesce(jsonb_object_agg(k, case when jsonb_typeof(v) = 'string' then to_jsonb(public.integ_clean_text(v #>> '{}')) else v end), '{}'::jsonb)
+  from jsonb_each(coalesce(j, '{}'::jsonb)) e(k, v) where k !~* '(secret|token|authorization|password|senha|key|signature)'
+$$;
+
+-- ---------------------------------------------------------------- tabelas
+create table if not exists public.integration_logs (
+  id bigint generated always as identity primary key,
+  org_id uuid references public.organizations(id) on delete cascade,
+  source text not null check (source in ('api', 'webhook', 'push', 'system')),
+  level text not null check (level in ('info', 'warn', 'error')),
+  event text not null check (length(event) <= 120),
+  detail jsonb,
+  created_at timestamptz not null default now()
+);
+create index if not exists integration_logs_org on public.integration_logs (org_id, created_at desc);
+create table if not exists public.integration_heartbeats (
+  source text primary key check (source in ('webhooks', 'push', 'api')),
+  last_run_at timestamptz not null default now(),
+  last_ok_at timestamptz,
+  detail jsonb
+);
+create table if not exists public.api_keys (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (length(trim(name)) between 2 and 60),
+  key_prefix text not null,
+  key_hash text not null unique,
+  scopes text[] not null check (cardinality(scopes) >= 1 and scopes <@ array['events:read', 'programs:read', 'sermons:read', 'contents:read']),
+  rate_limit int not null default 60 check (rate_limit between 10 and 600),
+  expires_at timestamptz,
+  revoked_at timestamptz,
+  last_used_at timestamptz,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists api_keys_org on public.api_keys (org_id);
+create table if not exists public.api_rate (
+  key_id uuid not null references public.api_keys(id) on delete cascade,
+  bucket timestamptz not null,
+  n int not null default 0,
+  primary key (key_id, bucket)
+);
+create table if not exists public.webhook_endpoints (
+  id uuid primary key default gen_random_uuid(),
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  name text not null check (length(trim(name)) between 2 and 60),
+  url text not null check (length(url) <= 500),
+  secret text not null,
+  events text[] not null check (cardinality(events) >= 1),
+  active boolean not null default true,
+  failure_streak int not null default 0,
+  disabled_reason text,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index if not exists webhook_endpoints_org on public.webhook_endpoints (org_id);
+create table if not exists public.webhook_events (
+  id bigint generated always as identity primary key,
+  org_id uuid not null references public.organizations(id) on delete cascade,
+  event_type text not null,
+  payload jsonb not null,
+  created_at timestamptz not null default now()
+);
+create table if not exists public.webhook_deliveries (
+  id bigint generated always as identity primary key,
+  endpoint_id uuid not null references public.webhook_endpoints(id) on delete cascade,
+  event_id bigint not null references public.webhook_events(id) on delete cascade,
+  status text not null default 'pending' check (status in ('pending', 'success', 'failed', 'dead')),
+  attempts int not null default 0,
+  next_attempt_at timestamptz default now(),
+  last_attempt_at timestamptz,
+  response_status int,
+  error text,
+  delivered_at timestamptz,
+  created_at timestamptz not null default now()
+);
+create index if not exists webhook_deliveries_due on public.webhook_deliveries (next_attempt_at) where status in ('pending', 'failed');
+create index if not exists webhook_deliveries_endpoint on public.webhook_deliveries (endpoint_id, created_at desc);
+alter table public.integration_logs enable row level security; alter table public.integration_heartbeats enable row level security; alter table public.api_keys enable row level security;
+alter table public.api_rate enable row level security; alter table public.webhook_endpoints enable row level security; alter table public.webhook_events enable row level security; alter table public.webhook_deliveries enable row level security;
+revoke all on public.integration_logs, public.integration_heartbeats, public.api_keys, public.api_rate, public.webhook_endpoints, public.webhook_events, public.webhook_deliveries from anon, authenticated;
+
+create or replace function public.integ_log(p_org uuid, p_source text, p_level text, p_event text, p_detail jsonb default null) returns void language sql security definer set search_path = public as $$
+  insert into integration_logs (org_id, source, level, event, detail) values (p_org, p_source, p_level, left(p_event, 120), public.integ_clean(p_detail))
+$$;
+revoke execute on function public.integ_log(uuid, text, text, text, jsonb), public.integ_need(uuid) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------- chaves de API
+create or replace function public.api_key_create(p_org uuid, p_name text, p_scopes text[], p_rate int default 60, p_days int default 365) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare v_key text; v_id uuid; v_name text := trim(coalesce(p_name, ''));
+begin
+  perform public.integ_need(p_org);
+  if length(v_name) not between 2 and 60 then raise exception 'integ_need_name'; end if;
+  if p_scopes is null or cardinality(p_scopes) = 0 or not (p_scopes <@ array['events:read', 'programs:read', 'sermons:read', 'contents:read']) then raise exception 'integ_invalid_scopes'; end if;
+  if coalesce(p_rate, 60) not between 10 and 600 then raise exception 'integ_invalid_rate'; end if;
+  if p_days is not null and p_days not between 1 and 730 then raise exception 'integ_invalid_days'; end if;
+  if (select count(*) from api_keys where org_id = p_org and revoked_at is null) >= 20 then raise exception 'integ_limit_reached'; end if;
+  v_key := 'somos_live_' || substr(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''), 1, 40);
+  insert into api_keys (org_id, name, key_prefix, key_hash, scopes, rate_limit, expires_at, created_by)
+  values (p_org, v_name, left(v_key, 15), encode(sha256(convert_to(v_key, 'utf8')), 'hex'), p_scopes, coalesce(p_rate, 60), case when p_days is null then null else now() + make_interval(days => p_days) end, auth.uid()) returning id into v_id;
+  perform public.mod_log(p_org, 'integracoes', 'api_key', v_id, 'create', null, jsonb_build_object('name', v_name, 'scopes', p_scopes));
+  return jsonb_build_object('ok', true, 'id', v_id, 'key', v_key);
+end $$;
+create or replace function public.api_key_list(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.integ_need(p_org);
+  return coalesce((select jsonb_agg(jsonb_build_object('id', k.id, 'name', k.name, 'prefix', k.key_prefix, 'scopes', k.scopes, 'rate_limit', k.rate_limit, 'expires_at', k.expires_at, 'last_used_at', k.last_used_at, 'created_at', k.created_at,
+      'state', case when k.revoked_at is not null then 'revoked' when k.expires_at is not null and k.expires_at < now() then 'expired' else 'active' end) order by k.created_at desc)
+    from api_keys k where k.org_id = p_org), '[]'::jsonb);
+end $$;
+create or replace function public.api_key_revoke(p_id uuid) returns jsonb language plpgsql security definer set search_path = public as $$
+declare k api_keys;
+begin
+  select * into k from api_keys where id = p_id; if k.id is null then raise exception 'not_found'; end if;
+  perform public.integ_need(k.org_id);
+  update api_keys set revoked_at = coalesce(revoked_at, now()) where id = p_id;
+  perform public.mod_log(k.org_id, 'integracoes', 'api_key', p_id, 'revoke', null, jsonb_build_object('name', k.name));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- uso exclusivo da Edge Function "api" (chave de serviço): confere a chave, o escopo e o limite por minuto
+create or replace function public.api_authenticate(p_hash text, p_scope text default null) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare k api_keys; v_n int; v_bucket timestamptz := date_trunc('minute', now());
+begin
+  select * into k from api_keys where key_hash = p_hash;
+  if k.id is null then return jsonb_build_object('ok', false, 'error', 'invalid_key'); end if;
+  if k.revoked_at is not null then return jsonb_build_object('ok', false, 'error', 'revoked', 'org_id', k.org_id, 'key_id', k.id); end if;
+  if k.expires_at is not null and k.expires_at < now() then return jsonb_build_object('ok', false, 'error', 'expired', 'org_id', k.org_id, 'key_id', k.id); end if;
+  if p_scope is not null and not (p_scope = any (k.scopes)) then return jsonb_build_object('ok', false, 'error', 'insufficient_scope', 'org_id', k.org_id, 'key_id', k.id); end if;
+  insert into api_rate (key_id, bucket, n) values (k.id, v_bucket, 1) on conflict (key_id, bucket) do update set n = api_rate.n + 1 returning n into v_n;
+  if v_n > k.rate_limit then return jsonb_build_object('ok', false, 'error', 'rate_limited', 'org_id', k.org_id, 'key_id', k.id, 'limit', k.rate_limit, 'retry_after', greatest(1, 60 - extract(second from now())::int)); end if;
+  if k.last_used_at is null or k.last_used_at < now() - interval '1 minute' then update api_keys set last_used_at = now() where id = k.id; end if;
+  return jsonb_build_object('ok', true, 'org_id', k.org_id, 'key_id', k.id, 'limit', k.rate_limit, 'remaining', k.rate_limit - v_n);
+end $$;
+create or replace function public.api_log(p_org uuid, p_key uuid, p_method text, p_path text, p_status int, p_ms int) returns void language sql security definer set search_path = public as $$
+  select public.integ_log(p_org, 'api', case when p_status >= 500 then 'error' when p_status >= 400 then 'warn' else 'info' end, left(coalesce(p_method, '') || ' ' || coalesce(p_path, ''), 120),
+    jsonb_build_object('status', p_status, 'ms', p_ms, 'key_id', p_key))
+$$;
+
+-- recursos da API v1: só o que a igreja já publica para todos (nada de pessoas, financeiro ou conteúdo restrito)
+create or replace function public.api_v1_events(p_org uuid, p_limit int default 50, p_offset int default 0) returns jsonb language sql stable security definer set search_path = public as $$
+  with r as (select e.* from ev_events e where e.org_id = p_org and e.status = 'published' and e.audience = 'all' order by e.starts_at desc limit least(greatest(coalesce(p_limit, 50), 1), 100) + 1 offset greatest(coalesce(p_offset, 0), 0))
+  select jsonb_build_object('data', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'title', x.title, 'description', x.description, 'location', x.location, 'starts_at', x.starts_at, 'ends_at', x.ends_at, 'image_url', x.image_url, 'registration', x.registration) order by x.starts_at desc)
+      from (select * from r order by starts_at desc limit least(greatest(coalesce(p_limit, 50), 1), 100)) x), '[]'::jsonb),
+    'limit', least(greatest(coalesce(p_limit, 50), 1), 100), 'offset', greatest(coalesce(p_offset, 0), 0), 'has_more', (select count(*) from r) > least(greatest(coalesce(p_limit, 50), 1), 100))
+$$;
+create or replace function public.api_v1_programs(p_org uuid, p_limit int default 50, p_offset int default 0) returns jsonb language sql stable security definer set search_path = public as $$
+  with r as (select p.* from prog_items p where p.org_id = p_org and p.status = 'published' and p.visibility = 'public' order by p.name limit least(greatest(coalesce(p_limit, 50), 1), 100) + 1 offset greatest(coalesce(p_offset, 0), 0))
+  select jsonb_build_object('data', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'name', x.name, 'description', x.description, 'category', x.category, 'location', x.location, 'start_date', x.start_date, 'starts_time', x.starts_time, 'ends_time', x.ends_time, 'recurrence', x.recurrence) order by x.name)
+      from (select * from r order by name limit least(greatest(coalesce(p_limit, 50), 1), 100)) x), '[]'::jsonb),
+    'limit', least(greatest(coalesce(p_limit, 50), 1), 100), 'offset', greatest(coalesce(p_offset, 0), 0), 'has_more', (select count(*) from r) > least(greatest(coalesce(p_limit, 50), 1), 100))
+$$;
+create or replace function public.api_v1_sermons(p_org uuid, p_limit int default 50, p_offset int default 0) returns jsonb language sql stable security definer set search_path = public as $$
+  with r as (select z.* from sermons z where z.org_id = p_org and z.status = 'published' and z.audience = 'all' order by z.preached_on desc nulls last, z.created_at desc limit least(greatest(coalesce(p_limit, 50), 1), 100) + 1 offset greatest(coalesce(p_offset, 0), 0))
+  select jsonb_build_object('data', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'title', x.title, 'preacher', x.preacher, 'preached_on', x.preached_on, 'scripture', x.scripture, 'description', x.description, 'video_url', x.video_url, 'audio_url', x.audio_url, 'image_url', x.image_url,
+        'series', (select s.name from sermon_series s where s.id = x.series_id)) order by x.preached_on desc nulls last, x.created_at desc)
+      from (select * from r order by preached_on desc nulls last, created_at desc limit least(greatest(coalesce(p_limit, 50), 1), 100)) x), '[]'::jsonb),
+    'limit', least(greatest(coalesce(p_limit, 50), 1), 100), 'offset', greatest(coalesce(p_offset, 0), 0), 'has_more', (select count(*) from r) > least(greatest(coalesce(p_limit, 50), 1), 100))
+$$;
+create or replace function public.api_v1_contents(p_org uuid, p_limit int default 50, p_offset int default 0) returns jsonb language sql stable security definer set search_path = public as $$
+  with r as (select c.* from content_items c where c.org_id = p_org and c.status = 'published' and c.audience = 'all' order by c.published_at desc nulls last, c.created_at desc limit least(greatest(coalesce(p_limit, 50), 1), 100) + 1 offset greatest(coalesce(p_offset, 0), 0))
+  select jsonb_build_object('data', coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'kind', x.kind, 'title', x.title, 'description', x.description, 'category', x.category, 'url', x.url, 'image_url', x.image_url, 'published_at', x.published_at) order by x.published_at desc nulls last, x.created_at desc)
+      from (select * from r order by published_at desc nulls last, created_at desc limit least(greatest(coalesce(p_limit, 50), 1), 100)) x), '[]'::jsonb),
+    'limit', least(greatest(coalesce(p_limit, 50), 1), 100), 'offset', greatest(coalesce(p_offset, 0), 0), 'has_more', (select count(*) from r) > least(greatest(coalesce(p_limit, 50), 1), 100))
+$$;
+
+-- ---------------------------------------------------------------- webhooks
+create or replace function public.wh_event_types() returns text[] language sql immutable as $$
+  select array['person.created', 'person.updated', 'event.created', 'registration.created', 'attendance.recorded', 'contribution.recorded', 'program.published']::text[]
+$$;
+-- só https, sem usuário na URL, sem endereço IP, sem nomes internos (localhost, .local, .internal ...)
+create or replace function public.integ_url_ok(u text) returns boolean language sql immutable as $$
+  select coalesce(u ~* '^https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{2,5})?(/[^[:space:]]*)?$' and length(u) <= 500
+    and h ~ '\.' and h !~ '^[0-9.]+$' and h !~* '(^|\.)(localhost|local|internal|localdomain|lan|home|corp|intranet)$', false)
+  from (select split_part(split_part(substr(coalesce(u, ''), 9), '/', 1), ':', 1) h) x
+$$;
+
+create or replace function public.wh_emit(p_org uuid, p_type text, p_payload jsonb) returns void language plpgsql security definer set search_path = public as $$
+declare v_id bigint;
+begin
+  if not exists (select 1 from webhook_endpoints e where e.org_id = p_org and e.active and p_type = any (e.events)) then return; end if;
+  insert into webhook_events (org_id, event_type, payload) values (p_org, p_type, p_payload) returning id into v_id;
+  insert into webhook_deliveries (endpoint_id, event_id) select e.id, v_id from webhook_endpoints e where e.org_id = p_org and e.active and p_type = any (e.events);
+end $$;
+revoke execute on function public.wh_emit(uuid, text, jsonb) from public, anon, authenticated;
+
+-- Gatilhos: nunca atrapalham a operação principal (qualquer erro é ignorado) e só levam dados mínimos.
+create or replace function public.wh_trg_people() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  begin
+    if tg_op = 'INSERT' then
+      perform public.wh_emit(new.org_id, 'person.created', jsonb_build_object('id', new.id, 'full_name', new.full_name, 'classification', new.classification, 'status', new.status));
+    elsif (old.full_name, old.classification, old.status) is distinct from (new.full_name, new.classification, new.status) then
+      perform public.wh_emit(new.org_id, 'person.updated', jsonb_build_object('id', new.id, 'full_name', new.full_name, 'classification', new.classification, 'status', new.status,
+        'changed', to_jsonb(array_remove(array[case when old.full_name is distinct from new.full_name then 'full_name' end, case when old.classification is distinct from new.classification then 'classification' end, case when old.status is distinct from new.status then 'status' end], null))));
+    end if;
+  exception when others then null; end;
+  return new;
+end $$;
+create or replace function public.wh_trg_events() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  begin perform public.wh_emit(new.org_id, 'event.created', jsonb_build_object('id', new.id, 'title', new.title, 'starts_at', new.starts_at, 'status', new.status, 'audience', new.audience)); exception when others then null; end;
+  return new;
+end $$;
+create or replace function public.wh_trg_registrations() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  begin
+    if tg_op = 'INSERT' then
+      perform public.wh_emit(new.org_id, 'registration.created', jsonb_build_object('id', new.id, 'event_id', new.event_id, 'status', new.status, 'guests', new.guests, 'source', new.source));
+    elsif old.checked_in_at is null and new.checked_in_at is not null then
+      perform public.wh_emit(new.org_id, 'attendance.recorded', jsonb_build_object('registration_id', new.id, 'event_id', new.event_id, 'checked_in_at', new.checked_in_at, 'count', new.checked_in_count));
+    end if;
+  exception when others then null; end;
+  return new;
+end $$;
+-- contribuição: só valor, data, categoria, campanha e forma; nunca a pessoa nem o nome do doador
+create or replace function public.wh_trg_fin() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  begin
+    if new.kind = 'income' and new.status = 'settled' and (tg_op = 'INSERT' or old.status is distinct from 'settled') then
+      perform public.wh_emit(new.org_id, 'contribution.recorded', jsonb_build_object('id', new.id, 'amount', new.amount, 'paid_at', new.paid_at, 'category_id', new.category_id, 'campaign_id', new.campaign_id, 'method', new.method));
+    end if;
+  exception when others then null; end;
+  return new;
+end $$;
+-- programação: só as de visibilidade pública (as internas não saem do SOMOS)
+create or replace function public.wh_trg_programs() returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  begin
+    if new.status = 'published' and new.visibility = 'public' and (tg_op = 'INSERT' or old.status is distinct from 'published') then
+      perform public.wh_emit(new.org_id, 'program.published', jsonb_build_object('id', new.id, 'name', new.name, 'category', new.category, 'start_date', new.start_date, 'starts_time', new.starts_time));
+    end if;
+  exception when others then null; end;
+  return new;
+end $$;
+revoke execute on function public.wh_trg_people(), public.wh_trg_events(), public.wh_trg_registrations(), public.wh_trg_fin(), public.wh_trg_programs() from public, anon, authenticated;
+drop trigger if exists wh_people_trg on public.people;
+create trigger wh_people_trg after insert or update of full_name, classification, status on public.people for each row execute function public.wh_trg_people();
+drop trigger if exists wh_events_trg on public.ev_events;
+create trigger wh_events_trg after insert on public.ev_events for each row execute function public.wh_trg_events();
+drop trigger if exists wh_regs_trg on public.ev_registrations;
+create trigger wh_regs_trg after insert or update of checked_in_at on public.ev_registrations for each row execute function public.wh_trg_registrations();
+drop trigger if exists wh_fin_trg on public.fin_entries;
+create trigger wh_fin_trg after insert or update of status on public.fin_entries for each row execute function public.wh_trg_fin();
+drop trigger if exists wh_prog_trg on public.prog_items;
+create trigger wh_prog_trg after insert or update of status on public.prog_items for each row execute function public.wh_trg_programs();
+
+create or replace function public.wh_save(p_org uuid, p_id uuid, p jsonb) returns jsonb language plpgsql security definer set search_path = public as $$
+declare v_name text := trim(coalesce(p->>'name', '')); v_url text := trim(coalesce(p->>'url', '')); v_events text[]; v_id uuid := p_id; v_secret text;
+begin
+  perform public.integ_need(p_org);
+  if length(v_name) not between 2 and 60 then raise exception 'integ_need_name'; end if;
+  if not public.integ_url_ok(v_url) then raise exception 'integ_bad_url'; end if;
+  select coalesce(array_agg(distinct x), '{}') into v_events from jsonb_array_elements_text(coalesce(p->'events', '[]'::jsonb)) x;
+  if cardinality(v_events) = 0 or not (v_events <@ public.wh_event_types()) then raise exception 'integ_invalid_events'; end if;
+  if 'contribution.recorded' = any (v_events) and not public.mod_perm(p_org, 'fin_manage') then raise exception 'integ_fin_denied'; end if;
+  if p_id is null then
+    if (select count(*) from webhook_endpoints where org_id = p_org) >= 10 then raise exception 'integ_limit_reached'; end if;
+    v_secret := 'whsec_' || substr(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''), 1, 48);
+    insert into webhook_endpoints (org_id, name, url, secret, events, active, created_by) values (p_org, v_name, v_url, v_secret, v_events, coalesce((p->>'active')::boolean, true), auth.uid()) returning id into v_id;
+  else
+    update webhook_endpoints set name = v_name, url = v_url, events = v_events where id = p_id and org_id = p_org; if not found then raise exception 'not_found'; end if;
+  end if;
+  perform public.mod_log(p_org, 'integracoes', 'webhook', v_id, case when p_id is null then 'create' else 'update' end, null, jsonb_build_object('name', v_name, 'events', v_events));
+  return jsonb_build_object('ok', true, 'id', v_id) || case when v_secret is not null then jsonb_build_object('secret', v_secret) else '{}'::jsonb end;
+end $$;
+create or replace function public.wh_list(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.integ_need(p_org);
+  return coalesce((select jsonb_agg(jsonb_build_object('id', e.id, 'name', e.name, 'url', e.url, 'events', e.events, 'active', e.active, 'disabled_reason', e.disabled_reason, 'secret_hint', '…' || right(e.secret, 4), 'created_at', e.created_at,
+      'pending', (select count(*) from webhook_deliveries d where d.endpoint_id = e.id and d.status in ('pending', 'failed')),
+      'dead', (select count(*) from webhook_deliveries d where d.endpoint_id = e.id and d.status = 'dead'),
+      'last', (select jsonb_build_object('status', d.status, 'at', coalesce(d.delivered_at, d.last_attempt_at, d.created_at), 'response_status', d.response_status) from webhook_deliveries d where d.endpoint_id = e.id order by d.id desc limit 1)) order by e.created_at desc)
+    from webhook_endpoints e where e.org_id = p_org), '[]'::jsonb);
+end $$;
+create or replace function public.wh_rotate_secret(p_id uuid) returns jsonb language plpgsql security definer set search_path = public as $$
+declare e webhook_endpoints; v_secret text;
+begin
+  select * into e from webhook_endpoints where id = p_id; if e.id is null then raise exception 'not_found'; end if;
+  perform public.integ_need(e.org_id);
+  v_secret := 'whsec_' || substr(replace(gen_random_uuid()::text || gen_random_uuid()::text, '-', ''), 1, 48);
+  update webhook_endpoints set secret = v_secret where id = p_id;
+  perform public.mod_log(e.org_id, 'integracoes', 'webhook', p_id, 'rotate_secret', null, null);
+  return jsonb_build_object('ok', true, 'secret', v_secret);
+end $$;
+create or replace function public.wh_set_active(p_id uuid, p_on boolean) returns jsonb language plpgsql security definer set search_path = public as $$
+declare e webhook_endpoints;
+begin
+  select * into e from webhook_endpoints where id = p_id; if e.id is null then raise exception 'not_found'; end if;
+  perform public.integ_need(e.org_id);
+  update webhook_endpoints set active = coalesce(p_on, false), failure_streak = case when p_on then 0 else failure_streak end, disabled_reason = case when p_on then null else disabled_reason end where id = p_id;
+  perform public.mod_log(e.org_id, 'integracoes', 'webhook', p_id, case when p_on then 'enable' else 'disable' end, null, null);
+  return jsonb_build_object('ok', true);
+end $$;
+create or replace function public.wh_delete(p_id uuid) returns jsonb language plpgsql security definer set search_path = public as $$
+declare e webhook_endpoints;
+begin
+  select * into e from webhook_endpoints where id = p_id; if e.id is null then raise exception 'not_found'; end if;
+  perform public.integ_need(e.org_id);
+  delete from webhook_endpoints where id = p_id;
+  perform public.mod_log(e.org_id, 'integracoes', 'webhook', p_id, 'delete', null, jsonb_build_object('name', e.name));
+  return jsonb_build_object('ok', true);
+end $$;
+create or replace function public.wh_test(p_id uuid) returns jsonb language plpgsql security definer set search_path = public as $$
+declare e webhook_endpoints; v_ev bigint;
+begin
+  select * into e from webhook_endpoints where id = p_id; if e.id is null then raise exception 'not_found'; end if;
+  perform public.integ_need(e.org_id);
+  insert into webhook_events (org_id, event_type, payload) values (e.org_id, 'webhook.test', jsonb_build_object('message', 'Teste de conexão do SOMOS')) returning id into v_ev;
+  insert into webhook_deliveries (endpoint_id, event_id) values (p_id, v_ev);
+  return jsonb_build_object('ok', true);
+end $$;
+create or replace function public.wh_deliveries(p_org uuid, p_endpoint uuid default null, p_status text default null, p_limit int default 50) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.integ_need(p_org);
+  return coalesce((select jsonb_agg(jsonb_build_object('id', x.id, 'endpoint_id', x.endpoint_id, 'endpoint', x.ename, 'event_type', x.event_type, 'status', x.status, 'attempts', x.attempts, 'response_status', x.response_status, 'error', x.error,
+      'created_at', x.created_at, 'last_attempt_at', x.last_attempt_at, 'delivered_at', x.delivered_at, 'next_attempt_at', x.next_attempt_at) order by x.id desc)
+    from (select d.*, e.name as ename, v.event_type from webhook_deliveries d join webhook_endpoints e on e.id = d.endpoint_id join webhook_events v on v.id = d.event_id
+           where e.org_id = p_org and (p_endpoint is null or d.endpoint_id = p_endpoint) and (p_status is null or d.status = p_status) order by d.id desc limit least(greatest(coalesce(p_limit, 50), 1), 200)) x), '[]'::jsonb);
+end $$;
+-- reenvio manual: só entrega que falhou ou foi abandonada. O destino recebe o mesmo identificador (X-Somos-Delivery), então pode ignorar repetições.
+create or replace function public.wh_retry(p_delivery bigint) returns jsonb language plpgsql security definer set search_path = public as $$
+declare d webhook_deliveries; e webhook_endpoints;
+begin
+  select * into d from webhook_deliveries where id = p_delivery; if d.id is null then raise exception 'not_found'; end if;
+  select * into e from webhook_endpoints where id = d.endpoint_id;
+  perform public.integ_need(e.org_id);
+  if d.status not in ('failed', 'dead') then raise exception 'integ_not_retryable'; end if;
+  update webhook_deliveries set status = 'pending', attempts = 0, next_attempt_at = now(), error = null where id = p_delivery;
+  perform public.mod_log(e.org_id, 'integracoes', 'webhook', e.id, 'retry', null, jsonb_build_object('delivery', p_delivery));
+  return jsonb_build_object('ok', true);
+end $$;
+
+-- uso exclusivo da Edge Function "webhook-dispatch" (chave de serviço)
+create or replace function public.wh_claim(p_limit int default 50) returns jsonb language sql security definer set search_path = public as $$
+  with c as (select d.id from webhook_deliveries d join webhook_endpoints e on e.id = d.endpoint_id
+              where d.status in ('pending', 'failed') and d.next_attempt_at <= now() and e.active order by d.id limit least(greatest(coalesce(p_limit, 50), 1), 200) for update of d skip locked),
+       u as (update webhook_deliveries d set attempts = d.attempts + 1, last_attempt_at = now(), next_attempt_at = now() + interval '10 minutes' from c where d.id = c.id returning d.id, d.endpoint_id, d.event_id, d.attempts)
+  select coalesce(jsonb_agg(jsonb_build_object('id', u.id, 'attempt', u.attempts, 'event_id', u.event_id, 'event_type', v.event_type, 'payload', v.payload, 'org_id', v.org_id, 'created_at', v.created_at, 'url', e.url, 'secret', e.secret, 'endpoint_id', e.id) order by u.id), '[]'::jsonb)
+  from u join webhook_endpoints e on e.id = u.endpoint_id join webhook_events v on v.id = u.event_id
+$$;
+create or replace function public.wh_report(p_results jsonb) returns void language plpgsql security definer set search_path = public as $$
+declare r record; d webhook_deliveries; v_org uuid; v_streak int;
+begin
+  for r in select * from jsonb_to_recordset(coalesce(p_results, '[]'::jsonb)) as x(id bigint, ok boolean, status int, error text) loop
+    select * into d from webhook_deliveries where id = r.id; if d.id is null then continue; end if;
+    select e.org_id into v_org from webhook_endpoints e where e.id = d.endpoint_id;
+    if coalesce(r.ok, false) then
+      update webhook_deliveries set status = 'success', response_status = r.status, error = null, delivered_at = now(), next_attempt_at = null where id = d.id;
+      update webhook_endpoints set failure_streak = 0 where id = d.endpoint_id;
+      perform public.integ_log(v_org, 'webhook', 'info', 'entrega concluída', jsonb_build_object('delivery', d.id, 'endpoint', d.endpoint_id, 'status', r.status, 'attempt', d.attempts));
+    else
+      update webhook_deliveries set status = case when d.attempts >= 6 then 'dead' else 'failed' end, response_status = r.status, error = public.integ_clean_text(r.error),
+        next_attempt_at = case when d.attempts >= 6 then null else now() + case d.attempts when 1 then interval '1 minute' when 2 then interval '5 minutes' when 3 then interval '30 minutes' when 4 then interval '2 hours' else interval '12 hours' end end where id = d.id;
+      update webhook_endpoints set failure_streak = failure_streak + 1 where id = d.endpoint_id returning failure_streak into v_streak;
+      if v_streak >= 30 then update webhook_endpoints set active = false, disabled_reason = 'Desativado automaticamente após 30 falhas seguidas' where id = d.endpoint_id and active; end if;
+      perform public.integ_log(v_org, 'webhook', case when d.attempts >= 6 then 'error' else 'warn' end, case when d.attempts >= 6 then 'entrega abandonada' else 'entrega falhou, nova tentativa agendada' end,
+        jsonb_build_object('delivery', d.id, 'endpoint', d.endpoint_id, 'status', r.status, 'attempt', d.attempts, 'error', r.error));
+    end if;
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------- monitoramento
+create or replace function public.integ_heartbeat(p_source text, p_ok boolean, p_detail jsonb default null) returns void language sql security definer set search_path = public as $$
+  insert into integration_heartbeats (source, last_run_at, last_ok_at, detail) values (p_source, now(), case when coalesce(p_ok, false) then now() end, public.integ_clean(p_detail))
+  on conflict (source) do update set last_run_at = now(), last_ok_at = case when coalesce(p_ok, false) then now() else integration_heartbeats.last_ok_at end, detail = public.integ_clean(p_detail)
+$$;
+create or replace function public.integ_status(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.integ_need(p_org);
+  return jsonb_build_object(
+    'webhooks', jsonb_build_object('endpoints_active', (select count(*) from webhook_endpoints where org_id = p_org and active), 'endpoints_disabled', (select count(*) from webhook_endpoints where org_id = p_org and not active),
+      'pending', (select count(*) from webhook_deliveries d join webhook_endpoints e on e.id = d.endpoint_id where e.org_id = p_org and d.status in ('pending', 'failed')),
+      'failed_24h', (select count(*) from webhook_deliveries d join webhook_endpoints e on e.id = d.endpoint_id where e.org_id = p_org and d.status in ('failed', 'dead') and coalesce(d.last_attempt_at, d.created_at) > now() - interval '24 hours'),
+      'dead', (select count(*) from webhook_deliveries d join webhook_endpoints e on e.id = d.endpoint_id where e.org_id = p_org and d.status = 'dead'),
+      'oldest_pending_seconds', (select extract(epoch from now() - min(d.created_at))::int from webhook_deliveries d join webhook_endpoints e on e.id = d.endpoint_id where e.org_id = p_org and d.status in ('pending', 'failed'))),
+    'api', jsonb_build_object('keys_active', (select count(*) from api_keys where org_id = p_org and revoked_at is null and (expires_at is null or expires_at > now())),
+      'requests_24h', (select count(*) from integration_logs where org_id = p_org and source = 'api' and created_at > now() - interval '24 hours'),
+      'errors_24h', (select count(*) from integration_logs where org_id = p_org and source = 'api' and level <> 'info' and created_at > now() - interval '24 hours')),
+    'push', jsonb_build_object('devices', (select count(*) from push_subscriptions s where exists (select 1 from org_members m where m.user_id = s.user_id and m.org_id = p_org)),
+      'pending', (select count(*) from push_outbox o where o.sent_at is null and o.attempts < 3 and exists (select 1 from org_members m where m.user_id = o.user_id and m.org_id = p_org)),
+      'configured', coalesce((select (detail->>'configured')::boolean from integration_heartbeats where source = 'push'), false)),
+    'heartbeats', coalesce((select jsonb_agg(jsonb_build_object('source', h.source, 'last_run_at', h.last_run_at, 'last_ok_at', h.last_ok_at, 'state', case when h.last_run_at < now() - interval '15 minutes' then 'late' else 'ok' end) order by h.source) from integration_heartbeats h), '[]'::jsonb));
+end $$;
+create or replace function public.integ_log_list(p_org uuid, p_source text default null, p_level text default null, p_limit int default 100) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  perform public.integ_need(p_org);
+  return coalesce((select jsonb_agg(jsonb_build_object('id', l.id, 'source', l.source, 'level', l.level, 'event', l.event, 'detail', l.detail, 'at', l.created_at) order by l.id desc)
+    from (select * from integration_logs where org_id = p_org and (p_source is null or source = p_source) and (p_level is null or level = p_level) order by id desc limit least(greatest(coalesce(p_limit, 100), 1), 300)) l), '[]'::jsonb);
+end $$;
+create or replace function public.integ_access(p_org uuid) returns jsonb language plpgsql stable security definer set search_path = public as $$
+begin
+  if auth.uid() is null then raise exception 'not_authenticated'; end if;
+  return jsonb_build_object('manage', public.mod_perm(p_org, 'integ_manage'), 'fin', public.mod_perm(p_org, 'fin_manage'));
+end $$;
+-- limpeza periódica: logs 90 dias, contadores de limite 2 dias, eventos entregues 30 dias (as entregas pendentes seguram o evento)
+create or replace function public.integ_purge() returns jsonb language plpgsql security definer set search_path = public as $$
+declare a int; b int; c int;
+begin
+  delete from integration_logs where created_at < now() - interval '90 days'; get diagnostics a = row_count;
+  delete from api_rate where bucket < now() - interval '2 days'; get diagnostics b = row_count;
+  delete from webhook_events v where v.created_at < now() - interval '30 days' and not exists (select 1 from webhook_deliveries d where d.event_id = v.id and d.status in ('pending', 'failed')); get diagnostics c = row_count;
+  return jsonb_build_object('logs', a, 'rate', b, 'events', c);
+end $$;
+do $$ begin
+  create extension if not exists pg_cron;
+  perform cron.unschedule(jobid) from cron.job where jobname = 'somos-integracoes-limpeza';
+  perform cron.schedule('somos-integracoes-limpeza', '17 3 * * *', 'select public.integ_purge()');
+exception when others then raise notice 'pg_cron indisponível: %', sqlerrm;
+end $$;
+
+-- ---------------------------------------------------------------- permissões de execução
+revoke execute on function public.api_key_create(uuid, text, text[], int, int), public.api_key_list(uuid), public.api_key_revoke(uuid), public.wh_save(uuid, uuid, jsonb), public.wh_list(uuid), public.wh_rotate_secret(uuid),
+  public.wh_set_active(uuid, boolean), public.wh_delete(uuid), public.wh_test(uuid), public.wh_deliveries(uuid, uuid, text, int), public.wh_retry(bigint), public.integ_status(uuid), public.integ_log_list(uuid, text, text, int), public.integ_access(uuid) from public, anon;
+grant execute on function public.api_key_create(uuid, text, text[], int, int), public.api_key_list(uuid), public.api_key_revoke(uuid), public.wh_save(uuid, uuid, jsonb), public.wh_list(uuid), public.wh_rotate_secret(uuid),
+  public.wh_set_active(uuid, boolean), public.wh_delete(uuid), public.wh_test(uuid), public.wh_deliveries(uuid, uuid, text, int), public.wh_retry(bigint), public.integ_status(uuid), public.integ_log_list(uuid, text, text, int), public.integ_access(uuid) to authenticated;
+-- só a chave de serviço (Edge Functions) executa estas:
+revoke execute on function public.api_authenticate(text, text), public.api_log(uuid, uuid, text, text, int, int), public.api_v1_events(uuid, int, int), public.api_v1_programs(uuid, int, int), public.api_v1_sermons(uuid, int, int), public.api_v1_contents(uuid, int, int),
+  public.wh_claim(int), public.wh_report(jsonb), public.integ_heartbeat(text, boolean, jsonb), public.integ_purge() from public, anon, authenticated;
+grant execute on function public.api_authenticate(text, text), public.api_log(uuid, uuid, text, text, int, int), public.api_v1_events(uuid, int, int), public.api_v1_programs(uuid, int, int), public.api_v1_sermons(uuid, int, int), public.api_v1_contents(uuid, int, int),
+  public.wh_claim(int), public.wh_report(jsonb), public.integ_heartbeat(text, boolean, jsonb), public.integ_purge() to service_role;
+revoke execute on function public.integ_clean(jsonb), public.integ_clean_text(text), public.wh_event_types(), public.integ_url_ok(text) from public, anon;
+grant execute on function public.integ_clean(jsonb), public.integ_clean_text(text), public.wh_event_types(), public.integ_url_ok(text) to authenticated, service_role;
+
+-- ---------------------------------------------------------------------
+-- Para desfazer: dropar os gatilhos wh_*_trg, as funções api_*, wh_*, integ_* e as tabelas api_keys, api_rate, webhook_*, integration_* (apaga chaves, endpoints e históricos de entrega);
+-- reaplicar module_actions() sem 'integ_manage'. Nenhum dado de pessoas, eventos ou financeiro é tocado.
+-- ---------------------------------------------------------------------
+-- Verificação (deve retornar true):
+select 'integ_manage' = any (public.module_actions())
+   and to_regclass('public.api_keys') is not null and to_regclass('public.webhook_endpoints') is not null and to_regclass('public.webhook_deliveries') is not null
+   and (select count(*) from pg_trigger where tgname in ('wh_people_trg', 'wh_events_trg', 'wh_regs_trg', 'wh_fin_trg', 'wh_prog_trg')) = 5
+   and public.integ_url_ok('https://exemplo.com.br/hook') and not public.integ_url_ok('https://localhost/x') and not public.integ_url_ok('http://exemplo.com/x') and not public.integ_url_ok('https://10.0.0.1/x') as integracoes_ok;
