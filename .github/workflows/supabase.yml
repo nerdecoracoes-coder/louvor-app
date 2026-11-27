@@ -5,6 +5,7 @@
 #   SUPABASE_PROJECT_REF   identificador do projeto (ex.: abcdefghijklmno)
 #   GOOGLE_SERVICE_ACCOUNT conteúdo completo do arquivo JSON da conta de serviço do Google
 #   CRON_SECRET            uma senha longa qualquer (a mesma usada em supabase/setup/agendamento.sql)
+#   VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT  (opcionais) aviso no celular (push); gerar com: npx web-push generate-vapid-keys
 #   R2_ACCOUNT_ID, R2_BUCKET, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY  (opcionais) Cloudflare R2 da versão leve
 name: Publicar no Supabase
 on:
@@ -27,6 +28,9 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          VAPID_SUBJECT: ${{ secrets.VAPID_SUBJECT }}
         run: |
           test -n "$GOOGLE_SERVICE_ACCOUNT" || { echo "Falta o secret GOOGLE_SERVICE_ACCOUNT"; exit 1; }
           test -n "$CRON_SECRET" || { echo "Falta o secret CRON_SECRET"; exit 1; }
@@ -37,7 +41,15 @@ jobs:
             supabase secrets set --project-ref "$PROJECT_REF" R2_ACCOUNT_ID="$R2_ACCOUNT_ID" R2_BUCKET="$R2_BUCKET" R2_ACCESS_KEY_ID="$R2_ACCESS_KEY_ID" R2_SECRET_ACCESS_KEY="$R2_SECRET_ACCESS_KEY" --yes
             echo "R2 configurado."
           fi
+          # aviso no celular (push), quando configurado
+          if [ -n "$VAPID_PUBLIC_KEY" ] && [ -n "$VAPID_PRIVATE_KEY" ]; then
+            supabase secrets set --project-ref "$PROJECT_REF" VAPID_PUBLIC_KEY="$VAPID_PUBLIC_KEY" VAPID_PRIVATE_KEY="$VAPID_PRIVATE_KEY" VAPID_SUBJECT="${VAPID_SUBJECT:-mailto:contato@example.org}" --yes
+            echo "Push (VAPID) configurado."
+          fi
       - name: Publicar funções
         run: |
           supabase functions deploy drive-sync --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
           supabase functions deploy drive-media --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
+          supabase functions deploy api --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
+          supabase functions deploy webhook-dispatch --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
+          supabase functions deploy push-send --project-ref "$PROJECT_REF" --no-verify-jwt --use-api --yes
