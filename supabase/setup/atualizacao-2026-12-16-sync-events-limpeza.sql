@@ -19,10 +19,11 @@ end $$;
 -- Limpeza unica agora: guarda so os 300 eventos mais recentes e devolve o espaco ao banco (TRUNCATE).
 -- O Supabase pode mostrar o aviso "destructive": e esperado, so o registro de eventos da sincronizacao e afetado.
 -- ---------------------------------------------------------------------
-create temp table _keep_sync_events as select * from public.sync_events order by id desc limit 300;
-truncate public.sync_events;
-insert into public.sync_events overriding system value select * from _keep_sync_events;
-drop table _keep_sync_events;
+do $$ begin
+  create temp table _keep_sync_events on commit drop as select * from public.sync_events order by id desc limit 300;
+  truncate public.sync_events;
+  insert into public.sync_events overriding system value select * from _keep_sync_events;
+end $$;
 
 -- Verificacao (deve retornar true; depois o tamanho de sync_events deve estar em poucos kB):
 select (select count(*) from public.sync_events) <= 300
