@@ -18,7 +18,11 @@ const upcoming = (days) => {
   // se a atualização do banco ainda não foi aplicada, a agenda fica vazia em vez de quebrar a página
   return sb.from("church_events").select("*").eq("org_id", state.org.id).gte("starts_at", from).lte("starts_at", to).order("starts_at").limit(60).then((r) => (r.error ? [] : r.data || []));
 };
-const titles = () => sb.from("org_members").select("user_id,church_title").eq("org_id", state.org.id).then((r) => new Map((r.error ? [] : r.data || []).map((m) => [m.user_id, m.church_title])));
+const titles = async () => {
+  let r = await sb.from("org_members").select("user_id,church_title,church_rank").eq("org_id", state.org.id);
+  if (r.error) r = await sb.from("org_members").select("user_id,church_title").eq("org_id", state.org.id);   // atualização da ordem ainda não aplicada
+  return new Map((r.error ? [] : r.data || []).map((m) => [m.user_id, { title: m.church_title, rank: m.church_rank ?? null }]));
+};
 
 const eventRow = (e) => `<button class="li evt" data-ev="${e.id}"><span class="evdate"><b>${fDay(e.starts_at)}</b><small>${esc(fMon(e.starts_at))}</small></span>
   <span class="grow" style="min-width:0"><span class="t ellipsis">${esc(e.title)}</span><span class="s">${e.kind ? `${esc(kindLabel(e.kind))} · ` : ""}${esc(fDateLong(e.starts_at).split(",")[0])} · ${fTime(e.starts_at)}${e.location ? ` · ${esc(e.location)}` : ""}</span></span>${icon("chevronRight")}</button>`;
@@ -141,18 +145,15 @@ export async function churchHome(el, alive) {
   ]);
   if (!alive()) return;
   const o = state.org;
-  for (const [id, t] of ttl) if (ppl.get(id)) ppl.get(id).church_title = t;
-  const leaders = [...ppl.values()].filter((p) => p.church_title).sort((a, b) => a.display_name.localeCompare(b.display_name));
+  for (const [id, t] of ttl) if (ppl.get(id)) { ppl.get(id).church_title = t.title; ppl.get(id).church_rank = t.rank; }
+  const leaders = orderedLeaders(ppl);
   const mine = new Set(state.myTeams.map((t) => t.id));
   el.innerHTML = `
   <section class="hero"><div class="grow"><p class="hello">Igreja</p><h1>${esc(o.name)}</h1>${o.subtitle ? `<p class="roles">${esc(o.subtitle)}</p>` : ""}</div></section>
+  ${leadersBlock(leaders)}
   ${quickRow(churchShortcuts())}
   <div id="dsc"></div>
   <div id="disc"></div>
-
-  <div class="sec"><h2>Liderança</h2>${isAdmin() ? `<span class="row gap-s"><button class="more" id="edcoord">${icon("calendar")} Agenda</button><button class="more" id="edlead">${icon("edit")} Cargos</button></span>` : ""}</div>
-  ${leaders.length ? `<div class="leaders">${leaders.map((p) => `<div class="leader">${avatar(p, 92, false)}<b class="ellipsis">${esc(p.display_name)}</b><span class="ellipsis">${esc(p.church_title)}</span></div>`).join("")}</div>`
-    : `<p class="small muted" style="margin:0 0 8px">${isAdmin() ? "Toque em Cargos para informar quem são os pastores e líderes da igreja." : "Em breve os pastores e líderes aparecem aqui."}</p>`}
 
   <div id="pend"></div>
   <div class="sec"><h2>Avisos da igreja</h2><a href="#/avisos">Todos ${icon("chevronRight")}</a></div>
@@ -168,7 +169,7 @@ export async function churchHome(el, alive) {
   ${birthdaySection([...ppl.values()])}
   ${canEditAgenda() || isAdmin() ? `<div class="sec"><h2>Ações da igreja</h2></div><div class="chips" style="flex-wrap:wrap">
     ${canEditAgenda() ? `<button class="chip" id="newev2">${icon("calendar")} Novo evento</button><a class="chip" href="#/avisos/novo">${icon("megaphone")} Novo aviso</a>` : ""}
-    ${isAdmin() ? `<a class="chip" href="#/times/novo">${icon("users")} Novo time</a><a class="chip" href="#/convidar-membro">${icon("org")} Convidar membro da igreja</a>` : ""}</div>` : ""}`;
+    ${isAdmin() ? `<a class="chip" href="#/times/novo">${icon("users")} Novo time</a><a class="chip" href="#/convidar-membro">${icon("org")} Convidar membro da igreja</a><button class="chip" id="edcoord">${icon("calendar")} Coordenadores da agenda</button>` : ""}</div>` : ""}`;
   const again = () => churchHome(el, alive);
   // "Para você": cards escolhidos pelo servidor (só com conteúdo real, público e destino funcionais); se a atualização do banco faltar, a seção some
   sb.rpc("home_discover", { p_org: state.org.id }).then((r) => {
@@ -182,7 +183,8 @@ export async function churchHome(el, alive) {
   on(el, "click", "[data-ev]", (e, b) => openEvent(evs.find((x) => x.id === b.dataset.ev), ppl, again));
   on(el, "click", "[data-notice]", (e, b) => openNotice(notices.find((n) => n.id === b.dataset.notice), ppl));
   on(el, "click", "[data-team]", (e, b) => go(`/times/${b.dataset.team}`));
-  el.querySelector("#edlead")?.addEventListener("click", () => leadersSheet(ppl, again));
+  el.querySelector("#addlead")?.addEventListener("click", () => pickLeaderSheet(ppl, leaders, again));
+  on(el, "click", "[data-lead]", (e, b) => leaderSheet(ppl, leaders, ppl.get(b.dataset.lead), again));
   el.querySelector("#edcoord")?.addEventListener("click", () => coordinatorsSheet(ppl, again));
 }
 
@@ -207,20 +209,68 @@ async function coordinatorsSheet(ppl, again) {
   };
 }
 
-function leadersSheet(ppl, again) {
-  const all = [...ppl.values()].sort((a, b) => a.display_name.localeCompare(b.display_name));
-  const s = sheet(`<h3>Cargos da liderança</h3><p class="small muted">Escreva o cargo de quem lidera a igreja (ex.: Pastor presidente, Pastora, Diácono chefe). Deixe em branco para tirar da lista.</p>
-    <div class="list">${all.map((p) => `<div class="li">${avatar(p, 36, false)}<span class="grow" style="min-width:0"><span class="t ellipsis">${esc(p.display_name)}</span>
-      <input class="input" data-title="${p.id}" maxlength="60" placeholder="Sem cargo" value="${attr(p.church_title || "")}" style="margin-top:6px"></span></div>`).join("")}</div>
-    <button class="btn primary block mt" id="lsave">Salvar cargos</button>`);
-  s.el.querySelector("#lsave").onclick = async (ev) => {
-    busy(ev.currentTarget);
-    try {
-      for (const i of s.el.querySelectorAll("[data-title]")) {
-        const v = i.value.trim() || null, p = ppl.get(i.dataset.title);
-        if ((p.church_title || null) !== v) await must(sb.from("org_members").update({ church_title: v }).eq("org_id", state.org.id).eq("user_id", i.dataset.title));
-      }
-      invalidatePeople(); s.close(); toast("Cargos salvos"); again();
-    } catch (err) { toast(errMsg(err), "err"); busy(ev.currentTarget, false); }
+// Liderança em ordem hierárquica: posição 1 é o líder principal (ex.: bispo), depois os demais. Sem posição, vai para o fim, por nome.
+function orderedLeaders(ppl) {
+  return [...ppl.values()].filter((p) => p.church_title)
+    .sort((a, b) => (a.church_rank ?? 1e9) - (b.church_rank ?? 1e9) || a.display_name.localeCompare(b.display_name));
+}
+// Fotos redondas, maiores que os demais círculos do Início; o líder principal em destaque. Só o administrador vê o "+" (e toca nas fotos para editar).
+function leadersBlock(leaders) {
+  const adm = isAdmin();
+  if (!leaders.length && !adm) return "";
+  const card = (p, main) => `<${adm ? "button" : "div"} class="leader${main ? " main" : ""}"${adm ? ` data-lead="${p.id}"` : ""}>${avatar(p, main ? 128 : 100, main)}<b class="ellipsis">${esc(p.display_name)}</b><span class="ellipsis">${esc(p.church_title)}</span></${adm ? "button" : "div"}>`;
+  const [first, ...rest] = leaders;
+  const add = adm ? `<button class="leader add" id="addlead" aria-label="Adicionar líder à liderança"><span class="plus" style="--s:100px">${icon("plus")}</span></button>` : "";
+  return `<section class="leaders" aria-label="Liderança">${first ? `<div class="lead-main">${card(first, true)}</div>` : ""}<div class="lead-rest">${rest.map((p) => card(p, false)).join("")}${add}</div></section>`;
+}
+
+// Grava cargo e posição de quem está na liderança (ordem = posição na lista). Sem a atualização do banco, grava só o cargo.
+async function saveLeaders(ppl, order, titleOf, again, removed = []) {
+  let rankOk = true;
+  const write = async (id, row) => {
+    let r = await sb.from("org_members").update(rankOk ? row : { church_title: row.church_title }).eq("org_id", state.org.id).eq("user_id", id);
+    if (r.error && rankOk && /church_rank/i.test(r.error.message || "")) { rankOk = false; r = await sb.from("org_members").update({ church_title: row.church_title }).eq("org_id", state.org.id).eq("user_id", id); }
+    if (r.error) throw r.error;
   };
+  for (const [i, id] of order.entries()) {
+    const p = ppl.get(id), title = titleOf(id), rank = i + 1;
+    if ((p?.church_title || null) !== title || (p?.church_rank ?? null) !== rank) await write(id, { church_title: title, church_rank: rank });
+  }
+  for (const id of removed) await write(id, { church_title: null, church_rank: null });
+  invalidatePeople(); again();
+  if (!rankOk) toast("Para guardar a ordem, aplique a atualização do banco (liderança em ordem).", "err");
+}
+
+// "+": escolhe a pessoa e depois informa o cargo
+function pickLeaderSheet(ppl, leaders, again) {
+  const have = new Set(leaders.map((p) => p.id));
+  const all = [...ppl.values()].filter((p) => !have.has(p.id)).sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const s = sheet(`<h3>Adicionar à liderança</h3><p class="small muted">Escolha a pessoa. Depois você informa o cargo (ex.: Bispo, Pastor, Pastora, Diácono).</p>
+    <input class="input" id="lq" placeholder="Buscar pelo nome" autocomplete="off">
+    <div class="list mt" id="llist">${all.map((p) => `<button class="li" data-pick="${p.id}" data-n="${attr(p.display_name.toLowerCase())}">${avatar(p, 40, false)}<span class="grow" style="min-width:0"><span class="t ellipsis">${esc(p.display_name)}</span></span>${icon("chevronRight")}</button>`).join("") || `<div class="li muted small">Todas as pessoas da igreja já estão na liderança.</div>`}</div>`);
+  s.el.querySelector("#lq").addEventListener("input", (e) => { const q = e.target.value.trim().toLowerCase(); s.el.querySelectorAll("[data-pick]").forEach((b) => { b.hidden = !!q && !b.dataset.n.includes(q); }); });
+  on(s.el, "click", "[data-pick]", (e, b) => { s.close(); leaderSheet(ppl, leaders, ppl.get(b.dataset.pick), again); });
+}
+
+// Cargo, posição (subir/descer) e remover
+function leaderSheet(ppl, leaders, p, again) {
+  if (!p) return;
+  const isNew = !leaders.some((x) => x.id === p.id);
+  const ids = leaders.map((x) => x.id); if (isNew) ids.push(p.id);
+  const idx = ids.indexOf(p.id);
+  const s = sheet(`<div class="row gap">${avatar(p, 56, false)}<div class="grow" style="min-width:0"><h3 style="margin:0" class="ellipsis">${esc(p.display_name)}</h3><span class="small muted">${isNew ? "Entrando na liderança" : `Posição ${idx + 1} de ${ids.length}${idx === 0 ? " · líder principal" : ""}`}</span></div></div>
+    <label class="field mt"><span>Cargo *</span><input id="ltitle" maxlength="60" placeholder="Ex.: Bispo, Pastor, Pastora" value="${attr(p.church_title || "")}"></label>
+    ${isNew ? `<p class="small muted">Entra no fim da lista. Depois você pode subir de posição.</p>` : `<div class="row gap-s"><button class="btn ghost sm grow" id="lup" ${idx === 0 ? "disabled" : ""}>${icon("chevronUp")} Subir</button><button class="btn ghost sm grow" id="ldown" ${idx === ids.length - 1 ? "disabled" : ""}>${icon("chevronDown")} Descer</button></div>`}
+    <button class="btn primary block mt" id="lsave">${isNew ? "Adicionar" : "Salvar"}</button>
+    ${isNew ? "" : `<button class="btn danger block mt-s" id="ldel">${icon("trash")} Tirar da liderança</button>`}`);
+  const titleNow = () => s.el.querySelector("#ltitle").value.trim();
+  const run = async (btn, fn) => { busy(btn); try { await fn(); s.close(); } catch (err) { toast(errMsg(err), "err"); busy(btn, false); } };
+  s.el.querySelector("#lsave").onclick = (ev) => { if (!titleNow()) return toast("Informe o cargo.", "err"); run(ev.currentTarget, () => saveLeaders(ppl, ids, (id) => (id === p.id ? titleNow() : ppl.get(id).church_title), again)); };
+  const move = (d) => (ev) => run(ev.currentTarget, () => { const o = [...ids]; [o[idx], o[idx + d]] = [o[idx + d], o[idx]]; return saveLeaders(ppl, o, (id) => (id === p.id ? (titleNow() || p.church_title) : ppl.get(id).church_title), again); });
+  s.el.querySelector("#lup")?.addEventListener("click", move(-1));
+  s.el.querySelector("#ldown")?.addEventListener("click", move(1));
+  s.el.querySelector("#ldel")?.addEventListener("click", async (ev) => {
+    if (!(await confirmDialog(`Tirar ${p.display_name} da liderança? A pessoa continua na igreja.`, "Tirar", true))) return;
+    run(ev.currentTarget, () => saveLeaders(ppl, ids.filter((x) => x !== p.id), (id) => ppl.get(id).church_title, again, [p.id]));
+  });
 }

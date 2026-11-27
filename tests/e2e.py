@@ -682,7 +682,19 @@ with sync_playwright() as pw:
     bruno.goto(BASE + "/#/igreja"); bruno.reload(); expect(bruno.locator(".notice", has_text="Ensaio Geral")).to_be_visible(timeout=10000)  # avisos gerais ficam na área da igreja
     expect(bruno.locator(".leaders .leader")).to_have_count(1); expect(bruno.locator(".leader")).to_contain_text("Pastor presidente")
     assert bruno.evaluate("""() => { const h = document.querySelector('.hero').getBoundingClientRect(), l = document.querySelector('.leaders').getBoundingClientRect(), n = document.querySelector('.notice').getBoundingClientRect(); const a = document.querySelector('.leader .av').getBoundingClientRect(); return l.top >= h.bottom - 1 && l.top < n.top && a.width >= 80 && Math.abs(a.width - a.height) < 1 && getComputedStyle(document.querySelector('.leader .av')).borderRadius !== '0px'; }""")
+    assert bruno.locator("#addlead").count() == 0 and bruno.locator("[data-lead]").count() == 0   # membro só vê; não edita
+    assert bruno.evaluate("() => { const l = document.querySelector('.leaders').getBoundingClientRect(), q = document.querySelector('.quick').getBoundingClientRect(); return l.top < q.top; }")   # liderança vem antes dos atalhos
     shot(bruno, "17b-igreja-lideranca"); ok("início da igreja: liderança logo abaixo do nome, fotos redondas grandes")
+    # administrador: círculo com "+" para acrescentar, ordem hierárquica e subir de posição
+    ana.goto(BASE + "/#/igreja"); ana.reload(); expect(ana.locator("#addlead")).to_be_visible(timeout=10000)
+    assert ana.locator(".leaders .leader").count() == 2 and ana.locator(".leader.main").count() == 1   # Bruno + o círculo "+"
+    ana.locator("#addlead").click(); ana.fill("#lq", "Carla"); ana.locator("[data-pick]", has_text="Carla Dias").click()
+    ana.fill("#ltitle", "Pastora"); ana.locator("#lsave").click()
+    expect(ana.locator(".lead-main")).to_contain_text("Pastor presidente", timeout=10000); expect(ana.locator(".lead-rest")).to_contain_text("Pastora")
+    shot(ana, "17c-igreja-lideranca-admin")
+    ana.locator("[data-lead]", has_text="Carla Dias").click(); ana.locator("#lup").click()
+    expect(ana.locator(".lead-main")).to_contain_text("Carla Dias", timeout=10000); expect(ana.locator(".lead-rest")).to_contain_text("Bruno Costa")
+    ok("liderança: administrador acrescenta pela bolinha com +, escolhe o cargo e sobe de posição; o primeiro fica em destaque")
     shot(bruno, "17-inicio-lider"); ok("aviso da organização publicado e exibido")
     expect(bruno.get_by_text("Agenda da igreja").first).to_be_visible(); expect(bruno.get_by_text("Minhas próximas escalas")).to_have_count(0)
     ana.goto(BASE + "/#/agenda"); ana.locator("#newev").click(); ana.fill(".sheet input[name=title]", "Culto de celebração"); ana.select_option(".sheet select[name=kind]", "culto"); ana.fill(".sheet input[name=start]", "23:59")
