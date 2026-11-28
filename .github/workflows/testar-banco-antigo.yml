@@ -1,0 +1,27 @@
+# Teste de SOMENTE LEITURA: confere se o banco do projeto atual ainda responde e quanto há de dados.
+# Não altera nada. Segredo necessário: OLD_DB_URL (endereço de conexão do banco, "Session pooler", do Supabase).
+name: Testar acesso ao banco antigo
+on:
+  workflow_dispatch:
+jobs:
+  testar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Instalar cliente do Postgres 17
+        run: |
+          sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+          sudo apt-get install -y postgresql-client-17
+      - name: Conferir acesso e tamanho dos dados
+        env:
+          OLD_DB_URL: ${{ secrets.OLD_DB_URL }}
+        run: |
+          set -e
+          test -n "$OLD_DB_URL" || { echo "Falta o segredo OLD_DB_URL"; exit 1; }
+          export PGCONNECT_TIMEOUT=20
+          psql "$OLD_DB_URL" -Atc "select 'conectou: ' || split_part(version(), ' ', 2)"
+          psql "$OLD_DB_URL" -Atc "select 'tabelas em public: ' || count(*) from information_schema.tables where table_schema = 'public'"
+          psql "$OLD_DB_URL" -Atc "select 'usuarios (auth): ' || count(*) from auth.users"
+          psql "$OLD_DB_URL" -Atc "select 'musicas: ' || count(*) from public.songs"
+          psql "$OLD_DB_URL" -Atc "select 'tamanho do banco: ' || pg_size_pretty(pg_database_size(current_database()))"
+          psql "$OLD_DB_URL" -Atc "select 'arquivos no Storage: ' || count(*) from storage.objects"
